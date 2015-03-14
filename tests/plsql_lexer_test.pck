@@ -1,5 +1,20 @@
 create or replace package plsql_lexer_test authid current_user is
 
+/*
+## Purpose ##
+
+Unit tests for plsql_lexer.
+
+
+## Example ##
+
+begin
+	plsql_lexer_test.run;
+	plsql_lexer_test.run(plsql_lexer_test.c_dynamic_tests);
+end;
+
+*/
+
 --Globals to select which test suites to run.
 c_test_whitespace  constant number := power(2, 1);
 c_test_comment     constant number := power(2, 2);
@@ -13,7 +28,7 @@ c_test_other       constant number := power(2, 9);
 
 c_dynamic_tests    constant number := power(2, 30);
 
---Default option is to run all test suites.
+--Default option is to run all static test suites.
 c_all_static_tests constant number := c_test_whitespace+c_test_comment+c_test_text+
 	c_test_numeric+c_test_symbol+c_test_punctuation+c_test_unexpected+c_test_utf8+
 	c_test_other;
