@@ -33,6 +33,8 @@ Statement classifier is a PL/SQL package to thoroughly classify a SQL or PL/SQL 
     end;
     /
 
+Results:
+
     Category      : DML
     Statement Type: SELECT
     Command Name  : SELECT
@@ -44,30 +46,32 @@ Statement classifier is a PL/SQL package to thoroughly classify a SQL or PL/SQL 
 ## How to Install
 
 1. Create objects on the desired schema:
-    alter session set current_schema=SCHEMA_NAME;
 
-    create or replace type token is object
-    (
-        type     varchar2(4000),
-        value    nclob,
-        --Although called "SQL" code and errm, these may also apply to PL/SQL.
-        --They would not match the real PL/SQL error messages, but the information
-        --should still be helpful to parse broken code.
-        sqlcode  number,
-        sqlerrm  varchar2(4000)
-    );
-    
-    --Use VARRAY because it is gaurenteed to maintain order.
-    create or replace type token_table is varray(2147483647) of token;
+        alter session set current_schema=SCHEMA_NAME;
+        
+        create or replace type token is object
+        (
+            type     varchar2(4000),
+            value    nclob,
+            --Although called "SQL" code and errm, these may also apply to PL/SQL.
+            --They would not match the real PL/SQL error messages, but the information
+            --should still be helpful to parse broken code.
+            sqlcode  number,
+            sqlerrm  varchar2(4000)
+        );
+        
+        --Use VARRAY because it is gaurenteed to maintain order.
+        create or replace type token_table is varray(2147483647) of token;
 
 2. Install packages on the desired schema:
-    alter session set current_schema=SCHEMA_NAME;
-    @plsql_lexer.pck
-    @statement_classifier.pck
+
+        alter session set current_schema=SCHEMA_NAME;
+        @plsql_lexer.pck
+        @statement_classifier.pck
 
 3. Install unit tests (optional):
-	@/tests/plsql_lexer_test.pck
-	@/tests/statement_classifier_test.pck
+        @/tests/plsql_lexer_test.pck
+        @/tests/statement_classifier_test.pck
 
 ## License
 `statement_classifier` is licensed under the LGPL.
