@@ -70,6 +70,7 @@ Results:
         @statement_classifier.pck
 
 3. Install unit tests (optional):
+
         @/tests/plsql_lexer_test.pck
         @/tests/statement_classifier_test.pck
 
