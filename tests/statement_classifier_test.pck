@@ -16,16 +16,13 @@ end;
 */
 
 --Globals to select which test suites to run.
-c_test_whitespace  constant number := power(2, 1);
-c_test_other       constant number := power(2, 9);
+c_static_tests  constant number := power(2, 1);
+c_dynamic_tests constant number := power(2, 30);
 
-c_dynamic_tests    constant number := power(2, 30);
-
---Default option is to run all static test suites.
-c_all_static_tests constant number := c_test_whitespace+c_test_other;
+c_all_tests constant number := c_static_tests+c_dynamic_tests;
 
 --Run the unit tests and display the results in dbms output.
-procedure run(p_tests number default c_all_static_tests);
+procedure run(p_tests number default c_static_tests);
 
 end;
 /
@@ -37,8 +34,10 @@ g_passed_count number := 0;
 g_failed_count number := 0;
 
 
---Helper procedures.
 
+-- =============================================================================
+-- Helper procedures.
+-- =============================================================================
 
 --------------------------------------------------------------------------------
 procedure assert_equals(p_test nvarchar2, p_expected nvarchar2, p_actual nvarchar2) is
@@ -56,19 +55,24 @@ begin
 end assert_equals;
 
 
---------------------------------------------------------------------------------
---Test Suites
-procedure test_whitespace is
-begin
-	null;
-end test_whitespace;
 
+-- =============================================================================
+-- Test Suites
+-- =============================================================================
 
 --------------------------------------------------------------------------------
-procedure test_other is
+procedure static_tests is
+	v_category varchar2(100);
+	v_statement_type varchar2(100);
+	v_command_name varchar2(64);
+	v_command_type number;
+	v_lex_sqlcode number;
+	v_lex_sqlerrm varchar2(4000);
 begin
+	statement_classifier.classify('asdf', v_category, v_statement_type, v_command_name, v_command_type, v_lex_sqlcode, v_lex_sqlerrm);
+
 	null;
-end test_other;
+end static_tests;
 
 
 --------------------------------------------------------------------------------
@@ -86,6 +90,8 @@ procedure dynamic_tests is
 	v_statement_type varchar2(30);
 	v_command_name varchar2(4000);
 	v_command_type varchar2(4000);
+	v_lex_sqlcode number;
+	v_lex_sqlerrm varchar2(4000);
 begin
 	--Test everything in GV$SQL.
 	open sql_cursor for
@@ -115,7 +121,7 @@ begin
 
 			g_test_count := g_test_count + 1;
 
-			statement_classifier.classify(v_sql_fulltexts(i), v_category, v_statement_type, v_command_name, v_command_type);
+			statement_classifier.classify(v_sql_fulltexts(i), v_category, v_statement_type, v_command_name, v_command_type, v_lex_sqlcode, v_lex_sqlerrm);
 			if v_command_type = v_command_types(i) and v_command_name = v_command_names(i) then
 				g_passed_count := g_passed_count + 1;
 			else
@@ -131,8 +137,13 @@ begin
 end dynamic_tests;
 
 
+
+-- =============================================================================
+-- Main Procedure
+-- =============================================================================
+
 --------------------------------------------------------------------------------
-procedure run(p_tests number default c_all_static_tests) is
+procedure run(p_tests number default c_static_tests) is
 begin
 	--Reset counters.
 	g_test_count := 0;
@@ -140,9 +151,8 @@ begin
 	g_failed_count := 0;
 
 	--Run the chosen tests.
-	if bitand(p_tests, c_test_whitespace)  > 0 then test_whitespace; end if;
-	if bitand(p_tests, c_test_other)       > 0 then test_other; end if;
-	if bitand(p_tests, c_dynamic_tests)    > 0 then dynamic_tests; end if;
+	if bitand(p_tests, c_static_tests)  > 0 then static_tests; end if;
+	if bitand(p_tests, c_dynamic_tests) > 0 then dynamic_tests; end if;
 
 
 	--Print summary of results.

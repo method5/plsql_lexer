@@ -30,8 +30,9 @@ end;
 
 */
 
-	function tokenize(p_source nclob) return token_table;
-	function print_tokens(p_tokens token_table) return nclob;
+function tokenize(p_source nclob) return token_table;
+function print_tokens(p_tokens token_table) return nclob;
+
 end;
 /
 create or replace package body plsql_lexer is
