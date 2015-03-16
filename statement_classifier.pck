@@ -2,7 +2,7 @@ create or replace package statement_classifier is
 
 g_version constant varchar2(10) := '0.2.0';
 procedure classify(
-	p_statement in clob,
+	p_statement in nclob,
 	p_category out varchar2,
 	p_statement_type out varchar2,
 	p_command_name out varchar2,
@@ -64,13 +64,33 @@ For example, a program may need to decide to:
 ## Example ##
 
 declare
-	v_category varchar2(19);
-	v_statement_type varchar2(25);
+	v_category       varchar2(100);
+	v_statement_type varchar2(100);
+	v_command_name   varchar2(64);
+	v_command_type   number;
+	v_lex_sqlcode    number;
+	v_lex_sqlerrm    varchar2(4000);
 begin
-	statement_classifier.classify('select * from dual', v_category, v_statement_type);
-	dbms_output.put_line('Category: '||v_category);
+	statement_classifier.classify(
+		'(with test as (select * from dual) select * from test)',
+		v_category,v_statement_type,v_command_name,v_command_type,v_lex_sqlcode,v_lex_sqlerrm
+	);
+
+	dbms_output.put_line('Category      : '||v_category);
 	dbms_output.put_line('Statement Type: '||v_statement_type);
+	dbms_output.put_line('Command Name  : '||v_command_name);
+	dbms_output.put_line('Command Type  : '||v_command_type);
+	dbms_output.put_line('Lex SQLCODE   : '||v_lex_sqlcode);
+	dbms_output.put_line('Lex SQLERRM   : '||v_lex_sqlerrm);
 end;
+/
+
+Category      : DML
+Statement Type: SELECT
+Command Name  : SELECT
+Command Type  : 3
+Lex SQLCODE   : 
+Lex SQLERRM   : 
 
 
 ## References ##
@@ -122,7 +142,7 @@ C_PLSQL               constant varchar2(100) := 'PL/SQL';
 --------------------------------------------------------------------------------
 --Return the category and statement type for a single statement.
 procedure classify(
-		p_statement in clob,
+		p_statement in nclob,
 		p_category out varchar2,
 		p_statement_type out varchar2,
 		p_command_name out varchar2,
@@ -142,6 +162,16 @@ procedure classify(
 begin
 	--DEBUG:
 	--dbms_output.put_line(print_tokens(v_tokens_with_whitespace));
+
+	--Find the first lexer error.
+	--Lexing errors are so serious that there will rarely be more than one anyway.
+	for i in 1 .. v_tokens_with_extra_stuff.count loop
+		if v_tokens_with_extra_stuff(i).sqlcode is not null then
+			p_lex_sqlcode := v_tokens_with_extra_stuff(i).sqlcode;
+			p_lex_sqlerrm := v_tokens_with_extra_stuff(i).sqlerrm;
+			exit;
+		end if;
+	end loop;
 
 	--Remove whitespace, comments, and optional keywords.
 	--All of the optional keywords in the SQL Language Reference are not used for
@@ -182,15 +212,6 @@ begin
 			elsif v_types(i) = 'symbol' and i = 4 then
 				v_symbols_1_to_4 := upper(v_symbols_1_to_3 || ' ' || v_tokens(i).value);
 			end if;
-		end if;
-	end loop;
-
-	--Find the first lexer error.
-	--Lexing errors are so serious that there will rarely be more than one anyway.
-	for i in 1 .. v_tokens.count loop
-		if v_tokens(i).sqlcode is not null then
-			p_lex_sqlcode := v_tokens(i).sqlcode;
-			p_lex_sqlerrm := v_tokens(i).sqlerrm;
 		end if;
 	end loop;
 

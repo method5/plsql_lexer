@@ -16,7 +16,11 @@ end;
 */
 
 --Globals to select which test suites to run.
-c_static_tests  constant number := power(2, 1);
+c_errors        constant number := power(2, 1);
+c_commands      constant number := power(2, 2);
+
+c_static_tests  constant number := c_errors+c_commands;
+
 c_dynamic_tests constant number := power(2, 30);
 
 c_all_tests constant number := c_static_tests+c_dynamic_tests;
@@ -33,6 +37,16 @@ g_test_count number := 0;
 g_passed_count number := 0;
 g_failed_count number := 0;
 
+--Global types
+type output_rec is record
+(
+	category varchar2(100),
+	statement_type varchar2(100),
+	command_name varchar2(64),
+	command_type number,
+	lex_sqlcode number,
+	lex_sqlerrm varchar2(4000)
+);
 
 
 -- =============================================================================
@@ -55,13 +69,8 @@ begin
 end assert_equals;
 
 
-
--- =============================================================================
--- Test Suites
--- =============================================================================
-
 --------------------------------------------------------------------------------
-procedure static_tests is
+procedure classify(p_statement nclob, p_output out output_rec) is
 	v_category varchar2(100);
 	v_statement_type varchar2(100);
 	v_command_name varchar2(64);
@@ -69,10 +78,95 @@ procedure static_tests is
 	v_lex_sqlcode number;
 	v_lex_sqlerrm varchar2(4000);
 begin
-	statement_classifier.classify('asdf', v_category, v_statement_type, v_command_name, v_command_type, v_lex_sqlcode, v_lex_sqlerrm);
+	statement_classifier.classify(p_statement, 
+		v_category,v_statement_type,v_command_name,v_command_type,v_lex_sqlcode,v_lex_sqlerrm);
 
-	null;
-end static_tests;
+	p_output.category := v_category;
+	p_output.statement_type := v_statement_type;
+	p_output.command_name := v_command_name;
+	p_output.command_type := v_command_type;
+	p_output.lex_sqlcode := v_lex_sqlcode;
+	p_output.lex_sqlerrm := v_lex_sqlerrm;
+end classify;
+
+
+-- =============================================================================
+-- Test Suites
+-- =============================================================================
+
+--------------------------------------------------------------------------------
+procedure test_errors is
+	v_output output_rec;
+begin
+	classify('(select * from dual)', v_output);
+	assert_equals('No errors 1', null, v_output.lex_sqlcode);
+	assert_equals('No errors 1', null, v_output.lex_sqlerrm);
+
+	classify('(select * from dual) /*', v_output);
+	assert_equals('Comment error 1', -1742, v_output.lex_sqlcode);
+	assert_equals('Comment error 2', 'comment not terminated properly', v_output.lex_sqlerrm);
+
+	classify('(select * from dual) "', v_output);
+	assert_equals('Missing double quote error 1', -1740, v_output.lex_sqlcode);
+	assert_equals('Missing double quote error 2', 'missing double quote in identifier', v_output.lex_sqlerrm);
+
+	classify('(select 1 "" from dual)', v_output);
+	assert_equals('Zero-length identifier 1', -1741, v_output.lex_sqlcode);
+	assert_equals('Zero-length identifier 2', 'illegal zero-length identifier', v_output.lex_sqlerrm);
+
+	classify('(select 1 a123456789012345678901234567890 from dual)', v_output);
+	assert_equals('Identifier too long error 1', -972, v_output.lex_sqlcode);
+	assert_equals('Identifier too long error 2', 'identifier is too long', v_output.lex_sqlerrm);
+
+	classify('(select 1 "a123456789012345678901234567890" from dual)', v_output);
+	assert_equals('Identifier too long error 3', -972, v_output.lex_sqlcode);
+	assert_equals('Identifier too long error 4', 'identifier is too long', v_output.lex_sqlerrm);
+
+	classify(q'<declare v_test varchar2(100) := q'  '; begin null; end;>', v_output);
+	assert_equals('Invalid character 1', -911, v_output.lex_sqlcode);
+	assert_equals('Invalid character 2', 'invalid character', v_output.lex_sqlerrm);
+	classify(q'<declare v_test varchar2(100) := nq'  '; begin null; end;>', v_output);
+	assert_equals('Invalid character 3', -911, v_output.lex_sqlcode);
+	assert_equals('Invalid character 4', 'invalid character', v_output.lex_sqlerrm);
+
+	classify('(select * from dual) '' ', v_output);
+	assert_equals('String not terminated 1', -1756, v_output.lex_sqlcode);
+	assert_equals('String not terminated 2', 'quoted string not properly terminated', v_output.lex_sqlerrm);
+	classify(q'<(select * from dual) q'!' >', v_output);
+	assert_equals('String not terminated 3', -1756, v_output.lex_sqlcode);
+	assert_equals('String not terminated 4', 'quoted string not properly terminated', v_output.lex_sqlerrm);
+end test_errors;
+
+
+--------------------------------------------------------------------------------
+procedure test_commands is
+	v_output output_rec;
+begin
+	/*
+	Tests are in the order of Categories and Components:
+    DDL
+      ADMINISTER KEY MANAGEMENT, ALTER (except ALTER SESSION and ALTER SYSTEM),
+      ANALYZE,ASSOCIATE STATISTICS,AUDIT,COMMENT,CREATE,DISASSOCIATE STATISTICS,
+      DROP,FLASHBACK,GRANT,NOAUDIT,PURGE,RENAME,REVOKE,TRUNCATE
+    DML
+      CALL,DELETE,EXPLAIN PLAN,INSERT,LOCK TABLE,MERGE,SELECT,UPDATE
+    Transaction Control
+      COMMIT,ROLLBACK,SAVEPOINT,SET TRANSACTION,SET CONSTRAINT
+    Session Control
+      ALTER SESSION,SET ROLE
+    System Control
+      ALTER SYSTEM
+    PL/SQL
+      Block
+	*/
+
+
+	classify('(select * from dual)', v_output);
+	assert_equals('1', 'DML', v_output.category);
+	assert_equals('1', 'SELECT', v_output.statement_type);
+	assert_equals('1', 'SELECT', v_output.command_name);
+	assert_equals('1', '3', v_output.command_type);
+end test_commands;
 
 
 --------------------------------------------------------------------------------
@@ -151,9 +245,9 @@ begin
 	g_failed_count := 0;
 
 	--Run the chosen tests.
-	if bitand(p_tests, c_static_tests)  > 0 then static_tests; end if;
+	if bitand(p_tests, c_errors)        > 0 then test_errors; end if;
+	if bitand(p_tests, c_commands)      > 0 then test_commands; end if;
 	if bitand(p_tests, c_dynamic_tests) > 0 then dynamic_tests; end if;
-
 
 	--Print summary of results.
 	dbms_output.put_line(null);

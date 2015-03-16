@@ -381,7 +381,7 @@ begin
 			if g_last_char = v_quote_delimiter and look_ahead(1) = '''' then
 				--"Alternative quotes (q'#...#') cannot use spaces, tabs, or carriage returns as delimiters".
 				--(The error says carriage return, but testing indicates they really mean newlines)
-				if look_ahead(2) in (chr(9), chr(10), chr(32)) then
+				if g_last_char in (chr(9), chr(10), chr(32)) then
 					g_token_text := g_token_text || g_last_char;
 					g_last_char := get_char;
 					g_token_text := g_token_text || g_last_char;
@@ -429,7 +429,7 @@ begin
 			if g_last_char = v_quote_delimiter and look_ahead(1) = '''' then
 				--"Alternative quotes (q'#...#') cannot use spaces, tabs, or carriage returns as delimiters".
 				--(The error says carriage return, but also includes newlines)
-				if look_ahead(2) in (' ', '	', chr(10), chr(13)) then
+				if g_last_char in (chr(9), chr(10), chr(32)) then
 					g_token_text := g_token_text || g_last_char;
 					g_last_char := get_char;
 					g_token_text := g_token_text || g_last_char;

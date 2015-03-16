@@ -16,12 +16,7 @@ Statement classifier is a PL/SQL package to thoroughly classify a SQL or PL/SQL 
     begin
         statement_classifier.classify(
             '(with test as (select * from dual) select * from test)',
-            v_category,
-            v_statement_type,
-            v_command_name,
-            v_command_type,
-            v_lex_sqlcode,
-            v_lex_sqlerrm
+            v_category,v_statement_type,v_command_name,v_command_type,v_lex_sqlcode,v_lex_sqlerrm
         );
 
         dbms_output.put_line('Category      : '||v_category);
