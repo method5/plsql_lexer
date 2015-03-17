@@ -141,6 +141,12 @@ end test_errors;
 --------------------------------------------------------------------------------
 procedure test_commands is
 	v_output output_rec;
+
+	--Helper function that concatenates results for easy string comparison.
+	function concat(p_output output_rec) return varchar2 is
+	begin
+		return p_output.category||'|'||p_output.statement_type||'|'||p_output.command_name||'|'||p_output.command_type;
+	end;
 begin
 	/*
 	Tests are in the order of Categories and Components:
@@ -160,12 +166,11 @@ begin
       Block
 	*/
 
-
-	classify('(select * from dual)', v_output);
-	assert_equals('1', 'DML', v_output.category);
-	assert_equals('1', 'SELECT', v_output.statement_type);
-	assert_equals('1', 'SELECT', v_output.command_name);
-	assert_equals('1', '3', v_output.command_type);
+	classify(q'[/*comment*/ adMINister /*asdf*/ kEy manaGEment create keystore 'asdf' identified by qwer]', v_output);
+	assert_equals('ADMINISTER KEY MANAGEMENT', 'DDL|ADMINISTER KEY MANAGEMENT|ADMINISTER KEY MANAGEMENT|238', concat(v_output));
+	classify(q'[ alter assemBLY /*I don't think this is a real command but whatever*/]', v_output);
+	assert_equals('ALTER ASSEMBLY', 'DDL|ALTER|ALTER ASSEMBLY|217', concat(v_output));
+	--TODO
 end test_commands;
 
 

@@ -242,7 +242,7 @@ begin
 		order by command_name;
 	*/
 	if v_symbols_1_to_3 = 'ADMINISTER KEY MANAGEMENT' then --Not in "Types of SQL Statements".
-		p_category := C_DDL; p_statement_type := 'ADMINISTER'; p_command_name := 'ADMINISTER KEY MANAGEMENT'; p_command_type := 238;
+		p_category := C_DDL; p_statement_type := 'ADMINISTER KEY MANAGEMENT'; p_command_name := 'ADMINISTER KEY MANAGEMENT'; p_command_type := 238;
 	elsif v_symbols_1_to_2 = 'ALTER ASSEMBLY' then --I don't think this is a real command.
 		p_category := C_DDL; p_statement_type := 'ALTER'; p_command_name := 'ALTER ASSEMBLY'; p_command_type := 217;
 	elsif v_symbols_1_to_3 = 'ALTER AUDIT POLICY' then
