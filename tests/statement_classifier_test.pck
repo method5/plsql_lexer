@@ -135,6 +135,9 @@ begin
 	classify(q'<(select * from dual) q'!' >', v_output);
 	assert_equals('String not terminated 3', -1756, v_output.lex_sqlcode);
 	assert_equals('String not terminated 4', 'quoted string not properly terminated', v_output.lex_sqlerrm);
+
+	--TODO: Test cannot parse
+
 end test_errors;
 
 
@@ -166,10 +169,44 @@ begin
       Block
 	*/
 
+	--These tests are based on `select * from v$sqlcommand order by command_name;`,
+	--and comparing syntx with the manual.
 	classify(q'[/*comment*/ adMINister /*asdf*/ kEy manaGEment create keystore 'asdf' identified by qwer]', v_output);
 	assert_equals('ADMINISTER KEY MANAGEMENT', 'DDL|ADMINISTER KEY MANAGEMENT|ADMINISTER KEY MANAGEMENT|238', concat(v_output));
 	classify(q'[ alter assemBLY /*I don't think this is a real command but whatever*/]', v_output);
 	assert_equals('ALTER ASSEMBLY', 'DDL|ALTER|ALTER ASSEMBLY|217', concat(v_output));
+	classify(q'[ ALTEr AUDIt POLICY myPOLICY drop roles myRole; --comment]', v_output);
+	assert_equals('ALTER AUDIT POLICY', 'DDL|ALTER|ALTER AUDIT POLICY|230', concat(v_output));
+	classify(q'[	alter	cluster	schema.my_cluster parallel 8]', v_output);
+	assert_equals('ALTER CLUSTER', 'DDL|ALTER|ALTER CLUSTER|5', concat(v_output));
+	classify(q'[alter database cdb1 mount]', v_output);
+	assert_equals('ALTER DATABASE', 'DDL|ALTER|ALTER DATABASE|35', concat(v_output));
+	classify(q'[alter shared public database link my_link connect to me identified by "password";]', v_output);
+	assert_equals('ALTER DATABASE LINK', 'DDL|ALTER|ALTER DATABASE LINK|225', concat(v_output));
+	classify(q'[ alter dimENSION my_dimension#12 compile;]', v_output);
+	assert_equals('ALTER DIMENSION', 'DDL|ALTER|ALTER DIMENSION|175', concat(v_output));
+	classify(q'[/*+useless comment*/ alter diskgroup +orcl13 resize disk '/emcpowersomething/' size 500m;]', v_output);
+	assert_equals('ALTER DISKGROUP', 'DDL|ALTER|ALTER DISK GROUP|193', concat(v_output));
+	--Undocumented feature:
+	classify(q'[ alter EDITION my_edition unusable]', v_output);
+	assert_equals('ALTER EDITION', 'DDL|ALTER|ALTER EDITION|213', concat(v_output));
+	classify(q'[ alter  flashback  archive myarchive set default;]', v_output);
+	assert_equals('ALTER FLASHBACK ARCHIVE', 'DDL|ALTER|ALTER FLASHBACK ARCHIVE|219', concat(v_output));
+	classify(q'[ALTER FUNCTION myschema.myfunction compile;]', v_output);
+	assert_equals('ALTER FUNCTION', 'DDL|ALTER|ALTER FUNCTION|92', concat(v_output));
+	classify(q'[ alter index asdf rebuild parallel 8]', v_output);
+	assert_equals('ALTER INDEX', 'DDL|ALTER|ALTER INDEX|11', concat(v_output));
+	classify(q'[ALTER INDEXTYPE  my_schema.my_indextype compile;]', v_output);
+	assert_equals('ALTER INDEXTYPE', 'DDL|ALTER|ALTER INDEXTYPE|166', concat(v_output));
+	classify(q'[ALTER JAVA]', v_output);
+	assert_equals('ALTER JAVA', 'DDL|ALTER|ALTER JAVA|161', concat(v_output));
+
+
+/*
+	classify(q'[]', v_output);
+	assert_equals('', 'DDL|ALTER||', concat(v_output));
+*/
+
 	--TODO
 end test_commands;
 

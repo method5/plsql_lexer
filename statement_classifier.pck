@@ -184,7 +184,7 @@ begin
 			and not
 			(
 				v_tokens_with_extra_stuff(i).type = 'symbol'
-				and upper(v_tokens_with_extra_stuff(i).type) in
+				and upper(v_tokens_with_extra_stuff(i).value) in
 				(
 					'AND','BIGFILE','BITMAP','COMPILE','EDITIONABLE','FORCE','FORCE','GLOBAL',
 					'NO','NOFORCE','NONEDITIONABLE','OR','PRIVATE','PUBLIC','REPLACE','RESOLVE',
