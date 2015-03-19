@@ -170,7 +170,7 @@ begin
 	System Control
 		ALTER SYSTEM
 	PL/SQL
-		Block
+		BLOCK
 	*/
 
 	--These tests are based on `select * from v$sqlcommand order by command_name;`,
@@ -182,6 +182,7 @@ begin
 	classify(q'[alter database cdb1 mount]', v_output); assert_equals('ALTER DATABASE', 'DDL|ALTER|ALTER DATABASE|35', concat(v_output));
 	classify(q'[alter shared public database link my_link connect to me identified by "password";]', v_output); assert_equals('ALTER DATABASE LINK', 'DDL|ALTER|ALTER DATABASE LINK|225', concat(v_output));
 	classify(q'[ alter dimENSION my_dimension#12 compile;]', v_output); assert_equals('ALTER DIMENSION', 'DDL|ALTER|ALTER DIMENSION|175', concat(v_output));
+	--Command name has extra space, real command is "DISKGROUP".
 	classify(q'[/*+useless comment*/ alter diskgroup +orcl13 resize disk '/emcpowersomething/' size 500m;]', v_output); assert_equals('ALTER DISKGROUP', 'DDL|ALTER|ALTER DISK GROUP|193', concat(v_output));
 	--Undocumented feature:
 	classify(q'[ alter EDITION my_edition unusable]', v_output); assert_equals('ALTER EDITION', 'DDL|ALTER|ALTER EDITION|213', concat(v_output));
@@ -189,9 +190,12 @@ begin
 	classify(q'[ALTER FUNCTION myschema.myfunction compile;]', v_output); assert_equals('ALTER FUNCTION', 'DDL|ALTER|ALTER FUNCTION|92', concat(v_output));
 	classify(q'[ alter index asdf rebuild parallel 8]', v_output); assert_equals('ALTER INDEX', 'DDL|ALTER|ALTER INDEX|11', concat(v_output));
 	classify(q'[ALTER INDEXTYPE  my_schema.my_indextype compile;]', v_output); assert_equals('ALTER INDEXTYPE', 'DDL|ALTER|ALTER INDEXTYPE|166', concat(v_output));
-	classify(q'[ALTER JAVA]', v_output); assert_equals('ALTER JAVA', 'DDL|ALTER|ALTER JAVA|161', concat(v_output));
 
-	--TODO:
+
+	--TODO: Add more realistic code. 
+
+
+	classify(q'[ALTER JAVA]', v_output); assert_equals('ALTER JAVA', 'DDL|ALTER|ALTER JAVA|161', concat(v_output));
 	classify(q'[ALTER LIBRARY]', v_output); assert_equals('ALTER LIBRARY', 'DDL|ALTER|ALTER LIBRARY|196', concat(v_output));
 	classify(q'[ALTER MATERIALIZED VIEW ]', v_output); assert_equals('ALTER MATERIALIZED VIEW ', 'DDL|ALTER|ALTER MATERIALIZED VIEW |75', concat(v_output));
 	classify(q'[ALTER MATERIALIZED VIEW LOG]', v_output); assert_equals('ALTER MATERIALIZED VIEW LOG', 'DDL|ALTER|ALTER MATERIALIZED VIEW LOG|72', concat(v_output));
@@ -220,144 +224,153 @@ begin
 	classify(q'[ALTER TYPE BODY]', v_output); assert_equals('ALTER TYPE BODY', 'DDL|ALTER|ALTER TYPE BODY|82', concat(v_output));
 	classify(q'[ALTER USER]', v_output); assert_equals('ALTER USER', 'DDL|ALTER|ALTER USER|43', concat(v_output));
 	classify(q'[ALTER VIEW]', v_output); assert_equals('ALTER VIEW', 'DDL|ALTER|ALTER VIEW|88', concat(v_output));
-	classify(q'[ANALYZE CLUSTER]', v_output); assert_equals('ANALYZE CLUSTER', 'DDL|ALTER|ANALYZE CLUSTER|64', concat(v_output));
-	classify(q'[ANALYZE INDEX]', v_output); assert_equals('ANALYZE INDEX', 'DDL|ALTER|ANALYZE INDEX|63', concat(v_output));
-	classify(q'[ANALYZE TABLE]', v_output); assert_equals('ANALYZE TABLE', 'DDL|ALTER|ANALYZE TABLE|62', concat(v_output));
-	classify(q'[ASSOCIATE STATISTICS]', v_output); assert_equals('ASSOCIATE STATISTICS', 'DDL|ALTER|ASSOCIATE STATISTICS|168', concat(v_output));
-	classify(q'[AUDIT OBJECT]', v_output); assert_equals('AUDIT OBJECT', 'DDL|ALTER|AUDIT OBJECT|30', concat(v_output));
-	classify(q'[CALL METHOD]', v_output); assert_equals('CALL METHOD', 'DDL|ALTER|CALL METHOD|170', concat(v_output));
-	classify(q'[CHANGE PASSWORD]', v_output); assert_equals('CHANGE PASSWORD', 'DDL|ALTER|CHANGE PASSWORD|190', concat(v_output));
-	classify(q'[COMMENT]', v_output); assert_equals('COMMENT', 'DDL|ALTER|COMMENT|29', concat(v_output));
+	classify(q'[ANALYZE CLUSTER]', v_output); assert_equals('ANALYZE CLUSTER', 'DDL|ANALYZE|ANALYZE CLUSTER|64', concat(v_output));
+	classify(q'[ANALYZE INDEX]', v_output); assert_equals('ANALYZE INDEX', 'DDL|ANALYZE|ANALYZE INDEX|63', concat(v_output));
+	classify(q'[ANALYZE TABLE]', v_output); assert_equals('ANALYZE TABLE', 'DDL|ANALYZE|ANALYZE TABLE|62', concat(v_output));
+	classify(q'[ASSOCIATE STATISTICS]', v_output); assert_equals('ASSOCIATE STATISTICS', 'DDL|ASSOCIATE STATISTICS|ASSOCIATE STATISTICS|168', concat(v_output));
+	classify(q'[AUDIT OBJECT]', v_output); assert_equals('AUDIT OBJECT', 'DDL|AUDIT|AUDIT OBJECT|30', concat(v_output));
+	classify(q'[CALL my_procedure(1,2)]', v_output); assert_equals('CALL METHOD', 'DML|CALL|CALL METHOD|170', concat(v_output));
+	classify(q'[ call my_procedure(3,4);]', v_output); assert_equals('CALL METHOD', 'DML|CALL|CALL METHOD|170', concat(v_output));
+	--I don't think this is a real command.
+	--classify(q'[CHANGE PASSWORD]', v_output); assert_equals('CHANGE PASSWORD', 'DDL|ALTER|CHANGE PASSWORD|190', concat(v_output));
+	classify(q'[COMMENT]', v_output); assert_equals('COMMENT', 'DDL|COMMENT|COMMENT|29', concat(v_output));
 	classify(q'[COMMIT]', v_output); assert_equals('COMMIT', 'Transaction Control|COMMIT|COMMIT|44', concat(v_output));
-	classify(q'[CREATE ASSEMBLY]', v_output); assert_equals('CREATE ASSEMBLY', 'DDL|ALTER|CREATE ASSEMBLY|216', concat(v_output));
-	classify(q'[CREATE AUDIT POLICY]', v_output); assert_equals('CREATE AUDIT POLICY', 'DDL|ALTER|CREATE AUDIT POLICY|229', concat(v_output));
-	classify(q'[CREATE BITMAPFILE]', v_output); assert_equals('CREATE BITMAPFILE', 'DDL|ALTER|CREATE BITMAPFILE|87', concat(v_output));
-	classify(q'[CREATE CLUSTER]', v_output); assert_equals('CREATE CLUSTER', 'DDL|ALTER|CREATE CLUSTER|4', concat(v_output));
-	classify(q'[CREATE CONTEXT]', v_output); assert_equals('CREATE CONTEXT', 'DDL|ALTER|CREATE CONTEXT|177', concat(v_output));
-	classify(q'[CREATE CONTROL FILE]', v_output); assert_equals('CREATE CONTROL FILE', 'DDL|ALTER|CREATE CONTROL FILE|57', concat(v_output));
-	classify(q'[CREATE DATABASE]', v_output); assert_equals('CREATE DATABASE', 'DDL|ALTER|CREATE DATABASE|34', concat(v_output));
-	classify(q'[CREATE DATABASE LINK]', v_output); assert_equals('CREATE DATABASE LINK', 'DDL|ALTER|CREATE DATABASE LINK|32', concat(v_output));
-	classify(q'[CREATE DIMENSION]', v_output); assert_equals('CREATE DIMENSION', 'DDL|ALTER|CREATE DIMENSION|174', concat(v_output));
-	classify(q'[CREATE DIRECTORY]', v_output); assert_equals('CREATE DIRECTORY', 'DDL|ALTER|CREATE DIRECTORY|157', concat(v_output));
-	classify(q'[CREATE DISK GROUP]', v_output); assert_equals('CREATE DISK GROUP', 'DDL|ALTER|CREATE DISK GROUP|194', concat(v_output));
-	classify(q'[CREATE EDITION]', v_output); assert_equals('CREATE EDITION', 'DDL|ALTER|CREATE EDITION|212', concat(v_output));
-	classify(q'[CREATE FLASHBACK ARCHIVE]', v_output); assert_equals('CREATE FLASHBACK ARCHIVE', 'DDL|ALTER|CREATE FLASHBACK ARCHIVE|218', concat(v_output));
-	classify(q'[CREATE FUNCTION]', v_output); assert_equals('CREATE FUNCTION', 'DDL|ALTER|CREATE FUNCTION|91', concat(v_output));
-	classify(q'[CREATE INDEX]', v_output); assert_equals('CREATE INDEX', 'DDL|ALTER|CREATE INDEX|9', concat(v_output));
-	classify(q'[CREATE INDEXTYPE]', v_output); assert_equals('CREATE INDEXTYPE', 'DDL|ALTER|CREATE INDEXTYPE|164', concat(v_output));
-	classify(q'[CREATE JAVA]', v_output); assert_equals('CREATE JAVA', 'DDL|ALTER|CREATE JAVA|160', concat(v_output));
-	classify(q'[CREATE LIBRARY]', v_output); assert_equals('CREATE LIBRARY', 'DDL|ALTER|CREATE LIBRARY|159', concat(v_output));
-	classify(q'[CREATE MATERIALIZED VIEW ]', v_output); assert_equals('CREATE MATERIALIZED VIEW ', 'DDL|ALTER|CREATE MATERIALIZED VIEW |74', concat(v_output));
-	classify(q'[CREATE MATERIALIZED VIEW LOG]', v_output); assert_equals('CREATE MATERIALIZED VIEW LOG', 'DDL|ALTER|CREATE MATERIALIZED VIEW LOG|71', concat(v_output));
-	classify(q'[CREATE MATERIALIZED ZONEMAP]', v_output); assert_equals('CREATE MATERIALIZED ZONEMAP', 'DDL|ALTER|CREATE MATERIALIZED ZONEMAP|239', concat(v_output));
-	classify(q'[CREATE OPERATOR]', v_output); assert_equals('CREATE OPERATOR', 'DDL|ALTER|CREATE OPERATOR|163', concat(v_output));
-	classify(q'[CREATE OUTLINE]', v_output); assert_equals('CREATE OUTLINE', 'DDL|ALTER|CREATE OUTLINE|180', concat(v_output));
-	classify(q'[CREATE PACKAGE]', v_output); assert_equals('CREATE PACKAGE', 'DDL|ALTER|CREATE PACKAGE|94', concat(v_output));
-	classify(q'[CREATE PACKAGE BODY]', v_output); assert_equals('CREATE PACKAGE BODY', 'DDL|ALTER|CREATE PACKAGE BODY|97', concat(v_output));
-	classify(q'[CREATE PFILE]', v_output); assert_equals('CREATE PFILE', 'DDL|ALTER|CREATE PFILE|188', concat(v_output));
-	classify(q'[CREATE PLUGGABLE DATABASE]', v_output); assert_equals('CREATE PLUGGABLE DATABASE', 'DDL|ALTER|CREATE PLUGGABLE DATABASE|226', concat(v_output));
-	classify(q'[CREATE PROCEDURE]', v_output); assert_equals('CREATE PROCEDURE', 'DDL|ALTER|CREATE PROCEDURE|24', concat(v_output));
-	classify(q'[CREATE PROFILE]', v_output); assert_equals('CREATE PROFILE', 'DDL|ALTER|CREATE PROFILE|65', concat(v_output));
-	classify(q'[CREATE RESTORE POINT]', v_output); assert_equals('CREATE RESTORE POINT', 'DDL|ALTER|CREATE RESTORE POINT|206', concat(v_output));
-	classify(q'[CREATE ROLE]', v_output); assert_equals('CREATE ROLE', 'DDL|ALTER|CREATE ROLE|52', concat(v_output));
-	classify(q'[CREATE ROLLBACK SEGMENT]', v_output); assert_equals('CREATE ROLLBACK SEGMENT', 'DDL|ALTER|CREATE ROLLBACK SEGMENT|36', concat(v_output));
-	classify(q'[CREATE SCHEMA]', v_output); assert_equals('CREATE SCHEMA', 'DDL|ALTER|CREATE SCHEMA|56', concat(v_output));
-	classify(q'[CREATE SCHEMA SYNONYM]', v_output); assert_equals('CREATE SCHEMA SYNONYM', 'DDL|ALTER|CREATE SCHEMA SYNONYM|222', concat(v_output));
-	classify(q'[CREATE SEQUENCE]', v_output); assert_equals('CREATE SEQUENCE', 'DDL|ALTER|CREATE SEQUENCE|13', concat(v_output));
-	classify(q'[CREATE SPFILE]', v_output); assert_equals('CREATE SPFILE', 'DDL|ALTER|CREATE SPFILE|187', concat(v_output));
-	classify(q'[CREATE SUMMARY]', v_output); assert_equals('CREATE SUMMARY', 'DDL|ALTER|CREATE SUMMARY|171', concat(v_output));
-	classify(q'[CREATE SYNONYM]', v_output); assert_equals('CREATE SYNONYM', 'DDL|ALTER|CREATE SYNONYM|19', concat(v_output));
-	classify(q'[CREATE TABLE]', v_output); assert_equals('CREATE TABLE', 'DDL|ALTER|CREATE TABLE|1', concat(v_output));
-	classify(q'[CREATE TABLESPACE]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|ALTER|CREATE TABLESPACE|39', concat(v_output));
-	classify(q'[CREATE TRIGGER]', v_output); assert_equals('CREATE TRIGGER', 'DDL|ALTER|CREATE TRIGGER|59', concat(v_output));
-	classify(q'[CREATE TYPE]', v_output); assert_equals('CREATE TYPE', 'DDL|ALTER|CREATE TYPE|77', concat(v_output));
-	classify(q'[CREATE TYPE BODY]', v_output); assert_equals('CREATE TYPE BODY', 'DDL|ALTER|CREATE TYPE BODY|81', concat(v_output));
-	classify(q'[CREATE USER]', v_output); assert_equals('CREATE USER', 'DDL|ALTER|CREATE USER|51', concat(v_output));
-	classify(q'[CREATE VIEW]', v_output); assert_equals('CREATE VIEW', 'DDL|ALTER|CREATE VIEW|21', concat(v_output));
-	classify(q'[DECLARE REWRITE EQUIVALENCE]', v_output); assert_equals('DECLARE REWRITE EQUIVALENCE', 'DDL|ALTER|DECLARE REWRITE EQUIVALENCE|209', concat(v_output));
-	classify(q'[DELETE]', v_output); assert_equals('DELETE', 'DDL|ALTER|DELETE|7', concat(v_output));
-	classify(q'[DISASSOCIATE STATISTICS]', v_output); assert_equals('DISASSOCIATE STATISTICS', 'DDL|ALTER|DISASSOCIATE STATISTICS|169', concat(v_output));
-	classify(q'[DROP ASSEMBLY]', v_output); assert_equals('DROP ASSEMBLY', 'DDL|ALTER|DROP ASSEMBLY|215', concat(v_output));
-	classify(q'[DROP AUDIT POLICY]', v_output); assert_equals('DROP AUDIT POLICY', 'DDL|ALTER|DROP AUDIT POLICY|231', concat(v_output));
-	classify(q'[DROP BITMAPFILE]', v_output); assert_equals('DROP BITMAPFILE', 'DDL|ALTER|DROP BITMAPFILE|89', concat(v_output));
-	classify(q'[DROP CLUSTER]', v_output); assert_equals('DROP CLUSTER', 'DDL|ALTER|DROP CLUSTER|8', concat(v_output));
-	classify(q'[DROP CONTEXT]', v_output); assert_equals('DROP CONTEXT', 'DDL|ALTER|DROP CONTEXT|178', concat(v_output));
-	classify(q'[DROP DATABASE]', v_output); assert_equals('DROP DATABASE', 'DDL|ALTER|DROP DATABASE|203', concat(v_output));
-	classify(q'[DROP DATABASE LINK]', v_output); assert_equals('DROP DATABASE LINK', 'DDL|ALTER|DROP DATABASE LINK|33', concat(v_output));
-	classify(q'[DROP DIMENSION]', v_output); assert_equals('DROP DIMENSION', 'DDL|ALTER|DROP DIMENSION|176', concat(v_output));
-	classify(q'[DROP DIRECTORY]', v_output); assert_equals('DROP DIRECTORY', 'DDL|ALTER|DROP DIRECTORY|158', concat(v_output));
-	classify(q'[DROP DISK GROUP]', v_output); assert_equals('DROP DISK GROUP', 'DDL|ALTER|DROP DISK GROUP|195', concat(v_output));
-	classify(q'[DROP EDITION]', v_output); assert_equals('DROP EDITION', 'DDL|ALTER|DROP EDITION|214', concat(v_output));
-	classify(q'[DROP FLASHBACK ARCHIVE]', v_output); assert_equals('DROP FLASHBACK ARCHIVE', 'DDL|ALTER|DROP FLASHBACK ARCHIVE|220', concat(v_output));
-	classify(q'[DROP FUNCTION]', v_output); assert_equals('DROP FUNCTION', 'DDL|ALTER|DROP FUNCTION|93', concat(v_output));
-	classify(q'[DROP INDEX]', v_output); assert_equals('DROP INDEX', 'DDL|ALTER|DROP INDEX|10', concat(v_output));
-	classify(q'[DROP INDEXTYPE]', v_output); assert_equals('DROP INDEXTYPE', 'DDL|ALTER|DROP INDEXTYPE|165', concat(v_output));
-	classify(q'[DROP JAVA]', v_output); assert_equals('DROP JAVA', 'DDL|ALTER|DROP JAVA|162', concat(v_output));
-	classify(q'[DROP LIBRARY]', v_output); assert_equals('DROP LIBRARY', 'DDL|ALTER|DROP LIBRARY|84', concat(v_output));
-	classify(q'[DROP MATERIALIZED VIEW ]', v_output); assert_equals('DROP MATERIALIZED VIEW ', 'DDL|ALTER|DROP MATERIALIZED VIEW |76', concat(v_output));
-	classify(q'[DROP MATERIALIZED VIEW  LOG]', v_output); assert_equals('DROP MATERIALIZED VIEW  LOG', 'DDL|ALTER|DROP MATERIALIZED VIEW  LOG|73', concat(v_output));
-	classify(q'[DROP MATERIALIZED ZONEMAP]', v_output); assert_equals('DROP MATERIALIZED ZONEMAP', 'DDL|ALTER|DROP MATERIALIZED ZONEMAP|241', concat(v_output));
-	classify(q'[DROP OPERATOR]', v_output); assert_equals('DROP OPERATOR', 'DDL|ALTER|DROP OPERATOR|167', concat(v_output));
-	classify(q'[DROP OUTLINE]', v_output); assert_equals('DROP OUTLINE', 'DDL|ALTER|DROP OUTLINE|181', concat(v_output));
-	classify(q'[DROP PACKAGE]', v_output); assert_equals('DROP PACKAGE', 'DDL|ALTER|DROP PACKAGE|96', concat(v_output));
-	classify(q'[DROP PACKAGE BODY]', v_output); assert_equals('DROP PACKAGE BODY', 'DDL|ALTER|DROP PACKAGE BODY|99', concat(v_output));
-	classify(q'[DROP PLUGGABLE DATABASE]', v_output); assert_equals('DROP PLUGGABLE DATABASE', 'DDL|ALTER|DROP PLUGGABLE DATABASE|228', concat(v_output));
-	classify(q'[DROP PROCEDURE]', v_output); assert_equals('DROP PROCEDURE', 'DDL|ALTER|DROP PROCEDURE|68', concat(v_output));
-	classify(q'[DROP PROFILE]', v_output); assert_equals('DROP PROFILE', 'DDL|ALTER|DROP PROFILE|66', concat(v_output));
-	classify(q'[DROP RESTORE POINT]', v_output); assert_equals('DROP RESTORE POINT', 'DDL|ALTER|DROP RESTORE POINT|207', concat(v_output));
-	classify(q'[DROP REWRITE EQUIVALENCE]', v_output); assert_equals('DROP REWRITE EQUIVALENCE', 'DDL|ALTER|DROP REWRITE EQUIVALENCE|211', concat(v_output));
-	classify(q'[DROP ROLE]', v_output); assert_equals('DROP ROLE', 'DDL|ALTER|DROP ROLE|54', concat(v_output));
-	classify(q'[DROP ROLLBACK SEGMENT]', v_output); assert_equals('DROP ROLLBACK SEGMENT', 'DDL|ALTER|DROP ROLLBACK SEGMENT|38', concat(v_output));
-	classify(q'[DROP SCHEMA SYNONYM]', v_output); assert_equals('DROP SCHEMA SYNONYM', 'DDL|ALTER|DROP SCHEMA SYNONYM|224', concat(v_output));
-	classify(q'[DROP SEQUENCE]', v_output); assert_equals('DROP SEQUENCE', 'DDL|ALTER|DROP SEQUENCE|16', concat(v_output));
-	classify(q'[DROP SUMMARY]', v_output); assert_equals('DROP SUMMARY', 'DDL|ALTER|DROP SUMMARY|173', concat(v_output));
-	classify(q'[DROP SYNONYM]', v_output); assert_equals('DROP SYNONYM', 'DDL|ALTER|DROP SYNONYM|20', concat(v_output));
-	classify(q'[DROP TABLE]', v_output); assert_equals('DROP TABLE', 'DDL|ALTER|DROP TABLE|12', concat(v_output));
-	classify(q'[DROP TABLESPACE]', v_output); assert_equals('DROP TABLESPACE', 'DDL|ALTER|DROP TABLESPACE|41', concat(v_output));
-	classify(q'[DROP TRIGGER]', v_output); assert_equals('DROP TRIGGER', 'DDL|ALTER|DROP TRIGGER|61', concat(v_output));
-	classify(q'[DROP TYPE]', v_output); assert_equals('DROP TYPE', 'DDL|ALTER|DROP TYPE|78', concat(v_output));
-	classify(q'[DROP TYPE BODY]', v_output); assert_equals('DROP TYPE BODY', 'DDL|ALTER|DROP TYPE BODY|83', concat(v_output));
-	classify(q'[DROP USER]', v_output); assert_equals('DROP USER', 'DDL|ALTER|DROP USER|53', concat(v_output));
-	classify(q'[DROP VIEW]', v_output); assert_equals('DROP VIEW', 'DDL|ALTER|DROP VIEW|22', concat(v_output));
-	classify(q'[Do not use 184]', v_output); assert_equals('Do not use 184', 'DDL|ALTER|Do not use 184|184', concat(v_output));
-	classify(q'[Do not use 185]', v_output); assert_equals('Do not use 185', 'DDL|ALTER|Do not use 185|185', concat(v_output));
-	classify(q'[Do not use 186]', v_output); assert_equals('Do not use 186', 'DDL|ALTER|Do not use 186|186', concat(v_output));
-	classify(q'[EXPLAIN]', v_output); assert_equals('EXPLAIN', 'DDL|ALTER|EXPLAIN|50', concat(v_output));
-	classify(q'[FLASHBACK DATABASE]', v_output); assert_equals('FLASHBACK DATABASE', 'DDL|ALTER|FLASHBACK DATABASE|204', concat(v_output));
-	classify(q'[FLASHBACK TABLE]', v_output); assert_equals('FLASHBACK TABLE', 'DDL|ALTER|FLASHBACK TABLE|205', concat(v_output));
-	classify(q'[GRANT OBJECT]', v_output); assert_equals('GRANT OBJECT', 'DDL|ALTER|GRANT OBJECT|17', concat(v_output));
-	classify(q'[INSERT]', v_output); assert_equals('INSERT', 'DDL|ALTER|INSERT|2', concat(v_output));
-	classify(q'[LOCK TABLE]', v_output); assert_equals('LOCK TABLE', 'DDL|ALTER|LOCK TABLE|26', concat(v_output));
-	classify(q'[NO-OP]', v_output); assert_equals('NO-OP', 'DDL|ALTER|NO-OP|27', concat(v_output));
-	classify(q'[NOAUDIT OBJECT]', v_output); assert_equals('NOAUDIT OBJECT', 'DDL|ALTER|NOAUDIT OBJECT|31', concat(v_output));
-	classify(q'[PL/SQL EXECUTE]', v_output); assert_equals('PL/SQL EXECUTE', 'DDL|ALTER|PL/SQL EXECUTE|47', concat(v_output));
-	classify(q'[PURGE DBA RECYCLEBIN]', v_output); assert_equals('PURGE DBA RECYCLEBIN', 'DDL|ALTER|PURGE DBA RECYCLEBIN|198', concat(v_output));
-	classify(q'[PURGE INDEX]', v_output); assert_equals('PURGE INDEX', 'DDL|ALTER|PURGE INDEX|201', concat(v_output));
-	classify(q'[PURGE TABLE]', v_output); assert_equals('PURGE TABLE', 'DDL|ALTER|PURGE TABLE|200', concat(v_output));
-	classify(q'[PURGE TABLESPACE]', v_output); assert_equals('PURGE TABLESPACE', 'DDL|ALTER|PURGE TABLESPACE|199', concat(v_output));
-	classify(q'[PURGE USER RECYCLEBIN]', v_output); assert_equals('PURGE USER RECYCLEBIN', 'DDL|ALTER|PURGE USER RECYCLEBIN|197', concat(v_output));
-	classify(q'[RENAME]', v_output); assert_equals('RENAME', 'DDL|ALTER|RENAME|28', concat(v_output));
-	classify(q'[REVOKE OBJECT]', v_output); assert_equals('REVOKE OBJECT', 'DDL|ALTER|REVOKE OBJECT|18', concat(v_output));
+	classify(q'[CREATE ASSEMBLY]', v_output); assert_equals('CREATE ASSEMBLY', 'DDL|CREATE|CREATE ASSEMBLY|216', concat(v_output));
+	classify(q'[CREATE AUDIT POLICY]', v_output); assert_equals('CREATE AUDIT POLICY', 'DDL|CREATE|CREATE AUDIT POLICY|229', concat(v_output));
+	classify(q'[CREATE BITMAPFILE]', v_output); assert_equals('CREATE BITMAPFILE', 'DDL|CREATE|CREATE BITMAPFILE|87', concat(v_output));
+	classify(q'[CREATE CLUSTER]', v_output); assert_equals('CREATE CLUSTER', 'DDL|CREATE|CREATE CLUSTER|4', concat(v_output));
+	classify(q'[CREATE CONTEXT]', v_output); assert_equals('CREATE CONTEXT', 'DDL|CREATE|CREATE CONTEXT|177', concat(v_output));
+	classify(q'[CREATE CONTROL FILE]', v_output); assert_equals('CREATE CONTROL FILE', 'DDL|CREATE|CREATE CONTROL FILE|57', concat(v_output));
+	classify(q'[CREATE DATABASE]', v_output); assert_equals('CREATE DATABASE', 'DDL|CREATE|CREATE DATABASE|34', concat(v_output));
+	classify(q'[CREATE DATABASE LINK]', v_output); assert_equals('CREATE DATABASE LINK', 'DDL|CREATE|CREATE DATABASE LINK|32', concat(v_output));
+	classify(q'[CREATE DIMENSION]', v_output); assert_equals('CREATE DIMENSION', 'DDL|CREATE|CREATE DIMENSION|174', concat(v_output));
+	classify(q'[CREATE DIRECTORY]', v_output); assert_equals('CREATE DIRECTORY', 'DDL|CREATE|CREATE DIRECTORY|157', concat(v_output));
+	--Command name has extra space, real command is "DISKGROUP".
+	classify(q'[CREATE DISKGROUP]', v_output); assert_equals('CREATE DISK GROUP', 'DDL|CREATE|CREATE DISK GROUP|194', concat(v_output));
+	classify(q'[CREATE EDITION]', v_output); assert_equals('CREATE EDITION', 'DDL|CREATE|CREATE EDITION|212', concat(v_output));
+	classify(q'[CREATE FLASHBACK ARCHIVE]', v_output); assert_equals('CREATE FLASHBACK ARCHIVE', 'DDL|CREATE|CREATE FLASHBACK ARCHIVE|218', concat(v_output));
+	classify(q'[CREATE FUNCTION]', v_output); assert_equals('CREATE FUNCTION', 'DDL|CREATE|CREATE FUNCTION|91', concat(v_output));
+	classify(q'[CREATE INDEX]', v_output); assert_equals('CREATE INDEX', 'DDL|CREATE|CREATE INDEX|9', concat(v_output));
+	classify(q'[CREATE INDEXTYPE]', v_output); assert_equals('CREATE INDEXTYPE', 'DDL|CREATE|CREATE INDEXTYPE|164', concat(v_output));
+	classify(q'[CREATE JAVA]', v_output); assert_equals('CREATE JAVA', 'DDL|CREATE|CREATE JAVA|160', concat(v_output));
+	classify(q'[CREATE LIBRARY]', v_output); assert_equals('CREATE LIBRARY', 'DDL|CREATE|CREATE LIBRARY|159', concat(v_output));
+	classify(q'[CREATE MATERIALIZED VIEW ]', v_output); assert_equals('CREATE MATERIALIZED VIEW ', 'DDL|CREATE|CREATE MATERIALIZED VIEW |74', concat(v_output));
+	classify(q'[CREATE MATERIALIZED VIEW LOG]', v_output); assert_equals('CREATE MATERIALIZED VIEW LOG', 'DDL|CREATE|CREATE MATERIALIZED VIEW LOG|71', concat(v_output));
+	classify(q'[CREATE MATERIALIZED ZONEMAP]', v_output); assert_equals('CREATE MATERIALIZED ZONEMAP', 'DDL|CREATE|CREATE MATERIALIZED ZONEMAP|239', concat(v_output));
+	classify(q'[CREATE OPERATOR]', v_output); assert_equals('CREATE OPERATOR', 'DDL|CREATE|CREATE OPERATOR|163', concat(v_output));
+	classify(q'[CREATE OUTLINE]', v_output); assert_equals('CREATE OUTLINE', 'DDL|CREATE|CREATE OUTLINE|180', concat(v_output));
+	classify(q'[CREATE PACKAGE]', v_output); assert_equals('CREATE PACKAGE', 'DDL|CREATE|CREATE PACKAGE|94', concat(v_output));
+	classify(q'[CREATE PACKAGE BODY]', v_output); assert_equals('CREATE PACKAGE BODY', 'DDL|CREATE|CREATE PACKAGE BODY|97', concat(v_output));
+	classify(q'[CREATE PFILE]', v_output); assert_equals('CREATE PFILE', 'DDL|CREATE|CREATE PFILE|188', concat(v_output));
+	classify(q'[CREATE PLUGGABLE DATABASE]', v_output); assert_equals('CREATE PLUGGABLE DATABASE', 'DDL|CREATE|CREATE PLUGGABLE DATABASE|226', concat(v_output));
+	classify(q'[CREATE PROCEDURE]', v_output); assert_equals('CREATE PROCEDURE', 'DDL|CREATE|CREATE PROCEDURE|24', concat(v_output));
+	classify(q'[CREATE PROFILE]', v_output); assert_equals('CREATE PROFILE', 'DDL|CREATE|CREATE PROFILE|65', concat(v_output));
+	classify(q'[CREATE RESTORE POINT]', v_output); assert_equals('CREATE RESTORE POINT', 'DDL|CREATE|CREATE RESTORE POINT|206', concat(v_output));
+	classify(q'[CREATE ROLE]', v_output); assert_equals('CREATE ROLE', 'DDL|CREATE|CREATE ROLE|52', concat(v_output));
+	classify(q'[CREATE ROLLBACK SEGMENT]', v_output); assert_equals('CREATE ROLLBACK SEGMENT', 'DDL|CREATE|CREATE ROLLBACK SEGMENT|36', concat(v_output));
+	classify(q'[CREATE SCHEMA]', v_output); assert_equals('CREATE SCHEMA', 'DDL|CREATE|CREATE SCHEMA|56', concat(v_output));
+	classify(q'[CREATE SCHEMA SYNONYM]', v_output); assert_equals('CREATE SCHEMA SYNONYM', 'DDL|CREATE|CREATE SCHEMA SYNONYM|222', concat(v_output));
+	classify(q'[CREATE SEQUENCE]', v_output); assert_equals('CREATE SEQUENCE', 'DDL|CREATE|CREATE SEQUENCE|13', concat(v_output));
+	classify(q'[CREATE SPFILE]', v_output); assert_equals('CREATE SPFILE', 'DDL|CREATE|CREATE SPFILE|187', concat(v_output));
+	classify(q'[CREATE SUMMARY]', v_output); assert_equals('CREATE SUMMARY', 'DDL|CREATE|CREATE SUMMARY|171', concat(v_output));
+	classify(q'[CREATE SYNONYM]', v_output); assert_equals('CREATE SYNONYM', 'DDL|CREATE|CREATE SYNONYM|19', concat(v_output));
+	classify(q'[CREATE TABLE]', v_output); assert_equals('CREATE TABLE', 'DDL|CREATE|CREATE TABLE|1', concat(v_output));
+	classify(q'[CREATE TABLESPACE]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
+	classify(q'[CREATE TRIGGER]', v_output); assert_equals('CREATE TRIGGER', 'DDL|CREATE|CREATE TRIGGER|59', concat(v_output));
+	classify(q'[CREATE TYPE]', v_output); assert_equals('CREATE TYPE', 'DDL|CREATE|CREATE TYPE|77', concat(v_output));
+	classify(q'[CREATE TYPE BODY]', v_output); assert_equals('CREATE TYPE BODY', 'DDL|CREATE|CREATE TYPE BODY|81', concat(v_output));
+	classify(q'[CREATE USER]', v_output); assert_equals('CREATE USER', 'DDL|CREATE|CREATE USER|51', concat(v_output));
+	classify(q'[CREATE VIEW]', v_output); assert_equals('CREATE VIEW', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+--	classify(q'[DECLARE REWRITE EQUIVALENCE]', v_output); assert_equals('DECLARE REWRITE EQUIVALENCE', 'DDL|ALTER|DECLARE REWRITE EQUIVALENCE|209', concat(v_output));
+	classify(q'[DELETE]', v_output); assert_equals('DELETE', 'DML|DELETE|DELETE|7', concat(v_output));
+	classify(q'[DISASSOCIATE STATISTICS]', v_output); assert_equals('DISASSOCIATE STATISTICS', 'DDL|DISASSOCIATE STATISTICS|DISASSOCIATE STATISTICS|169', concat(v_output));
+	classify(q'[DROP ASSEMBLY]', v_output); assert_equals('DROP ASSEMBLY', 'DDL|DROP|DROP ASSEMBLY|215', concat(v_output));
+	classify(q'[DROP AUDIT POLICY]', v_output); assert_equals('DROP AUDIT POLICY', 'DDL|DROP|DROP AUDIT POLICY|231', concat(v_output));
+	classify(q'[DROP BITMAPFILE]', v_output); assert_equals('DROP BITMAPFILE', 'DDL|DROP|DROP BITMAPFILE|89', concat(v_output));
+	classify(q'[DROP CLUSTER]', v_output); assert_equals('DROP CLUSTER', 'DDL|DROP|DROP CLUSTER|8', concat(v_output));
+	classify(q'[DROP CONTEXT]', v_output); assert_equals('DROP CONTEXT', 'DDL|DROP|DROP CONTEXT|178', concat(v_output));
+	classify(q'[DROP DATABASE]', v_output); assert_equals('DROP DATABASE', 'DDL|DROP|DROP DATABASE|203', concat(v_output));
+	classify(q'[DROP DATABASE LINK]', v_output); assert_equals('DROP DATABASE LINK', 'DDL|DROP|DROP DATABASE LINK|33', concat(v_output));
+	classify(q'[DROP DIMENSION]', v_output); assert_equals('DROP DIMENSION', 'DDL|DROP|DROP DIMENSION|176', concat(v_output));
+	classify(q'[DROP DIRECTORY]', v_output); assert_equals('DROP DIRECTORY', 'DDL|DROP|DROP DIRECTORY|158', concat(v_output));
+	--Command name has extra space, real command is "DISKGROUP".
+	classify(q'[DROP DISKGROUP]', v_output); assert_equals('DROP DISK GROUP', 'DDL|DROP|DROP DISK GROUP|195', concat(v_output));
+	classify(q'[DROP EDITION]', v_output); assert_equals('DROP EDITION', 'DDL|DROP|DROP EDITION|214', concat(v_output));
+	classify(q'[DROP FLASHBACK ARCHIVE]', v_output); assert_equals('DROP FLASHBACK ARCHIVE', 'DDL|DROP|DROP FLASHBACK ARCHIVE|220', concat(v_output));
+	classify(q'[DROP FUNCTION]', v_output); assert_equals('DROP FUNCTION', 'DDL|DROP|DROP FUNCTION|93', concat(v_output));
+	classify(q'[DROP INDEX]', v_output); assert_equals('DROP INDEX', 'DDL|DROP|DROP INDEX|10', concat(v_output));
+	classify(q'[DROP INDEXTYPE]', v_output); assert_equals('DROP INDEXTYPE', 'DDL|DROP|DROP INDEXTYPE|165', concat(v_output));
+	classify(q'[DROP JAVA]', v_output); assert_equals('DROP JAVA', 'DDL|DROP|DROP JAVA|162', concat(v_output));
+	classify(q'[DROP LIBRARY]', v_output); assert_equals('DROP LIBRARY', 'DDL|DROP|DROP LIBRARY|84', concat(v_output));
+	classify(q'[DROP MATERIALIZED VIEW ]', v_output); assert_equals('DROP MATERIALIZED VIEW ', 'DDL|DROP|DROP MATERIALIZED VIEW |76', concat(v_output));
+	classify(q'[DROP MATERIALIZED VIEW  LOG]', v_output); assert_equals('DROP MATERIALIZED VIEW  LOG', 'DDL|DROP|DROP MATERIALIZED VIEW  LOG|73', concat(v_output));
+	classify(q'[DROP MATERIALIZED ZONEMAP]', v_output); assert_equals('DROP MATERIALIZED ZONEMAP', 'DDL|DROP|DROP MATERIALIZED ZONEMAP|241', concat(v_output));
+	classify(q'[DROP OPERATOR]', v_output); assert_equals('DROP OPERATOR', 'DDL|DROP|DROP OPERATOR|167', concat(v_output));
+	classify(q'[DROP OUTLINE]', v_output); assert_equals('DROP OUTLINE', 'DDL|DROP|DROP OUTLINE|181', concat(v_output));
+	classify(q'[DROP PACKAGE]', v_output); assert_equals('DROP PACKAGE', 'DDL|DROP|DROP PACKAGE|96', concat(v_output));
+	classify(q'[DROP PACKAGE BODY]', v_output); assert_equals('DROP PACKAGE BODY', 'DDL|DROP|DROP PACKAGE BODY|99', concat(v_output));
+	classify(q'[DROP PLUGGABLE DATABASE]', v_output); assert_equals('DROP PLUGGABLE DATABASE', 'DDL|DROP|DROP PLUGGABLE DATABASE|228', concat(v_output));
+	classify(q'[DROP PROCEDURE]', v_output); assert_equals('DROP PROCEDURE', 'DDL|DROP|DROP PROCEDURE|68', concat(v_output));
+	classify(q'[DROP PROFILE]', v_output); assert_equals('DROP PROFILE', 'DDL|DROP|DROP PROFILE|66', concat(v_output));
+	classify(q'[DROP RESTORE POINT]', v_output); assert_equals('DROP RESTORE POINT', 'DDL|DROP|DROP RESTORE POINT|207', concat(v_output));
+	classify(q'[DROP REWRITE EQUIVALENCE]', v_output); assert_equals('DROP REWRITE EQUIVALENCE', 'DDL|DROP|DROP REWRITE EQUIVALENCE|211', concat(v_output));
+	classify(q'[DROP ROLE]', v_output); assert_equals('DROP ROLE', 'DDL|DROP|DROP ROLE|54', concat(v_output));
+	classify(q'[DROP ROLLBACK SEGMENT]', v_output); assert_equals('DROP ROLLBACK SEGMENT', 'DDL|DROP|DROP ROLLBACK SEGMENT|38', concat(v_output));
+	classify(q'[DROP SCHEMA SYNONYM]', v_output); assert_equals('DROP SCHEMA SYNONYM', 'DDL|DROP|DROP SCHEMA SYNONYM|224', concat(v_output));
+	classify(q'[DROP SEQUENCE]', v_output); assert_equals('DROP SEQUENCE', 'DDL|DROP|DROP SEQUENCE|16', concat(v_output));
+	classify(q'[DROP SUMMARY]', v_output); assert_equals('DROP SUMMARY', 'DDL|DROP|DROP SUMMARY|173', concat(v_output));
+	classify(q'[DROP SYNONYM]', v_output); assert_equals('DROP SYNONYM', 'DDL|DROP|DROP SYNONYM|20', concat(v_output));
+	classify(q'[DROP TABLE]', v_output); assert_equals('DROP TABLE', 'DDL|DROP|DROP TABLE|12', concat(v_output));
+	classify(q'[DROP TABLESPACE]', v_output); assert_equals('DROP TABLESPACE', 'DDL|DROP|DROP TABLESPACE|41', concat(v_output));
+	classify(q'[DROP TRIGGER]', v_output); assert_equals('DROP TRIGGER', 'DDL|DROP|DROP TRIGGER|61', concat(v_output));
+	classify(q'[DROP TYPE]', v_output); assert_equals('DROP TYPE', 'DDL|DROP|DROP TYPE|78', concat(v_output));
+	classify(q'[DROP TYPE BODY]', v_output); assert_equals('DROP TYPE BODY', 'DDL|DROP|DROP TYPE BODY|83', concat(v_output));
+	classify(q'[DROP USER]', v_output); assert_equals('DROP USER', 'DDL|DROP|DROP USER|53', concat(v_output));
+	classify(q'[DROP VIEW]', v_output); assert_equals('DROP VIEW', 'DDL|DROP|DROP VIEW|22', concat(v_output));
+	--classify(q'[Do not use 184]', v_output); assert_equals('Do not use 184', 'DDL|ALTER|Do not use 184|184', concat(v_output));
+	--classify(q'[Do not use 185]', v_output); assert_equals('Do not use 185', 'DDL|ALTER|Do not use 185|185', concat(v_output));
+	--classify(q'[Do not use 186]', v_output); assert_equals('Do not use 186', 'DDL|ALTER|Do not use 186|186', concat(v_output));
+	classify(q'[EXPLAIN]', v_output); assert_equals('EXPLAIN', 'DML|EXPLAIN PLAN|EXPLAIN|50', concat(v_output));
+	classify(q'[FLASHBACK DATABASE]', v_output); assert_equals('FLASHBACK DATABASE', 'DDL|FLASHBACK|FLASHBACK DATABASE|204', concat(v_output));
+	classify(q'[FLASHBACK TABLE]', v_output); assert_equals('FLASHBACK TABLE', 'DDL|FLASHBACK|FLASHBACK TABLE|205', concat(v_output));
+	classify(q'[GRANT OBJECT]', v_output); assert_equals('GRANT OBJECT', 'DDL|GRANT|GRANT OBJECT|17', concat(v_output));
+	classify(q'[INSERT]', v_output); assert_equals('INSERT', 'DML|INSERT|INSERT|2', concat(v_output));
+	classify(q'[LOCK TABLE]', v_output); assert_equals('LOCK TABLE', 'DML|LOCK TABLE|LOCK TABLE|26', concat(v_output));
+	--classify(q'[NO-OP]', v_output); assert_equals('NO-OP', 'DDL|ALTER|NO-OP|27', concat(v_output));
+	classify(q'[NOAUDIT OBJECT]', v_output); assert_equals('NOAUDIT OBJECT', 'DDL|NOAUDIT|NOAUDIT OBJECT|31', concat(v_output));
+
+	--TODO
+	classify(q'[ <<my_label>>begin null; end;]', v_output); assert_equals('PL/SQL EXECUTE', 'PL/SQL|BLOCK|PL/SQL EXECUTE|47', concat(v_output));
+	classify(q'[/*asdf*/declare v_test number; begin null; end; /]', v_output); assert_equals('PL/SQL EXECUTE', 'PL/SQL|BLOCK|PL/SQL EXECUTE|47', concat(v_output));
+	classify(q'[  begin null; end; /]', v_output); assert_equals('PL/SQL EXECUTE', 'PL/SQL|BLOCK|PL/SQL EXECUTE|47', concat(v_output));
+
+	--Command name has space instead of underscore.
+ 	classify(q'[PURGE DBA_RECYCLEBIN]', v_output); assert_equals('PURGE DBA RECYCLEBIN', 'DDL|PURGE|PURGE DBA RECYCLEBIN|198', concat(v_output));
+	classify(q'[PURGE INDEX]', v_output); assert_equals('PURGE INDEX', 'DDL|PURGE|PURGE INDEX|201', concat(v_output));
+	classify(q'[PURGE TABLE]', v_output); assert_equals('PURGE TABLE', 'DDL|PURGE|PURGE TABLE|200', concat(v_output));
+	classify(q'[PURGE TABLESPACE]', v_output); assert_equals('PURGE TABLESPACE', 'DDL|PURGE|PURGE TABLESPACE|199', concat(v_output));
+	--Command name has extra "USER".
+	classify(q'[PURGE RECYCLEBIN]', v_output); assert_equals('PURGE USER RECYCLEBIN', 'DDL|PURGE|PURGE USER RECYCLEBIN|197', concat(v_output));
+	classify(q'[RENAME]', v_output); assert_equals('RENAME', 'DDL|RENAME|RENAME|28', concat(v_output));
+	classify(q'[REVOKE OBJECT]', v_output); assert_equals('REVOKE OBJECT', 'DDL|REVOKE|REVOKE OBJECT|18', concat(v_output));
 	classify(q'[ROLLBACK]', v_output); assert_equals('ROLLBACK', 'Transaction Control|ROLLBACK|ROLLBACK|45', concat(v_output));
 	classify(q'[SAVEPOINT]', v_output); assert_equals('SAVEPOINT', 'Transaction Control|SAVEPOINT|SAVEPOINT|46', concat(v_output));
-	classify(q'[SELECT]', v_output); assert_equals('SELECT', 'DDL|ALTER|SELECT|3', concat(v_output));
+	classify(q'[SELECT]', v_output); assert_equals('SELECT', 'DML|SELECT|SELECT|3', concat(v_output));
 	--TODO
 	classify(q'[SET CONSTRAINTS]', v_output); assert_equals('SET CONSTRAINT', 'Transaction Control|SET CONSTRAINT|SET CONSTRAINTS|90', concat(v_output));
 	classify(q'[SET ROLE]', v_output); assert_equals('SET ROLE', 'Session Control|SET ROLE|SET ROLE|55', concat(v_output));
 	classify(q'[SET TRANSACTION]', v_output); assert_equals('SET TRANSACTION', 'Transaction Control|SET TRANSACTION|SET TRANSACTION|48', concat(v_output));
-	classify(q'[TRUNCATE CLUSTER]', v_output); assert_equals('TRUNCATE CLUSTER', 'DDL|ALTER|TRUNCATE CLUSTER|86', concat(v_output));
-	classify(q'[TRUNCATE TABLE]', v_output); assert_equals('TRUNCATE TABLE', 'DDL|ALTER|TRUNCATE TABLE|85', concat(v_output));
-	classify(q'[UNDROP OBJECT]', v_output); assert_equals('UNDROP OBJECT', 'DDL|ALTER|UNDROP OBJECT|202', concat(v_output));
-	classify(q'[UPDATE]', v_output); assert_equals('UPDATE', 'DDL|ALTER|UPDATE|6', concat(v_output));
-	classify(q'[UPDATE INDEXES]', v_output); assert_equals('UPDATE INDEXES', 'DDL|ALTER|UPDATE INDEXES|182', concat(v_output));
-	classify(q'[UPDATE JOIN INDEX]', v_output); assert_equals('UPDATE JOIN INDEX', 'DDL|ALTER|UPDATE JOIN INDEX|191', concat(v_output));
-	classify(q'[UPSERT]', v_output); assert_equals('UPSERT', 'DDL|ALTER|UPSERT|189', concat(v_output));
-	classify(q'[VALIDATE INDEX]', v_output); assert_equals('VALIDATE INDEX', 'DDL|ALTER|VALIDATE INDEX|23', concat(v_output));
-
-	/*
-	PL/SQL
-		Block
-	*/
+	classify(q'[TRUNCATE CLUSTER]', v_output); assert_equals('TRUNCATE CLUSTER', 'DDL|TRUNCATE|TRUNCATE CLUSTER|86', concat(v_output));
+	classify(q'[TRUNCATE TABLE]', v_output); assert_equals('TRUNCATE TABLE', 'DDL|TRUNCATE|TRUNCATE TABLE|85', concat(v_output));
+	--classify(q'[UNDROP OBJECT]', v_output); assert_equals('UNDROP OBJECT', 'DDL|ALTER|UNDROP OBJECT|202', concat(v_output));
+	classify(q'[UPDATE]', v_output); assert_equals('UPDATE', 'DML|UPDATE|UPDATE|6', concat(v_output));
+	--These are not real commands (they are part of alter table) and they could be ambiguous with an UPDATE statement
+	--if there was a table named "INDEXES" or "JOIN".
+	--classify(q'[UPDATE INDEXES]', v_output); assert_equals('UPDATE INDEXES', '?|?|UPDATE INDEXES|182', concat(v_output));
+	--classify(q'[UPDATE JOIN INDEX]', v_output); assert_equals('UPDATE JOIN INDEX', '?|?|UPDATE JOIN INDEX|191', concat(v_output));
+	classify(q'[merge into table1 using table2 on (table1.a = table2.a) when not matched then update set table1.a = 1;]', v_output); assert_equals('UPSERT', 'DML|MERGE|UPSERT|189', concat(v_output));
+	--Not a real command, this is part of ANALYZE.
+	--classify(q'[VALIDATE INDEX]', v_output); assert_equals('VALIDATE INDEX', '?|?|VALIDATE INDEX|23', concat(v_output));
 
 end test_commands;
 

@@ -1,6 +1,6 @@
 create or replace package statement_classifier is
 
-g_version constant varchar2(10) := '0.2.0';
+g_version constant varchar2(10) := '0.3.0';
 procedure classify(
 	p_statement in nclob,
 	p_category out varchar2,
@@ -48,7 +48,7 @@ For example, a program may need to decide to:
     System Control
       ALTER SYSTEM
     PL/SQL
-      Block
+      BLOCK
 
 - OUT p_command_name: This is usually more specific than the statement type
     and is based on V$SQLCOMMAND.  For example, "CREATE PLUGGABLE DATABASE".
@@ -120,7 +120,7 @@ errors, such as a non-terminated string.
 A simple review of the SQL Language Reference shows that 99% of the time
 a statement type can be identified simply by matching with the first N keywords.
 For example, "CREATE" must start with keyword CREATE.  Some notable exceptions 
-are SELECT can start with "WITH" or "(", and a PL/SQL Block can start with "<<",
+are SELECT can start with "WITH" or "(", and a PL/SQL BLOCK can start with "<<",
 "DECLARE", or "BEGIN".
 
 See PLSQL_LEXER for more details on possible tokens.
@@ -335,12 +335,13 @@ begin
 		p_category := C_DDL; p_statement_type := 'ANALYZE'; p_command_name := 'ANALYZE TABLE'; p_command_type := 62;
 	elsif v_symbols_1_to_2 = 'ASSOCIATE STATISTICS' then
 		p_category := C_DDL; p_statement_type := 'ASSOCIATE STATISTICS'; p_command_name := 'ASSOCIATE STATISTICS'; p_command_type := 168;
-	elsif v_symbols_1_to_2 = 'AUDIT' then --The command name is more specific than the command.
+	elsif v_symbols_1 = 'AUDIT' then --The command name is more specific than the command.
 		p_category := C_DDL; p_statement_type := 'AUDIT'; p_command_name := 'AUDIT OBJECT'; p_command_type := 30;
 	elsif v_symbols_1 = 'CALL' then --The command name is more specific than the command.
 		p_category := C_DML; p_statement_type := 'CALL'; p_command_name := 'CALL METHOD'; p_command_type := 170;
-	elsif v_symbols_1_to_2 = 'CHANGE PASSWORD' then --I don't think this is a real command.
-		p_category := C_DDL; p_statement_type := 'CHANGE'; p_command_name := 'CHANGE PASSWORD'; p_command_type := 190;
+	--I don't think this is a real command.
+	--elsif v_symbols_1_to_2 = 'CHANGE PASSWORD' then
+	--	p_category := C_DDL; p_statement_type := 'CHANGE'; p_command_name := 'CHANGE PASSWORD'; p_command_type := 190;
 	elsif v_symbols_1 = 'COMMENT' then
 		p_category := C_DDL; p_statement_type := 'COMMENT'; p_command_name := 'COMMENT'; p_command_type := 29;
 	elsif v_symbols_1 = 'COMMIT' then
@@ -365,7 +366,7 @@ begin
 		p_category := C_DDL; p_statement_type := 'CREATE'; p_command_name := 'CREATE DIMENSION'; p_command_type := 174;
 	elsif v_symbols_1_to_2 = 'CREATE DIRECTORY' then
 		p_category := C_DDL; p_statement_type := 'CREATE'; p_command_name := 'CREATE DIRECTORY'; p_command_type := 157;
-	elsif v_symbols_1_to_3 = 'CREATE DISKGROUP' then --Command name has extra space, real command is "DISKGROUP".
+	elsif v_symbols_1_to_2 = 'CREATE DISKGROUP' then --Command name has extra space, real command is "DISKGROUP".
 		p_category := C_DDL; p_statement_type := 'CREATE'; p_command_name := 'CREATE DISK GROUP'; p_command_type := 194;
 	elsif v_symbols_1_to_2 = 'CREATE EDITION' then
 		p_category := C_DDL; p_statement_type := 'CREATE'; p_command_name := 'CREATE EDITION'; p_command_type := 212;
@@ -442,7 +443,7 @@ begin
 	elsif v_symbols_1 = 'DELETE' then
 		p_category := C_DML; p_statement_type := 'DELETE'; p_command_name := 'DELETE'; p_command_type := 7;
 	elsif v_symbols_1_to_2 = 'DISASSOCIATE STATISTICS' then
-		p_category := C_DDL; p_statement_type := 'DISASSOCIATE'; p_command_name := 'DISASSOCIATE STATISTICS'; p_command_type := 169;
+		p_category := C_DDL; p_statement_type := 'DISASSOCIATE STATISTICS'; p_command_name := 'DISASSOCIATE STATISTICS'; p_command_type := 169;
 	elsif v_symbols_1_to_2 = 'DROP ASSEMBLY' then --I don't think this is a real command.
 		p_category := C_DDL; p_statement_type := 'DROP'; p_command_name := 'DROP ASSEMBLY'; p_command_type := 215;
 	elsif v_symbols_1_to_3 = 'DROP AUDIT POLICY' then
@@ -546,15 +547,15 @@ begin
 	elsif v_symbols_1 = 'INSERT' then
 		p_category := C_DML; p_statement_type := 'INSERT'; p_command_name := 'INSERT'; p_command_type := 2;
 	elsif v_symbols_1_to_2 = 'LOCK TABLE' then
-		p_category := C_DML; p_statement_type := 'LOCK'; p_command_name := 'LOCK TABLE'; p_command_type := 26;
+		p_category := C_DML; p_statement_type := 'LOCK TABLE'; p_command_name := 'LOCK TABLE'; p_command_type := 26;
 	elsif v_symbols_1 = 'NO-OP' then --I don't think this is a real command.
 		p_category := C_DDL; p_statement_type := 'NO-OP'; p_command_name := 'NO-OP'; p_command_type := 27;
 	elsif v_symbols_1 = 'NOAUDIT' then --Command name is more specific than statement type.
 		p_category := C_DDL; p_statement_type := 'NOAUDIT'; p_command_name := 'NOAUDIT OBJECT'; p_command_type := 31;
 	elsif (v_types(1) = '<' and v_types(2) = '<') --PL/SQL is custom.
 			or v_types(1)='symbol' and v_values(1) in ('DECLARE', 'BEGIN') then
-		p_category := C_PLSQL; p_statement_type := 'Block'; p_command_name := 'PL/SQL EXECUTE'; p_command_type := 47;
-	elsif v_symbols_1_to_2 = 'PURGE DBA_RECYCLEBIN' then --Command name space instead of underscore.
+		p_category := C_PLSQL; p_statement_type := 'BLOCK'; p_command_name := 'PL/SQL EXECUTE'; p_command_type := 47;
+	elsif v_symbols_1_to_2 = 'PURGE DBA_RECYCLEBIN' then --Command name has space instead of underscore.
 		p_category := C_DDL; p_statement_type := 'PURGE'; p_command_name := 'PURGE DBA RECYCLEBIN'; p_command_type := 198;
 	elsif v_symbols_1_to_2 = 'PURGE INDEX' then
 		p_category := C_DDL; p_statement_type := 'PURGE'; p_command_name := 'PURGE INDEX'; p_command_type := 201;
