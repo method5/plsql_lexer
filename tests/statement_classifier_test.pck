@@ -190,36 +190,39 @@ begin
 	classify(q'[ALTER FUNCTION myschema.myfunction compile;]', v_output); assert_equals('ALTER FUNCTION', 'DDL|ALTER|ALTER FUNCTION|92', concat(v_output));
 	classify(q'[ alter index asdf rebuild parallel 8]', v_output); assert_equals('ALTER INDEX', 'DDL|ALTER|ALTER INDEX|11', concat(v_output));
 	classify(q'[ALTER INDEXTYPE  my_schema.my_indextype compile;]', v_output); assert_equals('ALTER INDEXTYPE', 'DDL|ALTER|ALTER INDEXTYPE|166', concat(v_output));
+	classify(q'[ALTER java  source my_schema.some_object compile;]', v_output); assert_equals('ALTER JAVA', 'DDL|ALTER|ALTER JAVA|161', concat(v_output));
+	classify(q'[alter library test_library editionable compile;]', v_output); assert_equals('ALTER LIBRARY', 'DDL|ALTER|ALTER LIBRARY|196', concat(v_output));
+	classify(q'[ALTER  MATERIALIZED  VIEW a_schema.mv_name cache consider fresh;]', v_output); assert_equals('ALTER MATERIALIZED VIEW ', 'DDL|ALTER|ALTER MATERIALIZED VIEW |75', concat(v_output));
+	classify(q'[ALTER /*a*/ MATERIALIZED /*b*/ VIEW /*c*/LOG force on my_table parallel 10]', v_output); assert_equals('ALTER MATERIALIZED VIEW LOG', 'DDL|ALTER|ALTER MATERIALIZED VIEW LOG|72', concat(v_output));
+	classify(q'[ alter  materialized	zonemap my_schema.my_zone enable pruning]', v_output); assert_equals('ALTER MATERIALIZED ZONEMAP', 'DDL|ALTER|ALTER MATERIALIZED ZONEMAP|240', concat(v_output));
+	classify(q'[alter operator my_operator add binding (number) return (number) using my_function]', v_output); assert_equals('ALTER OPERATOR', 'DDL|ALTER|ALTER OPERATOR|183', concat(v_output));
+	classify(q'[alter outline public my_outline disable;]', v_output); assert_equals('ALTER OUTLINE', 'DDL|ALTER|ALTER OUTLINE|179', concat(v_output));
+	classify(q'[ALTER PACKAGE my_package editionable]', v_output); assert_equals('ALTER PACKAGE', 'DDL|ALTER|ALTER PACKAGE|95', concat(v_output));
+	classify(q'[alter package body my_package compile]', v_output); assert_equals('ALTER PACKAGE BODY', 'DDL|ALTER|ALTER PACKAGE BODY|98', concat(v_output));
+	classify(q'[ALTER PLUGGABLE DATABASE my_pdb default tablespace some_tbs]', v_output); assert_equals('ALTER PLUGGABLE DATABASE', 'DDL|ALTER|ALTER PLUGGABLE DATABASE|227', concat(v_output));
+	classify(q'[ALTER PROCEDURE my_proc compile]', v_output); assert_equals('ALTER PROCEDURE', 'DDL|ALTER|ALTER PROCEDURE|25', concat(v_output));
+	classify(q'[ alter profile default limit password_max_time unlimited;]', v_output); assert_equals('ALTER PROFILE', 'DDL|ALTER|ALTER PROFILE|67', concat(v_output));
+	classify(q'[ALTER RESOURCE COST privat_sga 1000;]', v_output); assert_equals('ALTER RESOURCE COST', 'DDL|ALTER|ALTER RESOURCE COST|70', concat(v_output));
+	--I don't think this is a real command.
+	--classify(q'[ALTER REWRITE EQUIVALENCE]', v_output); assert_equals('ALTER REWRITE EQUIVALENCE', 'DDL|ALTER|ALTER REWRITE EQUIVALENCE|210', concat(v_output));
+	classify(q'[alter role some_role# identified externally]', v_output); assert_equals('ALTER ROLE', 'DDL|ALTER|ALTER ROLE|79', concat(v_output));
+	classify(q'[ALTER ROLLBACK SEGMENT my_rbs offline]', v_output); assert_equals('ALTER ROLLBACK SEGMENT', 'DDL|ALTER|ALTER ROLLBACK SEGMENT|37', concat(v_output));
+	classify(q'[alter sequence my_seq cache 100]', v_output); assert_equals('ALTER SEQUENCE', 'DDL|ALTER|ALTER SEQUENCE|14', concat(v_output));
+	classify(q'[alter session set OPTIMIZER_DYNAMIC_SAMPLING=5;]', v_output); assert_equals('ALTER SESSION', 'Session Control|ALTER SESSION|ALTER SESSION|42', concat(v_output));
+	classify(q'[ALTER SESSION set current_schema=my_schema]', v_output); assert_equals('ALTER SESSION', 'Session Control|ALTER SESSION|ALTER SESSION|42', concat(v_output));
+	--An old version of "ALTER SNAPSHOT"?  Not sure if this is still used.
+	classify(q'[ALTER SUMMARY a_schema.mv_name cache;]', v_output); assert_equals('ALTER SUMMARY', 'DDL|ALTER|ALTER SUMMARY|172', concat(v_output));
+	classify(q'[ALTER /**/public/**/ SYNONYM my_synonym compile]', v_output); assert_equals('ALTER SYNONYM', 'DDL|ALTER|ALTER SYNONYM|192', concat(v_output));
+	classify(q'[ALTER SYNONYM  my_synonym compile]', v_output); assert_equals('ALTER SYNONYM', 'DDL|ALTER|ALTER SYNONYM|192', concat(v_output));
+	classify(q'[alter system set memory_target=5m]', v_output); assert_equals('ALTER SYSTEM', 'System Control|ALTER SYSTEM|ALTER SYSTEM|49', concat(v_output));
+	classify(q'[alter system reset "_stupid_hidden_parameter"]', v_output); assert_equals('ALTER SYSTEM', 'System Control|ALTER SYSTEM|ALTER SYSTEM|49', concat(v_output));
+	classify(q'[ ALTER  TABLE my_schema.my_table rename to new_name;]', v_output); assert_equals('ALTER TABLE', 'DDL|ALTER|ALTER TABLE|15', concat(v_output));
+	classify(q'[ALTER TABLESPACE some_tbs coalesce]', v_output); assert_equals('ALTER TABLESPACE', 'DDL|ALTER|ALTER TABLESPACE|40', concat(v_output));
+	--Undocumented by still runs in 12.1.0.2.
+	classify(q'[ALTER TRACING enable;]', v_output); assert_equals('ALTER TRACING', 'DDL|ALTER|ALTER TRACING|58', concat(v_output));
 
-
-	--TODO: Add more realistic code. 
-
-
-	classify(q'[ALTER JAVA]', v_output); assert_equals('ALTER JAVA', 'DDL|ALTER|ALTER JAVA|161', concat(v_output));
-	classify(q'[ALTER LIBRARY]', v_output); assert_equals('ALTER LIBRARY', 'DDL|ALTER|ALTER LIBRARY|196', concat(v_output));
-	classify(q'[ALTER MATERIALIZED VIEW ]', v_output); assert_equals('ALTER MATERIALIZED VIEW ', 'DDL|ALTER|ALTER MATERIALIZED VIEW |75', concat(v_output));
-	classify(q'[ALTER MATERIALIZED VIEW LOG]', v_output); assert_equals('ALTER MATERIALIZED VIEW LOG', 'DDL|ALTER|ALTER MATERIALIZED VIEW LOG|72', concat(v_output));
-	classify(q'[ALTER MATERIALIZED ZONEMAP]', v_output); assert_equals('ALTER MATERIALIZED ZONEMAP', 'DDL|ALTER|ALTER MATERIALIZED ZONEMAP|240', concat(v_output));
-	classify(q'[ALTER OPERATOR]', v_output); assert_equals('ALTER OPERATOR', 'DDL|ALTER|ALTER OPERATOR|183', concat(v_output));
-	classify(q'[ALTER OUTLINE]', v_output); assert_equals('ALTER OUTLINE', 'DDL|ALTER|ALTER OUTLINE|179', concat(v_output));
-	classify(q'[ALTER PACKAGE]', v_output); assert_equals('ALTER PACKAGE', 'DDL|ALTER|ALTER PACKAGE|95', concat(v_output));
-	classify(q'[ALTER PACKAGE BODY]', v_output); assert_equals('ALTER PACKAGE BODY', 'DDL|ALTER|ALTER PACKAGE BODY|98', concat(v_output));
-	classify(q'[ALTER PLUGGABLE DATABASE]', v_output); assert_equals('ALTER PLUGGABLE DATABASE', 'DDL|ALTER|ALTER PLUGGABLE DATABASE|227', concat(v_output));
-	classify(q'[ALTER PROCEDURE]', v_output); assert_equals('ALTER PROCEDURE', 'DDL|ALTER|ALTER PROCEDURE|25', concat(v_output));
-	classify(q'[ALTER PROFILE]', v_output); assert_equals('ALTER PROFILE', 'DDL|ALTER|ALTER PROFILE|67', concat(v_output));
-	classify(q'[ALTER RESOURCE COST]', v_output); assert_equals('ALTER RESOURCE COST', 'DDL|ALTER|ALTER RESOURCE COST|70', concat(v_output));
-	classify(q'[ALTER REWRITE EQUIVALENCE]', v_output); assert_equals('ALTER REWRITE EQUIVALENCE', 'DDL|ALTER|ALTER REWRITE EQUIVALENCE|210', concat(v_output));
-	classify(q'[ALTER ROLE]', v_output); assert_equals('ALTER ROLE', 'DDL|ALTER|ALTER ROLE|79', concat(v_output));
-	classify(q'[ALTER ROLLBACK SEGMENT]', v_output); assert_equals('ALTER ROLLBACK SEGMENT', 'DDL|ALTER|ALTER ROLLBACK SEGMENT|37', concat(v_output));
-	classify(q'[ALTER SEQUENCE]', v_output); assert_equals('ALTER SEQUENCE', 'DDL|ALTER|ALTER SEQUENCE|14', concat(v_output));
-	classify(q'[ALTER SESSION]', v_output); assert_equals('ALTER SESSION', 'Session Control|ALTER SESSION|ALTER SESSION|42', concat(v_output));
-	classify(q'[ALTER SUMMARY]', v_output); assert_equals('ALTER SUMMARY', 'DDL|ALTER|ALTER SUMMARY|172', concat(v_output));
-	classify(q'[ALTER SYNONYM]', v_output); assert_equals('ALTER SYNONYM', 'DDL|ALTER|ALTER SYNONYM|192', concat(v_output));
-	classify(q'[ALTER SYSTEM]', v_output); assert_equals('ALTER SYSTEM', 'System Control|ALTER SYSTEM|ALTER SYSTEM|49', concat(v_output));
-	classify(q'[ALTER TABLE]', v_output); assert_equals('ALTER TABLE', 'DDL|ALTER|ALTER TABLE|15', concat(v_output));
-	classify(q'[ALTER TABLESPACE]', v_output); assert_equals('ALTER TABLESPACE', 'DDL|ALTER|ALTER TABLESPACE|40', concat(v_output));
-	classify(q'[ALTER TRACING]', v_output); assert_equals('ALTER TRACING', 'DDL|ALTER|ALTER TRACING|58', concat(v_output));
-	classify(q'[ALTER TRIGGER]', v_output); assert_equals('ALTER TRIGGER', 'DDL|ALTER|ALTER TRIGGER|60', concat(v_output));
+	--TODO:
+	classify(q'[alter trigger]', v_output); assert_equals('ALTER TRIGGER', 'DDL|ALTER|ALTER TRIGGER|60', concat(v_output));
 	classify(q'[ALTER TYPE]', v_output); assert_equals('ALTER TYPE', 'DDL|ALTER|ALTER TYPE|80', concat(v_output));
 	classify(q'[ALTER TYPE BODY]', v_output); assert_equals('ALTER TYPE BODY', 'DDL|ALTER|ALTER TYPE BODY|82', concat(v_output));
 	classify(q'[ALTER USER]', v_output); assert_equals('ALTER USER', 'DDL|ALTER|ALTER USER|43', concat(v_output));

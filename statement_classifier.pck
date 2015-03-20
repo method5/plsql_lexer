@@ -295,8 +295,9 @@ begin
 		p_category := C_DDL; p_statement_type := 'ALTER'; p_command_name := 'ALTER PROFILE'; p_command_type := 67;
 	elsif v_symbols_1_to_3 = 'ALTER RESOURCE COST' then
 		p_category := C_DDL; p_statement_type := 'ALTER'; p_command_name := 'ALTER RESOURCE COST'; p_command_type := 70;
-	elsif v_symbols_1_to_3 = 'ALTER REWRITE EQUIVALENCE' then --I don't think this is a real commmand.
-		p_category := C_DDL; p_statement_type := 'ALTER'; p_command_name := 'ALTER REWRITE EQUIVALENCE'; p_command_type := 210;
+	--I don't think this is a real command.
+	--elsif v_symbols_1_to_3 = 'ALTER REWRITE EQUIVALENCE' then
+	--	p_category := C_DDL; p_statement_type := 'ALTER'; p_command_name := 'ALTER REWRITE EQUIVALENCE'; p_command_type := 210;
 	elsif v_symbols_1_to_2 = 'ALTER ROLE' then
 		p_category := C_DDL; p_statement_type := 'ALTER'; p_command_name := 'ALTER ROLE'; p_command_type := 79;
 	elsif v_symbols_1_to_3 = 'ALTER ROLLBACK SEGMENT' then
@@ -315,7 +316,8 @@ begin
 		p_category := C_DDL; p_statement_type := 'ALTER'; p_command_name := 'ALTER TABLE'; p_command_type := 15;
 	elsif v_symbols_1_to_2 = 'ALTER TABLESPACE' then
 		p_category := C_DDL; p_statement_type := 'ALTER'; p_command_name := 'ALTER TABLESPACE'; p_command_type := 40;
-	elsif v_symbols_1_to_2 = 'ALTER TRACING' then --I don't think this is a real commmand.
+	--Undocumented by still runs in 12.1.0.2.
+	elsif v_symbols_1_to_2 = 'ALTER TRACING' then
 		p_category := C_DDL; p_statement_type := 'ALTER'; p_command_name := 'ALTER TRACING'; p_command_type := 58;
 	elsif v_symbols_1_to_2 = 'ALTER TRIGGER' then
 		p_category := C_DDL; p_statement_type := 'ALTER'; p_command_name := 'ALTER TRIGGER'; p_command_type := 60;
