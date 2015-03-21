@@ -197,8 +197,17 @@ begin
 	classify(q'[ alter  materialized	zonemap my_schema.my_zone enable pruning]', v_output); assert_equals('ALTER MATERIALIZED ZONEMAP', 'DDL|ALTER|ALTER MATERIALIZED ZONEMAP|240', concat(v_output));
 	classify(q'[alter operator my_operator add binding (number) return (number) using my_function]', v_output); assert_equals('ALTER OPERATOR', 'DDL|ALTER|ALTER OPERATOR|183', concat(v_output));
 	classify(q'[alter outline public my_outline disable;]', v_output); assert_equals('ALTER OUTLINE', 'DDL|ALTER|ALTER OUTLINE|179', concat(v_output));
+
+	--TODO: This is wrong
+	--alter package test_package compile body: 98
+	--alter package test_package compile package: 95
+	--alter package test_package compile specification: 95
+	--alter package test_package compile: 95
+
+
 	classify(q'[ALTER PACKAGE my_package editionable]', v_output); assert_equals('ALTER PACKAGE', 'DDL|ALTER|ALTER PACKAGE|95', concat(v_output));
 	classify(q'[alter package body my_package compile]', v_output); assert_equals('ALTER PACKAGE BODY', 'DDL|ALTER|ALTER PACKAGE BODY|98', concat(v_output));
+
 	classify(q'[ALTER PLUGGABLE DATABASE my_pdb default tablespace some_tbs]', v_output); assert_equals('ALTER PLUGGABLE DATABASE', 'DDL|ALTER|ALTER PLUGGABLE DATABASE|227', concat(v_output));
 	classify(q'[ALTER PROCEDURE my_proc compile]', v_output); assert_equals('ALTER PROCEDURE', 'DDL|ALTER|ALTER PROCEDURE|25', concat(v_output));
 	classify(q'[ alter profile default limit password_max_time unlimited;]', v_output); assert_equals('ALTER PROFILE', 'DDL|ALTER|ALTER PROFILE|67', concat(v_output));
@@ -220,10 +229,8 @@ begin
 	classify(q'[ALTER TABLESPACE some_tbs coalesce]', v_output); assert_equals('ALTER TABLESPACE', 'DDL|ALTER|ALTER TABLESPACE|40', concat(v_output));
 	--Undocumented by still runs in 12.1.0.2.
 	classify(q'[ALTER TRACING enable;]', v_output); assert_equals('ALTER TRACING', 'DDL|ALTER|ALTER TRACING|58', concat(v_output));
-
-	--TODO:
-	classify(q'[alter trigger]', v_output); assert_equals('ALTER TRIGGER', 'DDL|ALTER|ALTER TRIGGER|60', concat(v_output));
-	classify(q'[ALTER TYPE]', v_output); assert_equals('ALTER TYPE', 'DDL|ALTER|ALTER TYPE|80', concat(v_output));
+	classify(q'[alter trigger my_schema.my_trigger enable;]', v_output); assert_equals('ALTER TRIGGER', 'DDL|ALTER|ALTER TRIGGER|60', concat(v_output));
+	classify(q'[ALTER TYPE my_schema.my_type noneditionable]', v_output); assert_equals('ALTER TYPE', 'DDL|ALTER|ALTER TYPE|80', concat(v_output));
 	classify(q'[ALTER TYPE BODY]', v_output); assert_equals('ALTER TYPE BODY', 'DDL|ALTER|ALTER TYPE BODY|82', concat(v_output));
 	classify(q'[ALTER USER]', v_output); assert_equals('ALTER USER', 'DDL|ALTER|ALTER USER|43', concat(v_output));
 	classify(q'[ALTER VIEW]', v_output); assert_equals('ALTER VIEW', 'DDL|ALTER|ALTER VIEW|88', concat(v_output));

@@ -10,7 +10,8 @@ Tokens may be one of these:
 	comment                  - Single and multiline, does not include newline at end of the single lin comment.
 	text                     - Includes quotation marks, alternative quote delimiters, and "N"
 	numeric                  - Everything but initial + or -: ^([0-9]+\.[0-9]+|\.[0-9]+|[0-9]+)((e|E)(\+|-)?[0-9]+)?(f|F|d|D)?
-	symbol                   - May be an identifier, operator, or condition - the parser must distinguish them
+	word                     - May be a keyword, identifier, or operator.
+	                           The parser must distinguish between them because SQL keywords are frequently not reserved.
 	~!@%^*()-+=[]|:;<,>./    - All SQL and PL/SQL special characters
 	unexpected               - Everything else.  For example "&", a SQL*Plus characters.  (Should this be included above?)
 
@@ -217,15 +218,15 @@ end is_alpha_numeric_or__#$;
 
 
 --------------------------------------------------------------------------------
---Create a symbol token and potentially throw one of these two errors:
+--Create a word token and potentially throw one of these two errors:
 --ORA-00972: identifier is too long
 --ORA-01741: illegal zero-length identifier
-function create_symbol_check_length(p_token_text nclob) return token is
+function create_word_check_length(p_token_text nclob) return token is
 	v_token_string varchar2(4000);
 begin
 	--Don't bother converting NCLOB if it's obviously too long.
 	if dbms_lob.getlength(p_token_text) >= 200 then
-		return token('symbol', p_token_text, -972, 'identifier is too long');
+		return token('word', p_token_text, -972, 'identifier is too long');
 	--Else convert to VARCHAR2, return error if it's > 30 bytes (excluding quotation marks).
 	else
 		--Grab much more than necessary to ensure we don't land in the middle of a 2-code point character.
@@ -233,20 +234,20 @@ begin
 
 		--Look for empty quoted identifier.
 		if v_token_string = '""' then
-			return token('symbol', p_token_text, -1741, 'illegal zero-length identifier');
+			return token('word', p_token_text, -1741, 'illegal zero-length identifier');
 		--Look for identifer is too long.
 		elsif lengthb(replace(v_token_string, '"', null)) > 30 then
-			return token('symbol', p_token_text, -972, 'identifier is too long');
+			return token('word', p_token_text, -972, 'identifier is too long');
 		else
-			return token('symbol', p_token_text, null, null);
+			return token('word', p_token_text, null, null);
 		end if;
 	end if;
-end create_symbol_check_length;
+end create_word_check_length;
 
 
 --------------------------------------------------------------------------------
 --Return the next token from a string.
---Type is one of: EOF, whitespace, comment, text, numeric, symbol, or special charcters.
+--Type is one of: EOF, whitespace, comment, text, numeric, word, or special charcters.
 --See the package specification for some information on the lexer.
 function get_token return token is
 	v_quote_delimiter nvarchar2(1 char);
@@ -477,7 +478,7 @@ begin
 		return token('numeric', g_token_text, null, null);
 	end if;
 
-	--Symbol - quoted identifier.  Note that quoted identifers are not escaped.
+	--Word - quoted identifier.  Note that quoted identifers are not escaped.
 	if g_last_char = '"' then
 		g_token_text := g_last_char;
 		loop
@@ -490,14 +491,14 @@ begin
 			if look_ahead(1) is null then
 				g_token_text := g_token_text || g_last_char;
 				g_last_char := get_char;
-				return token('symbol', g_token_text, -01740, 'missing double quote in identifier');
+				return token('word', g_token_text, -01740, 'missing double quote in identifier');
 			end if;
 			g_token_text := g_token_text || g_last_char;
 		end loop;
-		return create_symbol_check_length(g_token_text);
+		return create_word_check_length(g_token_text);
 	end if;
 
-	--Symbol.
+	--Word.
 	--Starts with alpha (in any language!), may contain number, "_", "$", and "#".
 	if is_alpha(g_last_char) then
 		g_token_text := g_last_char;
@@ -508,7 +509,7 @@ begin
 			end if;
 			g_token_text := g_token_text || g_last_char;
 		end loop;
-		return create_symbol_check_length(g_token_text);
+		return create_word_check_length(g_token_text);
 	end if;
 
 	--Special characters used for operators. starting from top-left of keyboard.

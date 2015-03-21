@@ -20,7 +20,7 @@ c_test_whitespace  constant number := power(2, 1);
 c_test_comment     constant number := power(2, 2);
 c_test_text        constant number := power(2, 3);
 c_test_numeric     constant number := power(2, 4);
-c_test_symbol      constant number := power(2, 5);
+c_test_word        constant number := power(2, 5);
 c_test_punctuation constant number := power(2, 6);
 c_test_unexpected  constant number := power(2, 7);
 c_test_utf8        constant number := power(2, 8);
@@ -30,7 +30,7 @@ c_dynamic_tests    constant number := power(2, 30);
 
 --Default option is to run all static test suites.
 c_all_static_tests constant number := c_test_whitespace+c_test_comment+c_test_text+
-	c_test_numeric+c_test_symbol+c_test_punctuation+c_test_unexpected+c_test_utf8+
+	c_test_numeric+c_test_word+c_test_punctuation+c_test_unexpected+c_test_utf8+
 	c_test_other;
 
 --Run the unit tests and display the results in dbms output.
@@ -110,7 +110,7 @@ begin
 	--The chr(0) may prevent the string from being displayed properly.
 	assert_equals('whitespace: 2b', chr(0)||chr(9)||chr(10)||chr(11)||chr(12)||chr(13)||chr(32)||unistr('\3000'), get_value_n(chr(0)||chr(9)||chr(10)||chr(11)||chr(12)||chr(13)||chr(32)||unistr('\3000'), 1));
 	assert_equals('whitespace: 3', 'whitespace EOF', lex('	'));
-	assert_equals('whitespace: 4', 'whitespace symbol whitespace symbol EOF', lex(' a a'));
+	assert_equals('whitespace: 4', 'whitespace word whitespace word EOF', lex(' a a'));
 end test_whitespace;
 
 
@@ -121,12 +121,12 @@ begin
 	assert_equals('comment: 1b', '--asdf', get_value_n('  --asdf', 2));
 	assert_equals('comment: 2a', 'whitespace comment EOF', lex('  --asdf'||chr(13)||'asdf'));
 	assert_equals('comment: 2b', '--asdf'||chr(13)||'asdf', get_value_n('  --asdf'||chr(13)||'asdf', 2));
-	assert_equals('comment: 3', 'whitespace comment whitespace symbol EOF', lex('  --asdf'||chr(13)||chr(10)||'asdf'));
-	assert_equals('comment: 4', 'whitespace comment whitespace symbol EOF', lex('  --asdf'||chr(10)||'asdf'));
+	assert_equals('comment: 3', 'whitespace comment whitespace word EOF', lex('  --asdf'||chr(13)||chr(10)||'asdf'));
+	assert_equals('comment: 4', 'whitespace comment whitespace word EOF', lex('  --asdf'||chr(10)||'asdf'));
 	assert_equals('comment: 5', 'comment EOF', lex('--'));
 	assert_equals('comment: 6', 'comment EOF', lex('/**/'));
 	assert_equals('comment: 7', 'comment EOF', lex('--/*'));
-	assert_equals('comment: 8', 'symbol comment symbol EOF', lex(q'<asdf/*asdfq'!!'q!'' -- */asdf>'));
+	assert_equals('comment: 8', 'word comment word EOF', lex(q'<asdf/*asdfq'!!'q!'' -- */asdf>'));
 	assert_equals('comment: 9a', 'comment EOF', lex('/*'));
 	assert_equals('comment: 9b', '-1742', to_char(get_sqlcode_n('/*', 1)));
 	assert_equals('comment: 9c', 'comment not terminated properly', get_sqlerrm_n('/*', 1));
@@ -171,20 +171,20 @@ begin
 	assert_equals('text: alternative n quote 5b', q'!Nq'# ''' #'!', get_value_n(q'!Nq'# ''' #'!', 1)); --'--Fix highlighting on some IDEs.
 
 	--Test string not terminated.
-	assert_equals('text: string not terminated 1', 'symbol whitespace symbol whitespace text EOF', lex(q'!asdf qwer '!')); --'--Fix highlighting on some IDEs.
+	assert_equals('text: string not terminated 1', 'word whitespace word whitespace text EOF', lex(q'!asdf qwer '!')); --'--Fix highlighting on some IDEs.
 	assert_equals('text: string not terminated 2', q'!'!', get_value_n(q'!asdf qwer '!', 5)); --'--Fix highlighting on some IDEs.
 	assert_equals('text: string not terminated 3', '-1756', to_char(get_sqlcode_n(q'!asdf qwer '!', 5))); --'--Fix highlighting on some IDEs.
 	assert_equals('text: string not terminated 4', 'quoted string not properly terminated', get_sqlerrm_n(q'!asdf qwer '!', 5)); --'--Fix highlighting on some IDEs.
 	--Same as above, but for N, alternative quote, and N alternative quote.
-	assert_equals('text: n string not terminated 1', 'symbol whitespace symbol whitespace text EOF', lex(q'!asdf qwer n'!')); --'--Fix highlighting on some IDEs.
+	assert_equals('text: n string not terminated 1', 'word whitespace word whitespace text EOF', lex(q'!asdf qwer n'!')); --'--Fix highlighting on some IDEs.
 	assert_equals('text: n string not terminated 2', q'!n'!', get_value_n(q'!asdf qwer n'!', 5)); --'--Fix highlighting on some IDEs.
 	assert_equals('text: n string not terminated 3', '-1756', to_char(get_sqlcode_n(q'!asdf qwer n'!', 5))); --'--Fix highlighting on some IDEs.
 	assert_equals('text: n string not terminated 4', 'quoted string not properly terminated', get_sqlerrm_n(q'!asdf qwer n'!', 5)); --'--Fix highlighting on some IDEs.
-	assert_equals('text: AQ string not terminated 1', 'symbol whitespace symbol whitespace text EOF', lex(q'!asdf qwer Q'<asdf)'''!')); --'--Fix highlighting on some IDEs.
+	assert_equals('text: AQ string not terminated 1', 'word whitespace word whitespace text EOF', lex(q'!asdf qwer Q'<asdf)'''!')); --'--Fix highlighting on some IDEs.
 	assert_equals('text: AQ string not terminated 2', q'!Q'<asdf)'''!', get_value_n(q'!asdf qwer Q'<asdf)'''!', 5)); --'--Fix highlighting on some IDEs.
 	assert_equals('text: AQ string not terminated 3', '-1756', to_char(get_sqlcode_n(q'!asdf qwer q'<asdf)'''!', 5))); --'--Fix highlighting on some IDEs.
 	assert_equals('text: AQ string not terminated 4', 'quoted string not properly terminated', get_sqlerrm_n(q'!asdf qwer Q'<asdf)'''!', 5)); --'--Fix highlighting on some IDEs.
-	assert_equals('text: NAQ string not terminated 1', 'symbol whitespace symbol whitespace text EOF', lex(q'!asdf qwer nQ'<asdf)'''!')); --'--Fix highlighting on some IDEs.
+	assert_equals('text: NAQ string not terminated 1', 'word whitespace word whitespace text EOF', lex(q'!asdf qwer nQ'<asdf)'''!')); --'--Fix highlighting on some IDEs.
 	assert_equals('text: NAQ string not terminated 2', q'!NQ'<asdf)'''!', get_value_n(q'!asdf qwer NQ'<asdf)'''!', 5)); --'--Fix highlighting on some IDEs.
 	assert_equals('text: NAQ string not terminated 3', '-1756', to_char(get_sqlcode_n(q'!asdf qwer nq'<asdf)'''!', 5))); --'--Fix highlighting on some IDEs.
 	assert_equals('text: NAQ string not terminated 4', 'quoted string not properly terminated', get_sqlerrm_n(q'!asdf qwer NQ'<asdf)'''!', 5)); --'--Fix highlighting on some IDEs.
@@ -251,63 +251,63 @@ begin
 
 	assert_equals('numeric: random 1', 'text numeric EOF', lex(q'[''4]'));
 	assert_equals('numeric: random 2', 'numeric + numeric + numeric EOF', lex(q'[4+4+4]'));
-	assert_equals('numeric: random 3', 'numeric symbol EOF', lex(q'[1.2ee]'));
-	assert_equals('numeric: random 4', 'numeric symbol numeric symbol EOF', lex(q'[1.2ee1.2ff]'));
+	assert_equals('numeric: random 3', 'numeric word EOF', lex(q'[1.2ee]'));
+	assert_equals('numeric: random 4', 'numeric word numeric word EOF', lex(q'[1.2ee1.2ff]'));
 end test_numeric;
 
 
 --------------------------------------------------------------------------------
-procedure test_symbol is
+procedure test_word is
 begin
-	assert_equals('symbol: simple name', 'symbol whitespace symbol EOF', lex('asdf asdf'));
+	assert_equals('word: simple name', 'word whitespace word EOF', lex('asdf asdf'));
 
 	--Names can include numbers, #, $, and _, but not at the beginning.
-	assert_equals('symbol: identifier 1', 'symbol EOF', lex('asdfQWER1234#$_asdf'));
-	assert_equals('symbol: identifier 2', 'unexpected symbol EOF', lex('#a'));
-	assert_equals('symbol: identifier 3', 'unexpected symbol EOF', lex('$a'));
-	assert_equals('symbol: identifier 4', 'unexpected symbol EOF', lex('_a'));
-	assert_equals('symbol: identifier 5', 'numeric symbol EOF', lex('1a'));
-	assert_equals('symbol: identifier 6', '+ symbol + EOF', lex('+a1#$_+'));
+	assert_equals('word: identifier 1', 'word EOF', lex('asdfQWER1234#$_asdf'));
+	assert_equals('word: identifier 2', 'unexpected word EOF', lex('#a'));
+	assert_equals('word: identifier 3', 'unexpected word EOF', lex('$a'));
+	assert_equals('word: identifier 4', 'unexpected word EOF', lex('_a'));
+	assert_equals('word: identifier 5', 'numeric word EOF', lex('1a'));
+	assert_equals('word: identifier 6', '+ word + EOF', lex('+a1#$_+'));
 
 	--4 byte supplementary character for "cut".
-	assert_equals('symbol: utf8 identifier 1', 'symbol EOF', lex(unistr('\d849\df79')));
+	assert_equals('word: utf8 identifier 1', 'word EOF', lex(unistr('\d849\df79')));
 	--2 byte D - Latin Capital Letter ETH.
-	assert_equals('symbol: utf8 identifier 2', 'symbol EOF', lex(unistr('\00d0')));
+	assert_equals('word: utf8 identifier 2', 'word EOF', lex(unistr('\00d0')));
 	--Putting different letters together.
-	assert_equals('symbol: utf8 identifier 3', 'symbol + EOF', lex(unistr('\00d0')||unistr('\00d0')||unistr('\d849\df79')||'A+'));
-	assert_equals('symbol: utf8 identifier 4', unistr('\00d0')||unistr('\00d0')||unistr('\d849\df79')||'A', get_value_n(unistr('\00d0')||unistr('\00d0')||unistr('\d849\df79')||'A+', 1));
+	assert_equals('word: utf8 identifier 3', 'word + EOF', lex(unistr('\00d0')||unistr('\00d0')||unistr('\d849\df79')||'A+'));
+	assert_equals('word: utf8 identifier 4', unistr('\00d0')||unistr('\00d0')||unistr('\d849\df79')||'A', get_value_n(unistr('\00d0')||unistr('\00d0')||unistr('\d849\df79')||'A+', 1));
 
-	assert_equals('symbol: double quote 1', 'symbol symbol EOF', lex('"asdf"a'));
-	assert_equals('symbol: double quote 2', 'symbol symbol EOF', lex('"!@#$%^&*()"a'));
-	assert_equals('symbol: double quote 3', '"!@#$%^&*()"', get_value_n('"!@#$%^&*()"a', 1));
-	assert_equals('symbol: double quote 4', 'symbol numeric symbol EOF', lex('"a"4"b"'));
+	assert_equals('word: double quote 1', 'word word EOF', lex('"asdf"a'));
+	assert_equals('word: double quote 2', 'word word EOF', lex('"!@#$%^&*()"a'));
+	assert_equals('word: double quote 3', '"!@#$%^&*()"', get_value_n('"!@#$%^&*()"a', 1));
+	assert_equals('word: double quote 4', 'word numeric word EOF', lex('"a"4"b"'));
 
-	assert_equals('symbol: missing double quote 1a', 'symbol EOF', lex('"!@#$%^&*()'));
-	assert_equals('symbol: missing double quote 1b', '-1740', get_sqlcode_n('"!@#$%^&*()', 1));
-	assert_equals('symbol: missing double quote 1c', 'missing double quote in identifier', get_sqlerrm_n('"!@#$%^&*()', 1));
+	assert_equals('word: missing double quote 1a', 'word EOF', lex('"!@#$%^&*()'));
+	assert_equals('word: missing double quote 1b', '-1740', get_sqlcode_n('"!@#$%^&*()', 1));
+	assert_equals('word: missing double quote 1c', 'missing double quote in identifier', get_sqlerrm_n('"!@#$%^&*()', 1));
 
-	assert_equals('symbol: zero-length identifier 1a', 'numeric symbol EOF', lex('1""'));
-	assert_equals('symbol: zero-length identifier 1b', '-1741', get_sqlcode_n('1""', 2));
-	assert_equals('symbol: zero-length identifier 1c', 'illegal zero-length identifier', get_sqlerrm_n('1""', 2));
+	assert_equals('word: zero-length identifier 1a', 'numeric word EOF', lex('1""'));
+	assert_equals('word: zero-length identifier 1b', '-1741', get_sqlcode_n('1""', 2));
+	assert_equals('word: zero-length identifier 1c', 'illegal zero-length identifier', get_sqlerrm_n('1""', 2));
 
-	assert_equals('symbol: identifier is too long 30 bytes 1a', 'symbol EOF', lex('abcdefghijabcdefghijabcdefghij'));
-	assert_equals('symbol: identifier is too long 30 bytes 1b', null, get_sqlcode_n('abcdefghijabcdefghijabcdefghij', 1));
-	assert_equals('symbol: identifier is too long 30 bytes 1c', null, get_sqlerrm_n('abcdefghijabcdefghijabcdefghij', 1));
-	assert_equals('symbol: identifier is too long 30 bytes 2a', 'symbol EOF', lex('"abcdefghijabcdefghijabcdefghij"'));
-	assert_equals('symbol: identifier is too long 30 bytes 2b', null, get_sqlcode_n('"abcdefghijabcdefghijabcdefghij"', 1));
-	assert_equals('symbol: identifier is too long 30 bytes 2c', null, get_sqlerrm_n('"abcdefghijabcdefghijabcdefghij"', 1));
+	assert_equals('word: identifier is too long 30 bytes 1a', 'word EOF', lex('abcdefghijabcdefghijabcdefghij'));
+	assert_equals('word: identifier is too long 30 bytes 1b', null, get_sqlcode_n('abcdefghijabcdefghijabcdefghij', 1));
+	assert_equals('word: identifier is too long 30 bytes 1c', null, get_sqlerrm_n('abcdefghijabcdefghijabcdefghij', 1));
+	assert_equals('word: identifier is too long 30 bytes 2a', 'word EOF', lex('"abcdefghijabcdefghijabcdefghij"'));
+	assert_equals('word: identifier is too long 30 bytes 2b', null, get_sqlcode_n('"abcdefghijabcdefghijabcdefghij"', 1));
+	assert_equals('word: identifier is too long 30 bytes 2c', null, get_sqlerrm_n('"abcdefghijabcdefghijabcdefghij"', 1));
 
-	assert_equals('symbol: identifier is too long 31 bytes 1a', 'symbol EOF', lex('abcdefghijabcdefghijabcdefghijK'));
-	assert_equals('symbol: identifier is too long 31 bytes 1b', '-972', get_sqlcode_n('abcdefghijabcdefghijabcdefghijK', 1));
-	assert_equals('symbol: identifier is too long 31 bytes 1c', 'identifier is too long', get_sqlerrm_n('abcdefghijabcdefghijabcdefghijK', 1));
-	assert_equals('symbol: identifier is too long 31 bytes 2a', 'symbol EOF', lex('"abcdefghijabcdefghijabcdefghijK"'));
-	assert_equals('symbol: identifier is too long 31 bytes 2b', '-972', get_sqlcode_n('"abcdefghijabcdefghijabcdefghijK"', 1));
-	assert_equals('symbol: identifier is too long 31 bytes 2c', 'identifier is too long', get_sqlerrm_n('"abcdefghijabcdefghijabcdefghijK"', 1));
+	assert_equals('word: identifier is too long 31 bytes 1a', 'word EOF', lex('abcdefghijabcdefghijabcdefghijK'));
+	assert_equals('word: identifier is too long 31 bytes 1b', '-972', get_sqlcode_n('abcdefghijabcdefghijabcdefghijK', 1));
+	assert_equals('word: identifier is too long 31 bytes 1c', 'identifier is too long', get_sqlerrm_n('abcdefghijabcdefghijabcdefghijK', 1));
+	assert_equals('word: identifier is too long 31 bytes 2a', 'word EOF', lex('"abcdefghijabcdefghijabcdefghijK"'));
+	assert_equals('word: identifier is too long 31 bytes 2b', '-972', get_sqlcode_n('"abcdefghijabcdefghijabcdefghijK"', 1));
+	assert_equals('word: identifier is too long 31 bytes 2c', 'identifier is too long', get_sqlerrm_n('"abcdefghijabcdefghijabcdefghijK"', 1));
 
-	assert_equals('symbol: identifier is too long 29 chars 31 bytes 1a', 'symbol EOF', lex('abcdefghijabcdefghijabcdefghi'||unistr('\00d0')));
-	assert_equals('symbol: identifier is too long 29 chars 31 bytes 1b', '-972', get_sqlcode_n('abcdefghijabcdefghijabcdefghi'||unistr('\00d0'), 1));
-	assert_equals('symbol: identifier is too long 29 chars 31 bytes 1c', 'identifier is too long', get_sqlerrm_n('abcdefghijabcdefghijabcdefghi'||unistr('\00d0'), 1));
-end test_symbol;
+	assert_equals('word: identifier is too long 29 chars 31 bytes 1a', 'word EOF', lex('abcdefghijabcdefghijabcdefghi'||unistr('\00d0')));
+	assert_equals('word: identifier is too long 29 chars 31 bytes 1b', '-972', get_sqlcode_n('abcdefghijabcdefghijabcdefghi'||unistr('\00d0'), 1));
+	assert_equals('word: identifier is too long 29 chars 31 bytes 1c', 'identifier is too long', get_sqlerrm_n('abcdefghijabcdefghijabcdefghi'||unistr('\00d0'), 1));
+end test_word;
 
 
 --------------------------------------------------------------------------------
@@ -338,7 +338,7 @@ begin
 	assert_equals('punctuation: 22', '/', get_value_n(q'[~!@%^*()-+=[]|:;<,>./]', 21));
 
 	assert_equals('punctuation: 241',
-		'< < symbol > > symbol whitespace symbol whitespace symbol : = numeric ; whitespace symbol whitespace symbol ; whitespace symbol ; EOF',
+		'< < word > > word whitespace word whitespace word : = numeric ; whitespace word whitespace word ; whitespace word ; EOF',
 		lex(q'[<<my_label>>declare v_test number:=1; begin null; end;]'));
 end test_punctuation;
 
@@ -348,7 +348,7 @@ procedure test_unexpected is
 begin
 	assert_equals('unexpected: 01', 'unexpected EOF', lex('_'));
 	assert_equals('unexpected: 02', '_', get_value_n('_', 1));
-	assert_equals('unexpected: 03', 'symbol unexpected EOF', lex('abcd&'));
+	assert_equals('unexpected: 03', 'word unexpected EOF', lex('abcd&'));
 	assert_equals('unexpected: 04', '&', get_value_n('abcd&', 2));
 end test_unexpected;
 
@@ -358,10 +358,10 @@ procedure test_utf8 is
 begin
 	--Unistr('\D841\DF79') is one 4-byte character.
 	--Try to trip-up substrings with multiples of that character.
-	assert_equals('utf8: 4-byte 1', 'symbol EOF', lex(unistr('\D841\DF79')));
-	assert_equals('utf8: 4-byte 2', 'symbol whitespace symbol EOF', lex(unistr('\D841\DF79') || ' ' || unistr('\D841\DF79')));
-	assert_equals('utf8: 4-byte 4', 'symbol whitespace symbol EOF', lex(unistr('\D841\DF79')||unistr('\D841\DF79')||unistr('\D841\DF79')||' a'));
-	assert_equals('utf8: 4-byte 3', 'symbol whitespace symbol EOF', lex(unistr('\D841\DF79')||unistr('\D841\DF79')||'asdf'||unistr('\D841\DF79')||' a'));
+	assert_equals('utf8: 4-byte 1', 'word EOF', lex(unistr('\D841\DF79')));
+	assert_equals('utf8: 4-byte 2', 'word whitespace word EOF', lex(unistr('\D841\DF79') || ' ' || unistr('\D841\DF79')));
+	assert_equals('utf8: 4-byte 4', 'word whitespace word EOF', lex(unistr('\D841\DF79')||unistr('\D841\DF79')||unistr('\D841\DF79')||' a'));
+	assert_equals('utf8: 4-byte 3', 'word whitespace word EOF', lex(unistr('\D841\DF79')||unistr('\D841\DF79')||'asdf'||unistr('\D841\DF79')||' a'));
 end test_utf8;
 
 
@@ -370,7 +370,7 @@ procedure test_other is
 begin
 	assert_equals('Other: Null only returns EOF', 'EOF', lex(null));
 	assert_equals('Other: EOF value is NULL', null, get_value_n(null, 1));
-	assert_equals('Other: Random', 'symbol whitespace - numeric + numeric whitespace symbol whitespace symbol ; EOF', lex('select -1+1e2d from dual;'));
+	assert_equals('Other: Random', 'word whitespace - numeric + numeric whitespace word whitespace word ; EOF', lex('select -1+1e2d from dual;'));
 end test_other;
 
 
@@ -422,7 +422,7 @@ begin
 	if bitand(p_tests, c_test_comment)     > 0 then test_comment; end if;
 	if bitand(p_tests, c_test_text)        > 0 then test_text; end if;
 	if bitand(p_tests, c_test_numeric)     > 0 then test_numeric; end if;
-	if bitand(p_tests, c_test_symbol)      > 0 then test_symbol; end if;
+	if bitand(p_tests, c_test_word)        > 0 then test_word; end if;
 	if bitand(p_tests, c_test_punctuation) > 0 then test_punctuation; end if;
 	if bitand(p_tests, c_test_unexpected)  > 0 then test_unexpected; end if;
 	if bitand(p_tests, c_test_utf8)        > 0 then test_utf8; end if;
