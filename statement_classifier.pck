@@ -186,7 +186,8 @@ begin
 				v_tokens_with_extra_stuff(i).type = 'word'
 				and upper(v_tokens_with_extra_stuff(i).value) in
 				(
-					'AND','BIGFILE','BITMAP','COMPILE','EDITIONABLE','FORCE','FORCE','GLOBAL',
+					--Removed COMPILE
+					'AND','BIGFILE','BITMAP','EDITIONABLE','FORCE','FORCE','GLOBAL',
 					'NO','NOFORCE','NONEDITIONABLE','OR','PRIVATE','PUBLIC','REPLACE','RESOLVE',
 					'SHARED','SMALLFILE','STANDBY','TEMPORARY','UNDO','UNIQUE'
 				)
@@ -197,8 +198,10 @@ begin
 		end if;
 	end loop;
 
-	--Get first 4 token types and values in more convenient formats, and in upper case for values.
-	for i in 1 .. least(v_tokens.count, 4) loop
+	--Get up to 8 tokens.
+	--The first 4 tokens are sufficient 99% of the time.
+	--8 tokens may be required for "alter package body".
+	for i in 1 .. least(v_tokens.count, 8) loop
 		if v_tokens.exists(i) then
 			v_types(i) := v_tokens(i).type;
 			v_values(i) := upper(v_tokens(i).value);
@@ -283,10 +286,43 @@ begin
 		p_category := C_DDL; p_statement_type := 'ALTER'; p_command_name := 'ALTER OPERATOR'; p_command_type := 183;
 	elsif v_words_1_to_2 = 'ALTER OUTLINE' then
 		p_category := C_DDL; p_statement_type := 'ALTER'; p_command_name := 'ALTER OUTLINE'; p_command_type := 179;
-	elsif v_words_1_to_3 = 'ALTER PACKAGE BODY' then --Moved above "ALTER PACKAGE" to capture more specific case first.
-		p_category := C_DDL; p_statement_type := 'ALTER'; p_command_name := 'ALTER PACKAGE BODY'; p_command_type := 98;
 	elsif v_words_1_to_2 = 'ALTER PACKAGE' then
-		p_category := C_DDL; p_statement_type := 'ALTER'; p_command_name := 'ALTER PACKAGE'; p_command_type := 95;
+		--There's only a few ways to be a "ALTER PACKAGE BODY":
+		--alter package (schema .)? package_name compile debug? body
+
+		if
+		--Example: alter package test_package compile body
+		(
+			(v_types(3) = 'word' and v_types(4) = 'word' and v_types(5) = 'word')
+			and
+			(v_values(3) like '%' and v_values(4) = 'COMPILE' and v_values(5) = 'BODY')
+		)
+		or
+		--Example: alter package jheller.test_package compile body
+		(
+			(v_types(3) = 'word' and v_types(4) = '.' and v_types(5) = 'word' and v_types(6) = 'word' and v_types(7) = 'word')
+			and
+			(v_values(3) like '%' and v_values(4) = '.' and v_values(5) like '%' and v_values(6) = 'COMPILE' and v_values(7) = 'BODY')
+		)
+		or
+		--Example: alter package test_package compile debug body
+		(
+			(v_types(3) = 'word' and v_types(4) = 'word' and v_types(5) = 'word' and v_types(6) = 'word')
+			and
+			(v_values(3) like '%' and v_values(4) = 'COMPILE' and v_values(5) = 'DEBUG' and v_values(6) = 'BODY')
+		)
+		or
+		--Example: alter package jheller.test_package compile debug body
+		(
+			(v_types(3) = 'word' and v_types(4) = '.' and v_types(5) = 'word' and v_types(6) = 'word' and v_types(7) = 'word' and v_types(8) = 'word')
+			and
+			(v_values(3) like '%' and v_values(4) = '.' and v_values(5) like '%' and v_values(6) = 'COMPILE' and v_values(7) = 'DEBUG' and v_values(8) = 'BODY')
+		) then
+			p_category := C_DDL; p_statement_type := 'ALTER'; p_command_name := 'ALTER PACKAGE BODY'; p_command_type := 98;
+		--Anything else is an "ALTER PACKAGE".
+		else
+			p_category := C_DDL; p_statement_type := 'ALTER'; p_command_name := 'ALTER PACKAGE'; p_command_type := 95;
+		end if;
 	elsif v_words_1_to_3 = 'ALTER PLUGGABLE DATABASE' then
 		p_category := C_DDL; p_statement_type := 'ALTER'; p_command_name := 'ALTER PLUGGABLE DATABASE'; p_command_type := 227;
 	elsif v_words_1_to_2 = 'ALTER PROCEDURE' then

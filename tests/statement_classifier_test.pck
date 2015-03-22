@@ -198,15 +198,23 @@ begin
 	classify(q'[alter operator my_operator add binding (number) return (number) using my_function]', v_output); assert_equals('ALTER OPERATOR', 'DDL|ALTER|ALTER OPERATOR|183', concat(v_output));
 	classify(q'[alter outline public my_outline disable;]', v_output); assert_equals('ALTER OUTLINE', 'DDL|ALTER|ALTER OUTLINE|179', concat(v_output));
 
-	--TODO: This is wrong
-	--alter package test_package compile body: 98
-	--alter package test_package compile package: 95
-	--alter package test_package compile specification: 95
-	--alter package test_package compile: 95
-
-
-	classify(q'[ALTER PACKAGE my_package editionable]', v_output); assert_equals('ALTER PACKAGE', 'DDL|ALTER|ALTER PACKAGE|95', concat(v_output));
-	classify(q'[alter package body my_package compile]', v_output); assert_equals('ALTER PACKAGE BODY', 'DDL|ALTER|ALTER PACKAGE BODY|98', concat(v_output));
+	--ALTER PACKAGE gets complicated - may need to read up to 8 tokens.
+	classify(q'[alter package test_package compile package]', v_output); assert_equals('ALTER PACKAGE 1', 'DDL|ALTER|ALTER PACKAGE|95', concat(v_output));
+	classify(q'[alter package jheller.test_package compile package]', v_output); assert_equals('ALTER PACKAGE 2', 'DDL|ALTER|ALTER PACKAGE|95', concat(v_output));
+	classify(q'[alter package test_package compile specification]', v_output); assert_equals('ALTER PACKAGE 3', 'DDL|ALTER|ALTER PACKAGE|95', concat(v_output));
+	classify(q'[alter package jheller.test_package compile specification]', v_output); assert_equals('ALTER PACKAGE 4', 'DDL|ALTER|ALTER PACKAGE|95', concat(v_output));
+	classify(q'[alter package test_package compile]', v_output); assert_equals('ALTER PACKAGE 5', 'DDL|ALTER|ALTER PACKAGE|95', concat(v_output));
+	classify(q'[alter package jheller.test_package compile]', v_output); assert_equals('ALTER PACKAGE 6', 'DDL|ALTER|ALTER PACKAGE|95', concat(v_output));
+	classify(q'[alter package test_package compile debug]', v_output); assert_equals('ALTER PACKAGE 7', 'DDL|ALTER|ALTER PACKAGE|95', concat(v_output));
+	classify(q'[alter package jheller.test_package compile debug]', v_output); assert_equals('ALTER PACKAGE 8', 'DDL|ALTER|ALTER PACKAGE|95', concat(v_output));
+	classify(q'[alter package test_package noneditionable]', v_output); assert_equals('ALTER PACKAGE 9', 'DDL|ALTER|ALTER PACKAGE|95', concat(v_output));
+	classify(q'[alter package test_package editionable]', v_output); assert_equals('ALTER PACKAGE 10', 'DDL|ALTER|ALTER PACKAGE|95', concat(v_output));
+	classify(q'[alter package jheller.test_package editionable]', v_output); assert_equals('ALTER PACKAGE 11', 'DDL|ALTER|ALTER PACKAGE|95', concat(v_output));
+	--ALTER PACKAGE BODY is also complicated
+	classify(q'[alter package test_package compile body]', v_output); assert_equals('ALTER PACKAGE BODY 1', 'DDL|ALTER|ALTER PACKAGE BODY|98', concat(v_output));
+	classify(q'[alter package jheller.test_package compile body]', v_output); assert_equals('ALTER PACKAGE BODY 2', 'DDL|ALTER|ALTER PACKAGE BODY|98', concat(v_output));
+	classify(q'[alter package test_package compile debug body]', v_output); assert_equals('ALTER PACKAGE BODY 3', 'DDL|ALTER|ALTER PACKAGE BODY|98', concat(v_output));
+	classify(q'[alter package jheller.test_package compile debug body]', v_output); assert_equals('ALTER PACKAGE BODY 4', 'DDL|ALTER|ALTER PACKAGE BODY|98', concat(v_output));
 
 	classify(q'[ALTER PLUGGABLE DATABASE my_pdb default tablespace some_tbs]', v_output); assert_equals('ALTER PLUGGABLE DATABASE', 'DDL|ALTER|ALTER PLUGGABLE DATABASE|227', concat(v_output));
 	classify(q'[ALTER PROCEDURE my_proc compile]', v_output); assert_equals('ALTER PROCEDURE', 'DDL|ALTER|ALTER PROCEDURE|25', concat(v_output));
@@ -230,6 +238,8 @@ begin
 	--Undocumented by still runs in 12.1.0.2.
 	classify(q'[ALTER TRACING enable;]', v_output); assert_equals('ALTER TRACING', 'DDL|ALTER|ALTER TRACING|58', concat(v_output));
 	classify(q'[alter trigger my_schema.my_trigger enable;]', v_output); assert_equals('ALTER TRIGGER', 'DDL|ALTER|ALTER TRIGGER|60', concat(v_output));
+
+	--TODO: Similar to PACKAGE
 	classify(q'[ALTER TYPE my_schema.my_type noneditionable]', v_output); assert_equals('ALTER TYPE', 'DDL|ALTER|ALTER TYPE|80', concat(v_output));
 	classify(q'[ALTER TYPE BODY]', v_output); assert_equals('ALTER TYPE BODY', 'DDL|ALTER|ALTER TYPE BODY|82', concat(v_output));
 	classify(q'[ALTER USER]', v_output); assert_equals('ALTER USER', 'DDL|ALTER|ALTER USER|43', concat(v_output));
