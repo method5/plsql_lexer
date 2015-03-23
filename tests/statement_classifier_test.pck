@@ -239,14 +239,32 @@ begin
 	classify(q'[ALTER TRACING enable;]', v_output); assert_equals('ALTER TRACING', 'DDL|ALTER|ALTER TRACING|58', concat(v_output));
 	classify(q'[alter trigger my_schema.my_trigger enable;]', v_output); assert_equals('ALTER TRIGGER', 'DDL|ALTER|ALTER TRIGGER|60', concat(v_output));
 
-	--TODO: Similar to PACKAGE
-	classify(q'[ALTER TYPE my_schema.my_type noneditionable]', v_output); assert_equals('ALTER TYPE', 'DDL|ALTER|ALTER TYPE|80', concat(v_output));
-	classify(q'[ALTER TYPE BODY]', v_output); assert_equals('ALTER TYPE BODY', 'DDL|ALTER|ALTER TYPE BODY|82', concat(v_output));
-	classify(q'[ALTER USER]', v_output); assert_equals('ALTER USER', 'DDL|ALTER|ALTER USER|43', concat(v_output));
-	classify(q'[ALTER VIEW]', v_output); assert_equals('ALTER VIEW', 'DDL|ALTER|ALTER VIEW|88', concat(v_output));
-	classify(q'[ANALYZE CLUSTER]', v_output); assert_equals('ANALYZE CLUSTER', 'DDL|ANALYZE|ANALYZE CLUSTER|64', concat(v_output));
-	classify(q'[ANALYZE INDEX]', v_output); assert_equals('ANALYZE INDEX', 'DDL|ANALYZE|ANALYZE INDEX|63', concat(v_output));
-	classify(q'[ANALYZE TABLE]', v_output); assert_equals('ANALYZE TABLE', 'DDL|ANALYZE|ANALYZE TABLE|62', concat(v_output));
+	--ALTER TYPE gets complicated - may need to read up to 8 tokens.
+	classify(q'[alter type test_type compile type]', v_output); assert_equals('ALTER TYPE 1', 'DDL|ALTER|ALTER TYPE|80', concat(v_output));
+	classify(q'[alter type jheller.test_type compile type]', v_output); assert_equals('ALTER TYPE 2', 'DDL|ALTER|ALTER TYPE|80', concat(v_output));
+	classify(q'[alter type test_type compile specification]', v_output); assert_equals('ALTER TYPE 3', 'DDL|ALTER|ALTER TYPE|80', concat(v_output));
+	classify(q'[alter type jheller.test_type compile specification]', v_output); assert_equals('ALTER TYPE 4', 'DDL|ALTER|ALTER TYPE|80', concat(v_output));
+	classify(q'[alter type test_type compile]', v_output); assert_equals('ALTER TYPE 5', 'DDL|ALTER|ALTER TYPE|80', concat(v_output));
+	classify(q'[alter type jheller.test_type compile]', v_output); assert_equals('ALTER TYPE 6', 'DDL|ALTER|ALTER TYPE|80', concat(v_output));
+	classify(q'[alter type test_type compile debug]', v_output); assert_equals('ALTER TYPE 7', 'DDL|ALTER|ALTER TYPE|80', concat(v_output));
+	classify(q'[alter type jheller.test_type compile debug]', v_output); assert_equals('ALTER TYPE 8', 'DDL|ALTER|ALTER TYPE|80', concat(v_output));
+	classify(q'[alter type test_type noneditionable]', v_output); assert_equals('ALTER TYPE 9', 'DDL|ALTER|ALTER TYPE|80', concat(v_output));
+	classify(q'[alter type test_type editionable]', v_output); assert_equals('ALTER TYPE 10', 'DDL|ALTER|ALTER TYPE|80', concat(v_output));
+	classify(q'[alter type jheller.test_type editionable]', v_output); assert_equals('ALTER TYPE 11', 'DDL|ALTER|ALTER TYPE|80', concat(v_output));
+	--ALTER TYPE BODY is also complicated
+	classify(q'[alter type test_type compile body]', v_output); assert_equals('ALTER TYPE BODY 1', 'DDL|ALTER|ALTER TYPE BODY|82', concat(v_output));
+	classify(q'[alter type jheller.test_type compile body]', v_output); assert_equals('ALTER TYPE BODY 2', 'DDL|ALTER|ALTER TYPE BODY|82', concat(v_output));
+	classify(q'[alter type test_type compile debug body]', v_output); assert_equals('ALTER TYPE BODY 3', 'DDL|ALTER|ALTER TYPE BODY|82', concat(v_output));
+	classify(q'[alter type jheller.test_type compile debug body]', v_output); assert_equals('ALTER TYPE BODY 4', 'DDL|ALTER|ALTER TYPE BODY|82', concat(v_output));
+
+	classify(q'[ALTER USER my_user profile default]', v_output); assert_equals('ALTER USER', 'DDL|ALTER|ALTER USER|43', concat(v_output));
+	classify(q'[ALTER VIEW my_schema.my_view read only;]', v_output); assert_equals('ALTER VIEW', 'DDL|ALTER|ALTER VIEW|88', concat(v_output));
+	--The syntax diagram in manual is wrong, it's "ANALYZE CLUSTER", not "CLUSTER ...".
+	classify(q'[ ANALYZE CLUSTER my_cluster validate structure]', v_output); assert_equals('ANALYZE CLUSTER', 'DDL|ANALYZE|ANALYZE CLUSTER|64', concat(v_output));
+	classify(q'[ ANALYZE INDEX my_index validate structure]', v_output); assert_equals('ANALYZE INDEX', 'DDL|ANALYZE|ANALYZE INDEX|63', concat(v_output));
+	classify(q'[ ANALYZE TABLE my_table validate structure;]', v_output); assert_equals('ANALYZE TABLE', 'DDL|ANALYZE|ANALYZE TABLE|62', concat(v_output));
+
+--TODO
 	classify(q'[ASSOCIATE STATISTICS]', v_output); assert_equals('ASSOCIATE STATISTICS', 'DDL|ASSOCIATE STATISTICS|ASSOCIATE STATISTICS|168', concat(v_output));
 	classify(q'[AUDIT OBJECT]', v_output); assert_equals('AUDIT OBJECT', 'DDL|AUDIT|AUDIT OBJECT|30', concat(v_output));
 	classify(q'[CALL my_procedure(1,2)]', v_output); assert_equals('CALL METHOD', 'DML|CALL|CALL METHOD|170', concat(v_output));

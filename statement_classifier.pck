@@ -289,7 +289,6 @@ begin
 	elsif v_words_1_to_2 = 'ALTER PACKAGE' then
 		--There's only a few ways to be a "ALTER PACKAGE BODY":
 		--alter package (schema .)? package_name compile debug? body
-
 		if
 		--Example: alter package test_package compile body
 		(
@@ -357,10 +356,43 @@ begin
 		p_category := C_DDL; p_statement_type := 'ALTER'; p_command_name := 'ALTER TRACING'; p_command_type := 58;
 	elsif v_words_1_to_2 = 'ALTER TRIGGER' then
 		p_category := C_DDL; p_statement_type := 'ALTER'; p_command_name := 'ALTER TRIGGER'; p_command_type := 60;
-	elsif v_words_1_to_3 = 'ALTER TYPE BODY' then --Moved above "ALTER PACKAGE" to capture more specific case first.
-		p_category := C_DDL; p_statement_type := 'ALTER'; p_command_name := 'ALTER TYPE BODY'; p_command_type := 82;
+	--This is very similar to "ALTER PACKAGE".
 	elsif v_words_1_to_2 = 'ALTER TYPE' then
-		p_category := C_DDL; p_statement_type := 'ALTER'; p_command_name := 'ALTER TYPE'; p_command_type := 80;
+		--There's only a few ways to be a "ALTER TYPE BODY":
+		--alter type (schema .)? type_name compile debug? body
+		if
+		--Example: alter type test_type compile body
+		(
+			(v_types(3) = 'word' and v_types(4) = 'word' and v_types(5) = 'word')
+			and
+			(v_values(3) like '%' and v_values(4) = 'COMPILE' and v_values(5) = 'BODY')
+		)
+		or
+		--Example: alter type jheller.test_type compile body
+		(
+			(v_types(3) = 'word' and v_types(4) = '.' and v_types(5) = 'word' and v_types(6) = 'word' and v_types(7) = 'word')
+			and
+			(v_values(3) like '%' and v_values(4) = '.' and v_values(5) like '%' and v_values(6) = 'COMPILE' and v_values(7) = 'BODY')
+		)
+		or
+		--Example: alter type test_type compile debug body
+		(
+			(v_types(3) = 'word' and v_types(4) = 'word' and v_types(5) = 'word' and v_types(6) = 'word')
+			and
+			(v_values(3) like '%' and v_values(4) = 'COMPILE' and v_values(5) = 'DEBUG' and v_values(6) = 'BODY')
+		)
+		or
+		--Example: alter type jheller.test_type compile debug body
+		(
+			(v_types(3) = 'word' and v_types(4) = '.' and v_types(5) = 'word' and v_types(6) = 'word' and v_types(7) = 'word' and v_types(8) = 'word')
+			and
+			(v_values(3) like '%' and v_values(4) = '.' and v_values(5) like '%' and v_values(6) = 'COMPILE' and v_values(7) = 'DEBUG' and v_values(8) = 'BODY')
+		) then
+			p_category := C_DDL; p_statement_type := 'ALTER'; p_command_name := 'ALTER TYPE BODY'; p_command_type := 82;
+		--Anything else is an "ALTER TYPE".
+		else
+			p_category := C_DDL; p_statement_type := 'ALTER'; p_command_name := 'ALTER TYPE'; p_command_type := 80;
+		end if;
 	elsif v_words_1_to_2 = 'ALTER USER' then
 		p_category := C_DDL; p_statement_type := 'ALTER'; p_command_name := 'ALTER USER'; p_command_type := 43;
 	elsif v_words_1_to_2 = 'ALTER VIEW' then
