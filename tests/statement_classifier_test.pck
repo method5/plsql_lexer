@@ -263,26 +263,38 @@ begin
 	classify(q'[ ANALYZE CLUSTER my_cluster validate structure]', v_output); assert_equals('ANALYZE CLUSTER', 'DDL|ANALYZE|ANALYZE CLUSTER|64', concat(v_output));
 	classify(q'[ ANALYZE INDEX my_index validate structure]', v_output); assert_equals('ANALYZE INDEX', 'DDL|ANALYZE|ANALYZE INDEX|63', concat(v_output));
 	classify(q'[ ANALYZE TABLE my_table validate structure;]', v_output); assert_equals('ANALYZE TABLE', 'DDL|ANALYZE|ANALYZE TABLE|62', concat(v_output));
-
---TODO
-	classify(q'[ASSOCIATE STATISTICS]', v_output); assert_equals('ASSOCIATE STATISTICS', 'DDL|ASSOCIATE STATISTICS|ASSOCIATE STATISTICS|168', concat(v_output));
-	classify(q'[AUDIT OBJECT]', v_output); assert_equals('AUDIT OBJECT', 'DDL|AUDIT|AUDIT OBJECT|30', concat(v_output));
+	classify(q'[associate statistics with columns my_schema.my_table using null;]', v_output); assert_equals('ASSOCIATE STATISTICS', 'DDL|ASSOCIATE STATISTICS|ASSOCIATE STATISTICS|168', concat(v_output));
+	classify(q'[audit all on my_schema.my_table whenever not successful]', v_output); assert_equals('AUDIT OBJECT', 'DDL|AUDIT|AUDIT OBJECT|30', concat(v_output));
+	classify(q'[audit policy some_policy;]', v_output); assert_equals('AUDIT OBJECT', 'DDL|AUDIT|AUDIT OBJECT|30', concat(v_output));
 	classify(q'[CALL my_procedure(1,2)]', v_output); assert_equals('CALL METHOD', 'DML|CALL|CALL METHOD|170', concat(v_output));
 	classify(q'[ call my_procedure(3,4);]', v_output); assert_equals('CALL METHOD', 'DML|CALL|CALL METHOD|170', concat(v_output));
+	classify(q'[ call my_schema.my_type.my_method('asdf', 'qwer') into :variable;]', v_output); assert_equals('CALL METHOD', 'DML|CALL|CALL METHOD|170', concat(v_output));
+	classify(q'[ call my_type(3,4).my_method() into :x;]', v_output); assert_equals('CALL METHOD', 'DML|CALL|CALL METHOD|170', concat(v_output));
 	--I don't think this is a real command.
 	--classify(q'[CHANGE PASSWORD]', v_output); assert_equals('CHANGE PASSWORD', 'DDL|ALTER|CHANGE PASSWORD|190', concat(v_output));
-	classify(q'[COMMENT]', v_output); assert_equals('COMMENT', 'DDL|COMMENT|COMMENT|29', concat(v_output));
-	classify(q'[COMMIT]', v_output); assert_equals('COMMIT', 'Transaction Control|COMMIT|COMMIT|44', concat(v_output));
-	classify(q'[CREATE ASSEMBLY]', v_output); assert_equals('CREATE ASSEMBLY', 'DDL|CREATE|CREATE ASSEMBLY|216', concat(v_output));
-	classify(q'[CREATE AUDIT POLICY]', v_output); assert_equals('CREATE AUDIT POLICY', 'DDL|CREATE|CREATE AUDIT POLICY|229', concat(v_output));
-	classify(q'[CREATE BITMAPFILE]', v_output); assert_equals('CREATE BITMAPFILE', 'DDL|CREATE|CREATE BITMAPFILE|87', concat(v_output));
-	classify(q'[CREATE CLUSTER]', v_output); assert_equals('CREATE CLUSTER', 'DDL|CREATE|CREATE CLUSTER|4', concat(v_output));
-	classify(q'[CREATE CONTEXT]', v_output); assert_equals('CREATE CONTEXT', 'DDL|CREATE|CREATE CONTEXT|177', concat(v_output));
-	classify(q'[CREATE CONTROL FILE]', v_output); assert_equals('CREATE CONTROL FILE', 'DDL|CREATE|CREATE CONTROL FILE|57', concat(v_output));
-	classify(q'[CREATE DATABASE]', v_output); assert_equals('CREATE DATABASE', 'DDL|CREATE|CREATE DATABASE|34', concat(v_output));
-	classify(q'[CREATE DATABASE LINK]', v_output); assert_equals('CREATE DATABASE LINK', 'DDL|CREATE|CREATE DATABASE LINK|32', concat(v_output));
-	classify(q'[CREATE DIMENSION]', v_output); assert_equals('CREATE DIMENSION', 'DDL|CREATE|CREATE DIMENSION|174', concat(v_output));
-	classify(q'[CREATE DIRECTORY]', v_output); assert_equals('CREATE DIRECTORY', 'DDL|CREATE|CREATE DIRECTORY|157', concat(v_output));
+	classify(q'[comment on audit policy my_policy is 'asdf']', v_output); assert_equals('COMMENT', 'DDL|COMMENT|COMMENT|29', concat(v_output));
+	classify(q'[comment on column my_schema.my_mv is q'!as'!';]', v_output); assert_equals('COMMENT', 'DDL|COMMENT|COMMENT|29', concat(v_output));
+	classify(q'[comment on table some_table is 'asdfasdf']', v_output); assert_equals('COMMENT', 'DDL|COMMENT|COMMENT|29', concat(v_output));
+	classify(q'[ commit work comment 'some comment' write wait batch]', v_output); assert_equals('COMMIT', 'Transaction Control|COMMIT|COMMIT|44', concat(v_output));
+	classify(q'[COMMIT force corrupt_xid_all]', v_output); assert_equals('COMMIT', 'Transaction Control|COMMIT|COMMIT|44', concat(v_output));
+	--Is this a real command?  http://dba.stackexchange.com/questions/96002/what-is-an-oracle-assembly/
+	classify(q'[create or replace assembly some_assembly is 'some string';
+	/]', v_output); assert_equals('CREATE ASSEMBLY', 'DDL|CREATE|CREATE ASSEMBLY|216', concat(v_output));
+	classify(q'[CREATE AUDIT POLICY my_policy actions update on oe.orders]', v_output); assert_equals('CREATE AUDIT POLICY', 'DDL|CREATE|CREATE AUDIT POLICY|229', concat(v_output));
+	--This is not a real command as far as I can tell.
+	--classify(q'[CREATE BITMAPFILE]', v_output); assert_equals('CREATE BITMAPFILE', 'DDL|CREATE|CREATE BITMAPFILE|87', concat(v_output));
+	classify(q'[CREATE CLUSTER my_schema.my_cluster(a number sort);]', v_output); assert_equals('CREATE CLUSTER', 'DDL|CREATE|CREATE CLUSTER|4', concat(v_output));
+	classify(q'[CREATE CONTEXT my_context using my_package;]', v_output); assert_equals('CREATE CONTEXT', 'DDL|CREATE|CREATE CONTEXT|177', concat(v_output));
+	classify(q'[CREATE or  REplace  CONTEXT my_context using my_package;]', v_output); assert_equals('CREATE CONTEXT', 'DDL|CREATE|CREATE CONTEXT|177', concat(v_output));
+	classify(q'[CREATE CONTROLFILE database my_db resetlogs]', v_output); assert_equals('CREATE CONTROL FILE', 'DDL|CREATE|CREATE CONTROL FILE|57', concat(v_output));
+	classify(q'[CREATE DATABASE my_database controlfile reuse;]', v_output); assert_equals('CREATE DATABASE', 'DDL|CREATE|CREATE DATABASE|34', concat(v_output));
+	classify(q'[CREATE DATABASE LINK my_link connect to my_user identified by "some_password*#&$@" using 'orcl1234';]', v_output); assert_equals('CREATE DATABASE LINK', 'DDL|CREATE|CREATE DATABASE LINK|32', concat(v_output));
+	classify(q'[CREATE shared DATABASE LINK my_link connect to my_user identified by "some_password*#&$@" using 'orcl1234';]', v_output); assert_equals('CREATE DATABASE LINK', 'DDL|CREATE|CREATE DATABASE LINK|32', concat(v_output));
+	classify(q'[CREATE public DATABASE LINK my_link connect to my_user identified by "some_password*#&$@" using 'orcl1234';]', v_output); assert_equals('CREATE DATABASE LINK', 'DDL|CREATE|CREATE DATABASE LINK|32', concat(v_output));
+	classify(q'[CREATE shared public DATABASE LINK my_link connect to my_user identified by "some_password*#&$@" using 'orcl1234';]', v_output); assert_equals('CREATE DATABASE LINK', 'DDL|CREATE|CREATE DATABASE LINK|32', concat(v_output));
+	classify(q'[CREATE DIMENSION my_schema.my_dimension level l1 is t1.a;]', v_output); assert_equals('CREATE DIMENSION', 'DDL|CREATE|CREATE DIMENSION|174', concat(v_output));
+	classify(q'[CREATE DIRECTORY my_directory#$1 as '/load/blah/']', v_output); assert_equals('CREATE DIRECTORY', 'DDL|CREATE|CREATE DIRECTORY|157', concat(v_output));
+	classify(q'[CREATE or replace DIRECTORY my_directory#$1 as '/load/blah/']', v_output); assert_equals('CREATE DIRECTORY', 'DDL|CREATE|CREATE DIRECTORY|157', concat(v_output));
 	--Command name has extra space, real command is "DISKGROUP".
 	classify(q'[CREATE DISKGROUP]', v_output); assert_equals('CREATE DISK GROUP', 'DDL|CREATE|CREATE DISK GROUP|194', concat(v_output));
 	classify(q'[CREATE EDITION]', v_output); assert_equals('CREATE EDITION', 'DDL|CREATE|CREATE EDITION|212', concat(v_output));

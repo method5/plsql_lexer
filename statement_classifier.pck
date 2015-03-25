@@ -409,7 +409,7 @@ begin
 		p_category := C_DDL; p_statement_type := 'AUDIT'; p_command_name := 'AUDIT OBJECT'; p_command_type := 30;
 	elsif v_words_1 = 'CALL' then --The command name is more specific than the command.
 		p_category := C_DML; p_statement_type := 'CALL'; p_command_name := 'CALL METHOD'; p_command_type := 170;
-	--I don't think this is a real command.
+	--This is not a real command.
 	--elsif v_words_1_to_2 = 'CHANGE PASSWORD' then
 	--	p_category := C_DDL; p_statement_type := 'CHANGE'; p_command_name := 'CHANGE PASSWORD'; p_command_type := 190;
 	elsif v_words_1 = 'COMMENT' then
@@ -420,13 +420,15 @@ begin
 		p_category := C_DDL; p_statement_type := 'CREATE'; p_command_name := 'CREATE ASSEMBLY'; p_command_type := 216;
 	elsif v_words_1_to_3 = 'CREATE AUDIT POLICY' then
 		p_category := C_DDL; p_statement_type := 'CREATE'; p_command_name := 'CREATE AUDIT POLICY'; p_command_type := 229;
-	elsif v_words_1_to_2 = 'CREATE BITMAPFILE' then --I don't think this is a real command.
-		p_category := C_DDL; p_statement_type := 'CREATE'; p_command_name := 'CREATE BITMAPFILE'; p_command_type := 87;
+	--This is not a real command.
+	--elsif v_words_1_to_2 = 'CREATE BITMAPFILE' then --I don't think this is a real command.
+	--	p_category := C_DDL; p_statement_type := 'CREATE'; p_command_name := 'CREATE BITMAPFILE'; p_command_type := 87;
 	elsif v_words_1_to_2 = 'CREATE CLUSTER' then
 		p_category := C_DDL; p_statement_type := 'CREATE'; p_command_name := 'CREATE CLUSTER'; p_command_type := 4;
 	elsif v_words_1_to_2 = 'CREATE CONTEXT' then
 		p_category := C_DDL; p_statement_type := 'CREATE'; p_command_name := 'CREATE CONTEXT'; p_command_type := 177;
-	elsif v_words_1_to_3 = 'CREATE CONTROL FILE' then
+	--Command name has an extra space.
+	elsif v_words_1_to_2 = 'CREATE CONTROLFILE' then
 		p_category := C_DDL; p_statement_type := 'CREATE'; p_command_name := 'CREATE CONTROL FILE'; p_command_type := 57;
 	elsif v_words_1_to_3 = 'CREATE DATABASE LINK' then --Moved above "CREATE DATABASE" to capture more specific case first.
 		p_category := C_DDL; p_statement_type := 'CREATE'; p_command_name := 'CREATE DATABASE LINK'; p_command_type := 32;
