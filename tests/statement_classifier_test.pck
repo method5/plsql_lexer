@@ -296,13 +296,35 @@ begin
 	classify(q'[CREATE DIRECTORY my_directory#$1 as '/load/blah/']', v_output); assert_equals('CREATE DIRECTORY', 'DDL|CREATE|CREATE DIRECTORY|157', concat(v_output));
 	classify(q'[CREATE or replace DIRECTORY my_directory#$1 as '/load/blah/']', v_output); assert_equals('CREATE DIRECTORY', 'DDL|CREATE|CREATE DIRECTORY|157', concat(v_output));
 	--Command name has extra space, real command is "DISKGROUP".
-	classify(q'[CREATE DISKGROUP]', v_output); assert_equals('CREATE DISK GROUP', 'DDL|CREATE|CREATE DISK GROUP|194', concat(v_output));
-	classify(q'[CREATE EDITION]', v_output); assert_equals('CREATE EDITION', 'DDL|CREATE|CREATE EDITION|212', concat(v_output));
-	classify(q'[CREATE FLASHBACK ARCHIVE]', v_output); assert_equals('CREATE FLASHBACK ARCHIVE', 'DDL|CREATE|CREATE FLASHBACK ARCHIVE|218', concat(v_output));
-	classify(q'[CREATE FUNCTION]', v_output); assert_equals('CREATE FUNCTION', 'DDL|CREATE|CREATE FUNCTION|91', concat(v_output));
-	classify(q'[CREATE INDEX]', v_output); assert_equals('CREATE INDEX', 'DDL|CREATE|CREATE INDEX|9', concat(v_output));
-	classify(q'[CREATE INDEXTYPE]', v_output); assert_equals('CREATE INDEXTYPE', 'DDL|CREATE|CREATE INDEXTYPE|164', concat(v_output));
-	classify(q'[CREATE JAVA]', v_output); assert_equals('CREATE JAVA', 'DDL|CREATE|CREATE JAVA|160', concat(v_output));
+	classify(q'[CREATE DISKGROUP my_diskgroup disk '/emc/powersomething/' size 555m;]', v_output); assert_equals('CREATE DISK GROUP', 'DDL|CREATE|CREATE DISK GROUP|194', concat(v_output));
+	classify(q'[CREATE EDITION my_edition as child of my_parent;]', v_output); assert_equals('CREATE EDITION', 'DDL|CREATE|CREATE EDITION|212', concat(v_output));
+	classify(q'[CREATE FLASHBACK ARCHIVE default my_fba tablespace my_ts quota 5g;]', v_output); assert_equals('CREATE FLASHBACK ARCHIVE', 'DDL|CREATE|CREATE FLASHBACK ARCHIVE|218', concat(v_output));
+	classify(q'[CREATE FUNCTION my_schema.my_function() return number is begin return 1; end; /]', v_output); assert_equals('CREATE FUNCTION', 'DDL|CREATE|CREATE FUNCTION|91', concat(v_output));
+	classify(q'[CREATE or replace FUNCTION my_schema.my_function() return number is begin return 1; end; /]', v_output); assert_equals('CREATE FUNCTION', 'DDL|CREATE|CREATE FUNCTION|91', concat(v_output));
+	classify(q'[CREATE or replace editionable FUNCTION my_schema.my_function() return number is begin return 1; end; /]', v_output); assert_equals('CREATE FUNCTION', 'DDL|CREATE|CREATE FUNCTION|91', concat(v_output));
+	classify(q'[CREATE or replace noneditionable FUNCTION my_schema.my_function() return number is begin return 1; end; /]', v_output); assert_equals('CREATE FUNCTION', 'DDL|CREATE|CREATE FUNCTION|91', concat(v_output));
+	classify(q'[CREATE editionable FUNCTION my_schema.my_function() return number is begin return 1; end; /]', v_output); assert_equals('CREATE FUNCTION', 'DDL|CREATE|CREATE FUNCTION|91', concat(v_output));
+	classify(q'[CREATE noneditionable FUNCTION my_schema.my_function() return number is begin return 1; end; /]', v_output); assert_equals('CREATE FUNCTION', 'DDL|CREATE|CREATE FUNCTION|91', concat(v_output));
+	classify(q'[CREATE INDEX on table1(a);]', v_output); assert_equals('CREATE INDEX', 'DDL|CREATE|CREATE INDEX|9', concat(v_output));
+	classify(q'[CREATE unique INDEX on table1(a);]', v_output); assert_equals('CREATE INDEX', 'DDL|CREATE|CREATE INDEX|9', concat(v_output));
+	classify(q'[CREATE bitmap INDEX on table1(a);]', v_output); assert_equals('CREATE INDEX', 'DDL|CREATE|CREATE INDEX|9', concat(v_output));
+	classify(q'[CREATE INDEXTYPE my_schema.my_indextype for indtype(a number) using my_type;]', v_output); assert_equals('CREATE INDEXTYPE', 'DDL|CREATE|CREATE INDEXTYPE|164', concat(v_output));
+	classify(q'[CREATE or replace INDEXTYPE my_schema.my_indextype for indtype(a number) using my_type;]', v_output); assert_equals('CREATE INDEXTYPE', 'DDL|CREATE|CREATE INDEXTYPE|164', concat(v_output));
+
+	--12 combinations of initial keywords.  COMPILE is optional here, but not elsewhere so it requires special handling.
+	classify(q'[CREATE and resolve noforce JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_output); assert_equals('CREATE JAVA', 'DDL|CREATE|CREATE JAVA|160', concat(v_output));
+	classify(q'[CREATE and resolve JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_output); assert_equals('CREATE JAVA', 'DDL|CREATE|CREATE JAVA|160', concat(v_output));
+	classify(q'[CREATE and compile noforce JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_output); assert_equals('CREATE JAVA', 'DDL|CREATE|CREATE JAVA|160', concat(v_output));
+	classify(q'[CREATE and compile JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_output); assert_equals('CREATE JAVA', 'DDL|CREATE|CREATE JAVA|160', concat(v_output));
+	classify(q'[CREATE noforce JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_output); assert_equals('CREATE JAVA', 'DDL|CREATE|CREATE JAVA|160', concat(v_output));
+	classify(q'[CREATE JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_output); assert_equals('CREATE JAVA', 'DDL|CREATE|CREATE JAVA|160', concat(v_output));
+	classify(q'[CREATE or replace and resolve noforce JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_output); assert_equals('CREATE JAVA', 'DDL|CREATE|CREATE JAVA|160', concat(v_output));
+	classify(q'[CREATE or replace and resolve  JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_output); assert_equals('CREATE JAVA', 'DDL|CREATE|CREATE JAVA|160', concat(v_output));
+	classify(q'[CREATE or replace and compile noforce JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_output); assert_equals('CREATE JAVA', 'DDL|CREATE|CREATE JAVA|160', concat(v_output));
+	classify(q'[CREATE or replace and compile  JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_output); assert_equals('CREATE JAVA', 'DDL|CREATE|CREATE JAVA|160', concat(v_output));
+	classify(q'[CREATE or replace noforce JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_output); assert_equals('CREATE JAVA', 'DDL|CREATE|CREATE JAVA|160', concat(v_output));
+	classify(q'[CREATE or replace JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_output); assert_equals('CREATE JAVA', 'DDL|CREATE|CREATE JAVA|160', concat(v_output));
+
 	classify(q'[CREATE LIBRARY]', v_output); assert_equals('CREATE LIBRARY', 'DDL|CREATE|CREATE LIBRARY|159', concat(v_output));
 	classify(q'[CREATE MATERIALIZED VIEW ]', v_output); assert_equals('CREATE MATERIALIZED VIEW ', 'DDL|CREATE|CREATE MATERIALIZED VIEW |74', concat(v_output));
 	classify(q'[CREATE MATERIALIZED VIEW LOG]', v_output); assert_equals('CREATE MATERIALIZED VIEW LOG', 'DDL|CREATE|CREATE MATERIALIZED VIEW LOG|71', concat(v_output));

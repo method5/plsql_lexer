@@ -174,11 +174,42 @@ begin
 	end loop;
 
 	--Remove whitespace, comments, and optional keywords.
-	--All of the optional keywords in the SQL Language Reference are not used for
-	--determining the category, statement type, command name, or command type.
+	--Optional keywords in the SQL Language Reference are not used for determining
+	--the category, statement type, command name, or command type.
 	--For example, ALTER [SHARED|PUBLIC]? DATABASE LINK is DDL/ALTER/ALTER DATABASE LINK/225.
-	--The keywords SHARED and PUBLIC can be discarded.  Luckily, *all* those
+	--The keywords SHARED and PUBLIC can be discarded.  Luckily, *almost all* of those
 	--optional keywords can *always* be discarded, leaving a nice linear path.
+	--The only exception is "COMPILE", which is occasionally necessary to classify.
+	/*
+	List of all optional keywords:
+	ALTER [SHARED|PUBLIC]? DATABASE LINK
+	ALTER [PUBLIC]? SYNONYM
+	CREATE [OR REPLACE]? CONTEXT
+	CREATE [SHARED|PUBLIC]? DATABASE LINK
+	CREATE [OR REPLACE]? DIRECTORY
+	CREATE [OR REPLACE]? [EDITIONABLE|NONEDITIONABLE]? FUNCTION
+	CREATE [UNIQUE|BITMAP]? INDEX
+	CREATE [OR REPLACE]? INDEXTYPE
+	CREATE [OR REPLACE]? [AND (RESOLVE|COMPILE)]? [NOFORCE]? JAVA
+	CREATE [OR REPLACE]? [EDITIONABLE|NONEDITIONABLE]? LIBRARY
+	CREATE [OR REPLACE]? OPERATOR
+	CREATE [OR REPLACE]? [PUBLIC|PRIVATE]? OUTLINE
+	CREATE [OR REPLACE]? [EDITIONABLE|NONEDITIONABLE]? PACKAGE
+	CREATE [OR REPLACE]? [EDITIONABLE|NONEDITIONABLE]? PACKAGE BODY
+	CREATE [OR REPLACE]? [EDITIONABLE|NONEDITIONABLE]? PROCEDURE
+	CREATE [PUBLIC]? ROLLBACK SEGMENT
+	CREATE [OR REPLACE]? [EDITIONABLE|NONEDITIONABLE]? [PUBLIC]? SYNONYM
+	CREATE [GLOBAL TEMPORARY]? TABLE
+	CREATE [BIGFILE|SMALLFILE]? [TEMPORARY|UNDO]? TABLESPACE
+	CREATE [OR REPLACE]? [EDITIONABLE|NONEDITIONABLE]? TRIGGER
+	CREATE [OR REPLACE]? [EDITIONABLE|NONEDITIONABLE]? TYPE
+	CREATE [OR REPLACE]? [EDITIONABLE|NONEDITIONABLE]? TYPE BODY
+	CREATE [OR REPLACE]? [NO FORCE|FORCE]? [EDITIONING|EDITIONABLE|EDITIONABLE EDITIONING|NONEDITIONABLE]? VIEW
+	DROP [PUBLIC]? DATABASE LINK
+	DROP [PUBLIC]? SYNONYM
+	FLASHBACK [STANDBY]? DATABASE
+	SET [CONSTRAINT|CONSTRAINTS]* (AMBIGUOUS - HOW DO WE NAME THESE?)
+	*/
 	for i in 1 .. v_tokens_with_extra_stuff.count loop
 		if v_tokens_with_extra_stuff(i).type not in ('whitespace', 'comment')
 			and not
@@ -450,7 +481,9 @@ begin
 		p_category := C_DDL; p_statement_type := 'CREATE'; p_command_name := 'CREATE INDEX'; p_command_type := 9;
 	elsif v_words_1_to_2 = 'CREATE INDEXTYPE' then
 		p_category := C_DDL; p_statement_type := 'CREATE'; p_command_name := 'CREATE INDEXTYPE'; p_command_type := 164;
-	elsif v_words_1_to_2 = 'CREATE JAVA' then
+	--COMPILE is optional here, but not elsewhere.
+	--Since it's not always thrown out, it must be handled here.
+	elsif v_words_1_to_2 = 'CREATE JAVA'  or v_words_1_to_3 = 'CREATE COMPILE JAVA' then
 		p_category := C_DDL; p_statement_type := 'CREATE'; p_command_name := 'CREATE JAVA'; p_command_type := 160;
 	elsif v_words_1_to_2 = 'CREATE LIBRARY' then
 		p_category := C_DDL; p_statement_type := 'CREATE'; p_command_name := 'CREATE LIBRARY'; p_command_type := 159;
