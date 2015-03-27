@@ -372,8 +372,9 @@ begin
 		p_category := C_DDL; p_statement_type := 'ALTER'; p_command_name := 'ALTER SEQUENCE'; p_command_type := 14;
 	elsif v_words_1_to_2 = 'ALTER SESSION' then --Different than other ALTERs.
 		p_category := C_Session_Control; p_statement_type := 'ALTER SESSION'; p_command_name := 'ALTER SESSION'; p_command_type := 42;
-	elsif v_words_1_to_2 = 'ALTER SUMMARY' then --An old version of "ALTER SNAPSHOT"?  Not sure if this is still used.
-		p_category := C_DDL; p_statement_type := 'ALTER'; p_command_name := 'ALTER SUMMARY'; p_command_type := 172;
+	--An old version of "ALTER SNAPSHOT"?  This is not supported in 11gR2+.
+	--elsif v_words_1_to_2 = 'ALTER SUMMARY' then
+	--	p_category := C_DDL; p_statement_type := 'ALTER'; p_command_name := 'ALTER SUMMARY'; p_command_type := 172;
 	elsif v_words_1_to_2 = 'ALTER SYNONYM' then
 		p_category := C_DDL; p_statement_type := 'ALTER'; p_command_name := 'ALTER SYNONYM'; p_command_type := 192;
 	elsif v_words_1_to_2 = 'ALTER SYSTEM' then --Different than other ALTERs.
@@ -523,8 +524,9 @@ begin
 		p_category := C_DDL; p_statement_type := 'CREATE'; p_command_name := 'CREATE SEQUENCE'; p_command_type := 13;
 	elsif v_words_1_to_2 = 'CREATE SPFILE' then
 		p_category := C_DDL; p_statement_type := 'CREATE'; p_command_name := 'CREATE SPFILE'; p_command_type := 187;
-	elsif v_words_1_to_2 = 'CREATE SUMMARY' then --Not a real command, I think this is an old version of "SNAPSHOT".
-		p_category := C_DDL; p_statement_type := 'CREATE'; p_command_name := 'CREATE SUMMARY'; p_command_type := 171;
+	--An old version of "CREATE SNAPSHOT"?  This is not supported in 11gR2+.
+	--elsif v_words_1_to_2 = 'CREATE SUMMARY' then --Not a real command, I think this is an old version of "SNAPSHOT".
+	--	p_category := C_DDL; p_statement_type := 'CREATE'; p_command_name := 'CREATE SUMMARY'; p_command_type := 171;
 	elsif v_words_1_to_2 = 'CREATE SYNONYM' then
 		p_category := C_DDL; p_statement_type := 'CREATE'; p_command_name := 'CREATE SYNONYM'; p_command_type := 19;
 	elsif v_words_1_to_2 = 'CREATE TABLE' then
@@ -615,8 +617,9 @@ begin
 		p_category := C_DDL; p_statement_type := 'DROP'; p_command_name := 'DROP SCHEMA SYNONYM'; p_command_type := 224;
 	elsif v_words_1_to_2 = 'DROP SEQUENCE' then
 		p_category := C_DDL; p_statement_type := 'DROP'; p_command_name := 'DROP SEQUENCE'; p_command_type := 16;
-	elsif v_words_1_to_2 = 'DROP SUMMARY' then --I think this is an old version of "SNAPSHOT".
-		p_category := C_DDL; p_statement_type := 'DROP'; p_command_name := 'DROP SUMMARY'; p_command_type := 173;
+	--An old version of "DROP SNAPSHOT"?  This is not supported in 11gR2+.
+	--elsif v_words_1_to_2 = 'DROP SUMMARY' then --I think this is an old version of "SNAPSHOT".
+	--	p_category := C_DDL; p_statement_type := 'DROP'; p_command_name := 'DROP SUMMARY'; p_command_type := 173;
 	elsif v_words_1_to_2 = 'DROP SYNONYM' then
 		p_category := C_DDL; p_statement_type := 'DROP'; p_command_name := 'DROP SYNONYM'; p_command_type := 20;
 	elsif v_words_1_to_2 = 'DROP TABLE' then

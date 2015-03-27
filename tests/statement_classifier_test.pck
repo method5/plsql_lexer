@@ -227,8 +227,8 @@ begin
 	classify(q'[alter sequence my_seq cache 100]', v_output); assert_equals('ALTER SEQUENCE', 'DDL|ALTER|ALTER SEQUENCE|14', concat(v_output));
 	classify(q'[alter session set OPTIMIZER_DYNAMIC_SAMPLING=5;]', v_output); assert_equals('ALTER SESSION', 'Session Control|ALTER SESSION|ALTER SESSION|42', concat(v_output));
 	classify(q'[ALTER SESSION set current_schema=my_schema]', v_output); assert_equals('ALTER SESSION', 'Session Control|ALTER SESSION|ALTER SESSION|42', concat(v_output));
-	--An old version of "ALTER SNAPSHOT"?  Not sure if this is still used.
-	classify(q'[ALTER SUMMARY a_schema.mv_name cache;]', v_output); assert_equals('ALTER SUMMARY', 'DDL|ALTER|ALTER SUMMARY|172', concat(v_output));
+	--An old version of "ALTER SNAPSHOT"?  This is not supported in 11gR2+.
+	--classify(q'[ALTER SUMMARY a_schema.mv_name cache;]', v_output); assert_equals('ALTER SUMMARY', 'DDL|ALTER|ALTER SUMMARY|172', concat(v_output));
 	classify(q'[ALTER /**/public/**/ SYNONYM my_synonym compile]', v_output); assert_equals('ALTER SYNONYM', 'DDL|ALTER|ALTER SYNONYM|192', concat(v_output));
 	classify(q'[ALTER SYNONYM  my_synonym compile]', v_output); assert_equals('ALTER SYNONYM', 'DDL|ALTER|ALTER SYNONYM|192', concat(v_output));
 	classify(q'[alter system set memory_target=5m]', v_output); assert_equals('ALTER SYSTEM', 'System Control|ALTER SYSTEM|ALTER SYSTEM|49', concat(v_output));
@@ -369,13 +369,35 @@ begin
 	classify(q'[CREATE ROLLBACK SEGMENT my_rbs]', v_output); assert_equals('CREATE ROLLBACK SEGMENT', 'DDL|CREATE|CREATE ROLLBACK SEGMENT|36', concat(v_output));
 	classify(q'[CREATE public ROLLBACK SEGMENT my_rbs]', v_output); assert_equals('CREATE ROLLBACK SEGMENT', 'DDL|CREATE|CREATE ROLLBACK SEGMENT|36', concat(v_output));
 	classify(q'[CREATE SCHEMA authorization my_schema grant select on table1 to user2 grant select on table2 to user3]', v_output); assert_equals('CREATE SCHEMA', 'DDL|CREATE|CREATE SCHEMA|56', concat(v_output));
-	classify(q'[CREATE SCHEMA SYNONYM]', v_output); assert_equals('CREATE SCHEMA SYNONYM', 'DDL|CREATE|CREATE SCHEMA SYNONYM|222', concat(v_output));
-	classify(q'[CREATE SEQUENCE]', v_output); assert_equals('CREATE SEQUENCE', 'DDL|CREATE|CREATE SEQUENCE|13', concat(v_output));
-	classify(q'[CREATE SPFILE]', v_output); assert_equals('CREATE SPFILE', 'DDL|CREATE|CREATE SPFILE|187', concat(v_output));
-	classify(q'[CREATE SUMMARY]', v_output); assert_equals('CREATE SUMMARY', 'DDL|CREATE|CREATE SUMMARY|171', concat(v_output));
-	classify(q'[CREATE SYNONYM]', v_output); assert_equals('CREATE SYNONYM', 'DDL|CREATE|CREATE SYNONYM|19', concat(v_output));
-	classify(q'[CREATE TABLE]', v_output); assert_equals('CREATE TABLE', 'DDL|CREATE|CREATE TABLE|1', concat(v_output));
-	classify(q'[CREATE TABLESPACE]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
+	--Undocumented feature.
+	classify(q'[CREATE SCHEMA SYNONYM demo2 for demo1]', v_output); assert_equals('CREATE SCHEMA SYNONYM', 'DDL|CREATE|CREATE SCHEMA SYNONYM|222', concat(v_output));
+	classify(q'[CREATE SEQUENCE my_schema.my_sequence cache 20;]', v_output); assert_equals('CREATE SEQUENCE', 'DDL|CREATE|CREATE SEQUENCE|13', concat(v_output));
+	classify(q'[CREATE SPFILE = 'my_spfile' from pfile;]', v_output); assert_equals('CREATE SPFILE', 'DDL|CREATE|CREATE SPFILE|187', concat(v_output));
+	--An old version of "CREATE SNAPSHOT"?  This is not supported in 11gR2+.
+	--classify(q'[CREATE SUMMARY]', v_output); assert_equals('CREATE SUMMARY', 'DDL|CREATE|CREATE SUMMARY|171', concat(v_output));
+	classify(q'[CREATE SYNONYM my_synonym for other_schema.some_object@some_link;]', v_output); assert_equals('CREATE SYNONYM', 'DDL|CREATE|CREATE SYNONYM|19', concat(v_output));
+	classify(q'[CREATE public SYNONYM my_synonym for other_schema.some_object@some_link;]', v_output); assert_equals('CREATE SYNONYM', 'DDL|CREATE|CREATE SYNONYM|19', concat(v_output));
+	classify(q'[CREATE editionable SYNONYM my_synonym for other_schema.some_object@some_link;]', v_output); assert_equals('CREATE SYNONYM', 'DDL|CREATE|CREATE SYNONYM|19', concat(v_output));
+	classify(q'[CREATE editionable public SYNONYM my_synonym for other_schema.some_object@some_link;]', v_output); assert_equals('CREATE SYNONYM', 'DDL|CREATE|CREATE SYNONYM|19', concat(v_output));
+	classify(q'[CREATE noneditionable SYNONYM my_synonym for other_schema.some_object@some_link;]', v_output); assert_equals('CREATE SYNONYM', 'DDL|CREATE|CREATE SYNONYM|19', concat(v_output));
+	classify(q'[CREATE noneditionable public SYNONYM my_synonym for other_schema.some_object@some_link;]', v_output); assert_equals('CREATE SYNONYM', 'DDL|CREATE|CREATE SYNONYM|19', concat(v_output));
+	classify(q'[CREATE or replace SYNONYM my_synonym for other_schema.some_object@some_link;]', v_output); assert_equals('CREATE SYNONYM', 'DDL|CREATE|CREATE SYNONYM|19', concat(v_output));
+	classify(q'[CREATE or replace public SYNONYM my_synonym for other_schema.some_object@some_link;]', v_output); assert_equals('CREATE SYNONYM', 'DDL|CREATE|CREATE SYNONYM|19', concat(v_output));
+	classify(q'[CREATE or replace editionable SYNONYM my_synonym for other_schema.some_object@some_link;]', v_output); assert_equals('CREATE SYNONYM', 'DDL|CREATE|CREATE SYNONYM|19', concat(v_output));
+	classify(q'[CREATE or replace editionable public SYNONYM my_synonym for other_schema.some_object@some_link;]', v_output); assert_equals('CREATE SYNONYM', 'DDL|CREATE|CREATE SYNONYM|19', concat(v_output));
+	classify(q'[CREATE or replace noneditionable SYNONYM my_synonym for other_schema.some_object@some_link;]', v_output); assert_equals('CREATE SYNONYM', 'DDL|CREATE|CREATE SYNONYM|19', concat(v_output));
+	classify(q'[CREATE or replace noneditionable public SYNONYM my_synonym for other_schema.some_object@some_link;]', v_output); assert_equals('CREATE SYNONYM', 'DDL|CREATE|CREATE SYNONYM|19', concat(v_output));
+	classify(q'[CREATE TABLE my_table(a number);]', v_output); assert_equals('CREATE TABLE', 'DDL|CREATE|CREATE TABLE|1', concat(v_output));
+	classify(q'[CREATE global temporary TABLE my_table(a number);]', v_output); assert_equals('CREATE TABLE', 'DDL|CREATE|CREATE TABLE|1', concat(v_output));
+	classify(q'[CREATE TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
+	classify(q'[CREATE bigfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
+	classify(q'[CREATE smallfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
+	classify(q'[CREATE temporary TABLESPACE my_tbs tempfile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
+	classify(q'[CREATE temporary bigfile TABLESPACE my_tbs tempfile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
+	classify(q'[CREATE temporary smallfile TABLESPACE my_tbs tempfile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
+	classify(q'[CREATE undo TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
+	classify(q'[CREATE undo bigfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
+	classify(q'[CREATE undo smallfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
 	classify(q'[CREATE TRIGGER]', v_output); assert_equals('CREATE TRIGGER', 'DDL|CREATE|CREATE TRIGGER|59', concat(v_output));
 	classify(q'[CREATE TYPE]', v_output); assert_equals('CREATE TYPE', 'DDL|CREATE|CREATE TYPE|77', concat(v_output));
 	classify(q'[CREATE TYPE BODY]', v_output); assert_equals('CREATE TYPE BODY', 'DDL|CREATE|CREATE TYPE BODY|81', concat(v_output));
@@ -418,7 +440,8 @@ begin
 	classify(q'[DROP ROLLBACK SEGMENT]', v_output); assert_equals('DROP ROLLBACK SEGMENT', 'DDL|DROP|DROP ROLLBACK SEGMENT|38', concat(v_output));
 	classify(q'[DROP SCHEMA SYNONYM]', v_output); assert_equals('DROP SCHEMA SYNONYM', 'DDL|DROP|DROP SCHEMA SYNONYM|224', concat(v_output));
 	classify(q'[DROP SEQUENCE]', v_output); assert_equals('DROP SEQUENCE', 'DDL|DROP|DROP SEQUENCE|16', concat(v_output));
-	classify(q'[DROP SUMMARY]', v_output); assert_equals('DROP SUMMARY', 'DDL|DROP|DROP SUMMARY|173', concat(v_output));
+	--An old version of "DROP SNAPSHOT"?  This is not supported in 11gR2+.
+	--classify(q'[DROP SUMMARY]', v_output); assert_equals('DROP SUMMARY', 'DDL|DROP|DROP SUMMARY|173', concat(v_output));
 	classify(q'[DROP SYNONYM]', v_output); assert_equals('DROP SYNONYM', 'DDL|DROP|DROP SYNONYM|20', concat(v_output));
 	classify(q'[DROP TABLE]', v_output); assert_equals('DROP TABLE', 'DDL|DROP|DROP TABLE|12', concat(v_output));
 	classify(q'[DROP TABLESPACE]', v_output); assert_equals('DROP TABLESPACE', 'DDL|DROP|DROP TABLESPACE|41', concat(v_output));
