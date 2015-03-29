@@ -80,7 +80,7 @@ procedure classify(p_statement nclob, p_output out output_rec) is
 	v_lex_sqlcode number;
 	v_lex_sqlerrm varchar2(4000);
 begin
-	statement_classifier.classify(p_statement, 
+	statement_classifier.classify(p_statement,
 		v_category,v_statement_type,v_command_name,v_command_type,v_lex_sqlcode,v_lex_sqlerrm);
 
 	p_output.category := v_category;
@@ -93,6 +93,23 @@ begin
 exception when others then
 	p_output.fatal_error := dbms_utility.format_error_stack||dbms_utility.format_error_backtrace;
 end classify;
+
+
+--------------------------------------------------------------------------------
+function get_sqlerrm(p_statement nclob) return varchar2 is
+	v_category varchar2(100);
+	v_statement_type varchar2(100);
+	v_command_name varchar2(64);
+	v_command_type number;
+	v_lex_sqlcode number;
+	v_lex_sqlerrm varchar2(4000);
+begin
+	statement_classifier.classify(p_statement,
+		v_category,v_statement_type,v_command_name,v_command_type,v_lex_sqlcode,v_lex_sqlerrm);
+	return null;
+exception when others then
+	return sqlerrm;
+end get_sqlerrm;
 
 
 -- =============================================================================
@@ -141,8 +158,9 @@ begin
 	assert_equals('String not terminated 3', -1756, v_output.lex_sqlcode);
 	assert_equals('String not terminated 4', 'quoted string not properly terminated', v_output.lex_sqlerrm);
 
-	--TODO: Test cannot parse
-
+	--Cannot parse.
+	assert_equals('Cannot classify', 'ORA-20001: Cannot classify statement.', get_sqlerrm(q'[asdf]'));
+	--TODO: Add more tests
 end test_errors;
 
 
@@ -508,40 +526,57 @@ begin
 	--classify(q'[Do not use 184]', v_output); assert_equals('Do not use 184', 'DDL|ALTER|Do not use 184|184', concat(v_output));
 	--classify(q'[Do not use 185]', v_output); assert_equals('Do not use 185', 'DDL|ALTER|Do not use 185|185', concat(v_output));
 	--classify(q'[Do not use 186]', v_output); assert_equals('Do not use 186', 'DDL|ALTER|Do not use 186|186', concat(v_output));
-	classify(q'[EXPLAIN]', v_output); assert_equals('EXPLAIN', 'DML|EXPLAIN PLAN|EXPLAIN|50', concat(v_output));
-	classify(q'[FLASHBACK DATABASE]', v_output); assert_equals('FLASHBACK DATABASE', 'DDL|FLASHBACK|FLASHBACK DATABASE|204', concat(v_output));
-	classify(q'[FLASHBACK TABLE]', v_output); assert_equals('FLASHBACK TABLE', 'DDL|FLASHBACK|FLASHBACK TABLE|205', concat(v_output));
-	classify(q'[GRANT OBJECT]', v_output); assert_equals('GRANT OBJECT', 'DDL|GRANT|GRANT OBJECT|17', concat(v_output));
-	classify(q'[INSERT]', v_output); assert_equals('INSERT', 'DML|INSERT|INSERT|2', concat(v_output));
-	classify(q'[LOCK TABLE]', v_output); assert_equals('LOCK TABLE', 'DML|LOCK TABLE|LOCK TABLE|26', concat(v_output));
+	classify(q'[EXPLAIN plan set statement_id='asdf' for select * from dual]', v_output); assert_equals('EXPLAIN', 'DML|EXPLAIN PLAN|EXPLAIN|50', concat(v_output));
+	classify(q'[FLASHBACK DATABASE to restore point my_restore_point]', v_output); assert_equals('FLASHBACK DATABASE', 'DDL|FLASHBACK|FLASHBACK DATABASE|204', concat(v_output));
+	classify(q'[FLASHBACK standby DATABASE to restore point my_restore_point]', v_output); assert_equals('FLASHBACK DATABASE', 'DDL|FLASHBACK|FLASHBACK DATABASE|204', concat(v_output));
+	classify(q'[FLASHBACK TABLE my_schema.my_table to timestamp timestamp '2015-01-01 12:00:00']', v_output); assert_equals('FLASHBACK TABLE', 'DDL|FLASHBACK|FLASHBACK TABLE|205', concat(v_output));
+	classify(q'[GRANT dba my_user]', v_output); assert_equals('GRANT OBJECT 1', 'DDL|GRANT|GRANT OBJECT|17', concat(v_output));
+	classify(q'[GRANT select on my_table to some_other_user with grant option]', v_output); assert_equals('GRANT OBJECT 2', 'DDL|GRANT|GRANT OBJECT|17', concat(v_output));
+	classify(q'[GRANT dba to my_package]', v_output); assert_equals('GRANT OBJECT 3', 'DDL|GRANT|GRANT OBJECT|17', concat(v_output));
+	classify(q'[INSERT /*+ append */ into my_table select * from other_table]', v_output); assert_equals('INSERT', 'DML|INSERT|INSERT|2', concat(v_output));
+	classify(q'[INSERT all into table1(a) values(b) into table2(a) values(b) select b from another_table;]', v_output); assert_equals('INSERT', 'DML|INSERT|INSERT|2', concat(v_output));
+	classify(q'[LOCK TABLE my_schema.my_table in exclsive mode]', v_output); assert_equals('LOCK TABLE', 'DML|LOCK TABLE|LOCK TABLE|26', concat(v_output));
+	--See "UPSERT" for "MERGE".
 	--classify(q'[NO-OP]', v_output); assert_equals('NO-OP', 'DDL|ALTER|NO-OP|27', concat(v_output));
-	classify(q'[NOAUDIT OBJECT]', v_output); assert_equals('NOAUDIT OBJECT', 'DDL|NOAUDIT|NOAUDIT OBJECT|31', concat(v_output));
+	classify(q'[NOAUDIT insert any table]', v_output); assert_equals('NOAUDIT OBJECT', 'DDL|NOAUDIT|NOAUDIT OBJECT|31', concat(v_output));
+	classify(q'[NOAUDIT policy my_policy by some_user]', v_output); assert_equals('NOAUDIT OBJECT', 'DDL|NOAUDIT|NOAUDIT OBJECT|31', concat(v_output));
 
-	--TODO
 	classify(q'[ <<my_label>>begin null; end;]', v_output); assert_equals('PL/SQL EXECUTE', 'PL/SQL|BLOCK|PL/SQL EXECUTE|47', concat(v_output));
 	classify(q'[/*asdf*/declare v_test number; begin null; end; /]', v_output); assert_equals('PL/SQL EXECUTE', 'PL/SQL|BLOCK|PL/SQL EXECUTE|47', concat(v_output));
 	classify(q'[  begin null; end; /]', v_output); assert_equals('PL/SQL EXECUTE', 'PL/SQL|BLOCK|PL/SQL EXECUTE|47', concat(v_output));
 
 	--Command name has space instead of underscore.
- 	classify(q'[PURGE DBA_RECYCLEBIN]', v_output); assert_equals('PURGE DBA RECYCLEBIN', 'DDL|PURGE|PURGE DBA RECYCLEBIN|198', concat(v_output));
-	classify(q'[PURGE INDEX]', v_output); assert_equals('PURGE INDEX', 'DDL|PURGE|PURGE INDEX|201', concat(v_output));
-	classify(q'[PURGE TABLE]', v_output); assert_equals('PURGE TABLE', 'DDL|PURGE|PURGE TABLE|200', concat(v_output));
-	classify(q'[PURGE TABLESPACE]', v_output); assert_equals('PURGE TABLESPACE', 'DDL|PURGE|PURGE TABLESPACE|199', concat(v_output));
+ 	classify(q'[PURGE DBA_RECYCLEBIN;]', v_output); assert_equals('PURGE DBA RECYCLEBIN', 'DDL|PURGE|PURGE DBA RECYCLEBIN|198', concat(v_output));
+	classify(q'[PURGE INDEX my_index]', v_output); assert_equals('PURGE INDEX', 'DDL|PURGE|PURGE INDEX|201', concat(v_output));
+	classify(q'[PURGE TABLE my_table]', v_output); assert_equals('PURGE TABLE', 'DDL|PURGE|PURGE TABLE|200', concat(v_output));
+	classify(q'[PURGE TABLESPACE my_tbs user my_user]', v_output); assert_equals('PURGE TABLESPACE', 'DDL|PURGE|PURGE TABLESPACE|199', concat(v_output));
 	--Command name has extra "USER".
-	classify(q'[PURGE RECYCLEBIN]', v_output); assert_equals('PURGE USER RECYCLEBIN', 'DDL|PURGE|PURGE USER RECYCLEBIN|197', concat(v_output));
-	classify(q'[RENAME]', v_output); assert_equals('RENAME', 'DDL|RENAME|RENAME|28', concat(v_output));
-	classify(q'[REVOKE OBJECT]', v_output); assert_equals('REVOKE OBJECT', 'DDL|REVOKE|REVOKE OBJECT|18', concat(v_output));
-	classify(q'[ROLLBACK]', v_output); assert_equals('ROLLBACK', 'Transaction Control|ROLLBACK|ROLLBACK|45', concat(v_output));
-	classify(q'[SAVEPOINT]', v_output); assert_equals('SAVEPOINT', 'Transaction Control|SAVEPOINT|SAVEPOINT|46', concat(v_output));
-	classify(q'[SELECT]', v_output); assert_equals('SELECT', 'DML|SELECT|SELECT|3', concat(v_output));
-	--TODO
-	classify(q'[SET CONSTRAINTS]', v_output); assert_equals('SET CONSTRAINT', 'Transaction Control|SET CONSTRAINT|SET CONSTRAINTS|90', concat(v_output));
-	classify(q'[SET ROLE]', v_output); assert_equals('SET ROLE', 'Session Control|SET ROLE|SET ROLE|55', concat(v_output));
-	classify(q'[SET TRANSACTION]', v_output); assert_equals('SET TRANSACTION', 'Transaction Control|SET TRANSACTION|SET TRANSACTION|48', concat(v_output));
-	classify(q'[TRUNCATE CLUSTER]', v_output); assert_equals('TRUNCATE CLUSTER', 'DDL|TRUNCATE|TRUNCATE CLUSTER|86', concat(v_output));
-	classify(q'[TRUNCATE TABLE]', v_output); assert_equals('TRUNCATE TABLE', 'DDL|TRUNCATE|TRUNCATE TABLE|85', concat(v_output));
+	classify(q'[PURGE RECYCLEBIN;]', v_output); assert_equals('PURGE USER RECYCLEBIN', 'DDL|PURGE|PURGE USER RECYCLEBIN|197', concat(v_output));
+	classify(q'[RENAME old_table to new_table]', v_output); assert_equals('RENAME', 'DDL|RENAME|RENAME|28', concat(v_output));
+	classify(q'[REVOKE select any table from my_user]', v_output); assert_equals('REVOKE OBJECT 1', 'DDL|REVOKE|REVOKE OBJECT|18', concat(v_output));
+	classify(q'[REVOKE select on my_tables from user2]', v_output); assert_equals('REVOKE OBJECT 2', 'DDL|REVOKE|REVOKE OBJECT|18', concat(v_output));
+	classify(q'[REVOKE dba from my_package]', v_output); assert_equals('REVOKE OBJECT 3', 'DDL|REVOKE|REVOKE OBJECT|18', concat(v_output));
+
+	classify(q'[ROLLBACK;]', v_output); assert_equals('ROLLBACK 1', 'Transaction Control|ROLLBACK|ROLLBACK|45', concat(v_output));
+	classify(q'[ROLLBACK work;]', v_output); assert_equals('ROLLBACK 2', 'Transaction Control|ROLLBACK|ROLLBACK|45', concat(v_output));
+	classify(q'[ROLLBACK to savepoint savepoint1]', v_output); assert_equals('ROLLBACK 3', 'Transaction Control|ROLLBACK|ROLLBACK|45', concat(v_output));
+	classify(q'[SAVEPOINT my_savepoint;]', v_output); assert_equals('SAVEPOINT', 'Transaction Control|SAVEPOINT|SAVEPOINT|46', concat(v_output));
+
+	classify(q'[select * from dual;]', v_output); assert_equals('SELECT 1', 'DML|SELECT|SELECT|3', concat(v_output));
+	classify(q'[/*asdf*/select * from dual;]', v_output); assert_equals('SELECT 2', 'DML|SELECT|SELECT|3', concat(v_output));
+	classify(q'[((((select * from dual))));]', v_output); assert_equals('SELECT 3', 'DML|SELECT|SELECT|3', concat(v_output));
+	classify(q'[with test1 as (select 1 a from dual) select * from test1;]', v_output); assert_equals('SELECT 4', 'DML|SELECT|SELECT|3', concat(v_output));
+
+	--There are two versions of CONSTRAINT[S].
+	classify(q'[SET CONSTRAINTS all deferred]', v_output); assert_equals('SET CONSTRAINT', 'Transaction Control|SET CONSTRAINT|SET CONSTRAINTS|90', concat(v_output));
+	classify(q'[SET CONSTRAINT all immediate]', v_output); assert_equals('SET CONSTRAINT', 'Transaction Control|SET CONSTRAINT|SET CONSTRAINTS|90', concat(v_output));
+	classify(q'[SET ROLE none]', v_output); assert_equals('SET ROLE', 'Session Control|SET ROLE|SET ROLE|55', concat(v_output));
+	classify(q'[SET TRANSACTION read only]', v_output); assert_equals('SET TRANSACTION', 'Transaction Control|SET TRANSACTION|SET TRANSACTION|48', concat(v_output));
+	classify(q'[TRUNCATE CLUSTER my_schema.my_cluster drop storage;]', v_output); assert_equals('TRUNCATE CLUSTER', 'DDL|TRUNCATE|TRUNCATE CLUSTER|86', concat(v_output));
+	classify(q'[TRUNCATE TABLE my_schema.my_table purge materialized view log]', v_output); assert_equals('TRUNCATE TABLE', 'DDL|TRUNCATE|TRUNCATE TABLE|85', concat(v_output));
+	--Not a real command.
 	--classify(q'[UNDROP OBJECT]', v_output); assert_equals('UNDROP OBJECT', 'DDL|ALTER|UNDROP OBJECT|202', concat(v_output));
-	classify(q'[UPDATE]', v_output); assert_equals('UPDATE', 'DML|UPDATE|UPDATE|6', concat(v_output));
+	classify(q'[UPDATE my_tables set a = 1]', v_output); assert_equals('UPDATE', 'DML|UPDATE|UPDATE|6', concat(v_output));
 	--These are not real commands (they are part of alter table) and they could be ambiguous with an UPDATE statement
 	--if there was a table named "INDEXES" or "JOIN".
 	--classify(q'[UPDATE INDEXES]', v_output); assert_equals('UPDATE INDEXES', '?|?|UPDATE INDEXES|182', concat(v_output));

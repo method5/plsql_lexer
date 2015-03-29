@@ -83,7 +83,9 @@ begin
 	dbms_output.put_line('Lex SQLCODE   : '||v_lex_sqlcode);
 	dbms_output.put_line('Lex SQLERRM   : '||v_lex_sqlerrm);
 end;
-/
+
+
+RESULTS:
 
 Category      : DML
 Statement Type: SELECT
@@ -652,7 +654,7 @@ begin
 		p_category := C_DDL; p_statement_type := 'FLASHBACK'; p_command_name := 'FLASHBACK DATABASE'; p_command_type := 204;
 	elsif v_words_1_to_2 = 'FLASHBACK TABLE' then
 		p_category := C_DDL; p_statement_type := 'FLASHBACK'; p_command_name := 'FLASHBACK TABLE'; p_command_type := 205;
-	elsif v_words_1_to_2 = 'GRANT OBJECT' then
+	elsif v_words_1 = 'GRANT' then --Command name has an extra "OBJECT".
 		p_category := C_DDL; p_statement_type := 'GRANT'; p_command_name := 'GRANT OBJECT'; p_command_type := 17;
 	elsif v_words_1 = 'INSERT' then
 		p_category := C_DML; p_statement_type := 'INSERT'; p_command_name := 'INSERT'; p_command_type := 2;
