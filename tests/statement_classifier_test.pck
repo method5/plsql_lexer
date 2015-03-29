@@ -1,5 +1,4 @@
 create or replace package statement_classifier_test authid current_user is
-
 /*
 ## Purpose ##
 
@@ -14,6 +13,7 @@ begin
 end;
 
 */
+pragma serially_reusable;
 
 --Globals to select which test suites to run.
 c_errors        constant number := power(2, 1);
@@ -31,6 +31,7 @@ procedure run(p_tests number default c_static_tests);
 end;
 /
 create or replace package body statement_classifier_test is
+pragma serially_reusable;
 
 --Global counters.
 g_test_count number := 0;
@@ -398,58 +399,112 @@ begin
 	classify(q'[CREATE undo TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
 	classify(q'[CREATE undo bigfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
 	classify(q'[CREATE undo smallfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
-	classify(q'[CREATE TRIGGER]', v_output); assert_equals('CREATE TRIGGER', 'DDL|CREATE|CREATE TRIGGER|59', concat(v_output));
-	classify(q'[CREATE TYPE]', v_output); assert_equals('CREATE TYPE', 'DDL|CREATE|CREATE TYPE|77', concat(v_output));
-	classify(q'[CREATE TYPE BODY]', v_output); assert_equals('CREATE TYPE BODY', 'DDL|CREATE|CREATE TYPE BODY|81', concat(v_output));
-	classify(q'[CREATE USER]', v_output); assert_equals('CREATE USER', 'DDL|CREATE|CREATE USER|51', concat(v_output));
-	classify(q'[CREATE VIEW]', v_output); assert_equals('CREATE VIEW', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
---	classify(q'[DECLARE REWRITE EQUIVALENCE]', v_output); assert_equals('DECLARE REWRITE EQUIVALENCE', 'DDL|ALTER|DECLARE REWRITE EQUIVALENCE|209', concat(v_output));
-	classify(q'[DELETE]', v_output); assert_equals('DELETE', 'DML|DELETE|DELETE|7', concat(v_output));
-	classify(q'[DISASSOCIATE STATISTICS]', v_output); assert_equals('DISASSOCIATE STATISTICS', 'DDL|DISASSOCIATE STATISTICS|DISASSOCIATE STATISTICS|169', concat(v_output));
-	classify(q'[DROP ASSEMBLY]', v_output); assert_equals('DROP ASSEMBLY', 'DDL|DROP|DROP ASSEMBLY|215', concat(v_output));
-	classify(q'[DROP AUDIT POLICY]', v_output); assert_equals('DROP AUDIT POLICY', 'DDL|DROP|DROP AUDIT POLICY|231', concat(v_output));
-	classify(q'[DROP BITMAPFILE]', v_output); assert_equals('DROP BITMAPFILE', 'DDL|DROP|DROP BITMAPFILE|89', concat(v_output));
-	classify(q'[DROP CLUSTER]', v_output); assert_equals('DROP CLUSTER', 'DDL|DROP|DROP CLUSTER|8', concat(v_output));
-	classify(q'[DROP CONTEXT]', v_output); assert_equals('DROP CONTEXT', 'DDL|DROP|DROP CONTEXT|178', concat(v_output));
-	classify(q'[DROP DATABASE]', v_output); assert_equals('DROP DATABASE', 'DDL|DROP|DROP DATABASE|203', concat(v_output));
-	classify(q'[DROP DATABASE LINK]', v_output); assert_equals('DROP DATABASE LINK', 'DDL|DROP|DROP DATABASE LINK|33', concat(v_output));
-	classify(q'[DROP DIMENSION]', v_output); assert_equals('DROP DIMENSION', 'DDL|DROP|DROP DIMENSION|176', concat(v_output));
-	classify(q'[DROP DIRECTORY]', v_output); assert_equals('DROP DIRECTORY', 'DDL|DROP|DROP DIRECTORY|158', concat(v_output));
+	classify(q'[CREATE TRIGGER my_trigger before insert on my_table begin null; end; /]', v_output); assert_equals('CREATE TRIGGER', 'DDL|CREATE|CREATE TRIGGER|59', concat(v_output));
+	classify(q'[CREATE editionable TRIGGER my_trigger before insert on my_table begin null; end; /]', v_output); assert_equals('CREATE TRIGGER', 'DDL|CREATE|CREATE TRIGGER|59', concat(v_output));
+	classify(q'[CREATE noneditionable TRIGGER my_trigger before insert on my_table begin null; end; /]', v_output); assert_equals('CREATE TRIGGER', 'DDL|CREATE|CREATE TRIGGER|59', concat(v_output));
+	classify(q'[CREATE or replace TRIGGER my_trigger before insert on my_table begin null; end; /]', v_output); assert_equals('CREATE TRIGGER', 'DDL|CREATE|CREATE TRIGGER|59', concat(v_output));
+	classify(q'[CREATE or replace editionable TRIGGER my_trigger before insert on my_table begin null; end; /]', v_output); assert_equals('CREATE TRIGGER', 'DDL|CREATE|CREATE TRIGGER|59', concat(v_output));
+	classify(q'[CREATE or replace noneditionable TRIGGER my_trigger before insert on my_table begin null; end; /]', v_output); assert_equals('CREATE TRIGGER', 'DDL|CREATE|CREATE TRIGGER|59', concat(v_output));
+	classify(q'[CREATE TYPE my_type as object(a number); /]', v_output); assert_equals('CREATE TYPE', 'DDL|CREATE|CREATE TYPE|77', concat(v_output));
+	classify(q'[CREATE editionable TYPE my_type as object(a number); /]', v_output); assert_equals('CREATE TYPE', 'DDL|CREATE|CREATE TYPE|77', concat(v_output));
+	classify(q'[CREATE noneditionable TYPE my_type as object(a number); /]', v_output); assert_equals('CREATE TYPE', 'DDL|CREATE|CREATE TYPE|77', concat(v_output));
+	classify(q'[CREATE or replace TYPE my_type as object(a number); /]', v_output); assert_equals('CREATE TYPE', 'DDL|CREATE|CREATE TYPE|77', concat(v_output));
+	classify(q'[CREATE or replace editionable TYPE my_type as object(a number); /]', v_output); assert_equals('CREATE TYPE', 'DDL|CREATE|CREATE TYPE|77', concat(v_output));
+	classify(q'[CREATE or replace noneditionable TYPE my_type as object(a number); /]', v_output); assert_equals('CREATE TYPE', 'DDL|CREATE|CREATE TYPE|77', concat(v_output));
+	classify(q'[CREATE TYPE BODY my_type is member function my_function return number is begin return 1; end; end; ]', v_output); assert_equals('CREATE TYPE BODY', 'DDL|CREATE|CREATE TYPE BODY|81', concat(v_output));
+	classify(q'[CREATE editionable TYPE BODY my_type is member function my_function return number is begin return 1; end; end; ]', v_output); assert_equals('CREATE TYPE BODY', 'DDL|CREATE|CREATE TYPE BODY|81', concat(v_output));
+	classify(q'[CREATE noneditionable TYPE BODY my_type is member function my_function return number is begin return 1; end; end; ]', v_output); assert_equals('CREATE TYPE BODY', 'DDL|CREATE|CREATE TYPE BODY|81', concat(v_output));
+	classify(q'[CREATE or replace TYPE BODY my_type is member function my_function return number is begin return 1; end; end; ]', v_output); assert_equals('CREATE TYPE BODY', 'DDL|CREATE|CREATE TYPE BODY|81', concat(v_output));
+	classify(q'[CREATE or replace editionable TYPE BODY my_type is member function my_function return number is begin return 1; end; end; ]', v_output); assert_equals('CREATE TYPE BODY', 'DDL|CREATE|CREATE TYPE BODY|81', concat(v_output));
+	classify(q'[CREATE or replace noneditionable TYPE BODY my_type is member function my_function return number is begin return 1; end; end; ]', v_output); assert_equals('CREATE TYPE BODY', 'DDL|CREATE|CREATE TYPE BODY|81', concat(v_output));
+	classify(q'[CREATE USER my_user identified by "asdf";]', v_output); assert_equals('CREATE USER', 'DDL|CREATE|CREATE USER|51', concat(v_output));
+
+	classify(q'[CREATE VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 1', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE editioning VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 2', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE editionable VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 3', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE editionable editioning VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 4', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE noneditionable VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 5', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE force VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 6', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE force editioning VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 7', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE force editionable VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 8', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE force editionable editioning VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 9', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE force noneditionable VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 10', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE no force VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 11', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE no force editioning VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 12', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE no force editionable VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 13', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE no force editionable editioning VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 14', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE no force noneditionable VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 15', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE or replace VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 16', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE or replace editioning VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 17', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE or replace editionable VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 18', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE or replace editionable editioning VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 19', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE or replace noneditionable VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 20', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE or replace force VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 21', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE or replace force editioning VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 22', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE or replace force editionable VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 23', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE or replace force editionable editioning VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 24', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE or replace force noneditionable VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 25', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE or replace no force VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 26', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE or replace no force editioning VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 27', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE or replace no force editionable VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 28', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE or replace no force editionable editioning VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 29', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE or replace no force noneditionable VIEW my_view is select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 30', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+
+	--Not a real command.
+	--classify(q'[DECLARE REWRITE EQUIVALENCE]', v_output); assert_equals('DECLARE REWRITE EQUIVALENCE', 'DDL|ALTER|DECLARE REWRITE EQUIVALENCE|209', concat(v_output));
+	classify(q'[DELETE my_schema.my_table@my_link]', v_output); assert_equals('DELETE', 'DML|DELETE|DELETE|7', concat(v_output));
+	classify(q'[DELETE FROM my_schema.my_table@my_link]', v_output); assert_equals('DELETE', 'DML|DELETE|DELETE|7', concat(v_output));
+	classify(q'[DISASSOCIATE STATISTICS from columns mytable.a force;]', v_output); assert_equals('DISASSOCIATE STATISTICS', 'DDL|DISASSOCIATE STATISTICS|DISASSOCIATE STATISTICS|169', concat(v_output));
+	classify(q'[DROP ASSEMBLY my_assembly]', v_output); assert_equals('DROP ASSEMBLY', 'DDL|DROP|DROP ASSEMBLY|215', concat(v_output));
+	classify(q'[DROP AUDIT POLICY my_policy;]', v_output); assert_equals('DROP AUDIT POLICY', 'DDL|DROP|DROP AUDIT POLICY|231', concat(v_output));
+	--This isn't a real command as far as I can tell.
+	--classify(q'[DROP BITMAPFILE]', v_output); assert_equals('DROP BITMAPFILE', 'DDL|DROP|DROP BITMAPFILE|89', concat(v_output));
+	classify(q'[DROP CLUSTER my_cluster]', v_output); assert_equals('DROP CLUSTER', 'DDL|DROP|DROP CLUSTER|8', concat(v_output));
+	classify(q'[DROP CONTEXT my_context;]', v_output); assert_equals('DROP CONTEXT', 'DDL|DROP|DROP CONTEXT|178', concat(v_output));
+	classify(q'[DROP DATABASE;]', v_output); assert_equals('DROP DATABASE', 'DDL|DROP|DROP DATABASE|203', concat(v_output));
+	classify(q'[DROP DATABASE LINK my_link;]', v_output); assert_equals('DROP DATABASE LINK', 'DDL|DROP|DROP DATABASE LINK|33', concat(v_output));
+	classify(q'[DROP public DATABASE LINK my_link;]', v_output); assert_equals('DROP DATABASE LINK', 'DDL|DROP|DROP DATABASE LINK|33', concat(v_output));
+	classify(q'[DROP DIMENSION my_dimenson;]', v_output); assert_equals('DROP DIMENSION', 'DDL|DROP|DROP DIMENSION|176', concat(v_output));
+	classify(q'[DROP DIRECTORY my_directory;]', v_output); assert_equals('DROP DIRECTORY', 'DDL|DROP|DROP DIRECTORY|158', concat(v_output));
 	--Command name has extra space, real command is "DISKGROUP".
-	classify(q'[DROP DISKGROUP]', v_output); assert_equals('DROP DISK GROUP', 'DDL|DROP|DROP DISK GROUP|195', concat(v_output));
-	classify(q'[DROP EDITION]', v_output); assert_equals('DROP EDITION', 'DDL|DROP|DROP EDITION|214', concat(v_output));
-	classify(q'[DROP FLASHBACK ARCHIVE]', v_output); assert_equals('DROP FLASHBACK ARCHIVE', 'DDL|DROP|DROP FLASHBACK ARCHIVE|220', concat(v_output));
-	classify(q'[DROP FUNCTION]', v_output); assert_equals('DROP FUNCTION', 'DDL|DROP|DROP FUNCTION|93', concat(v_output));
-	classify(q'[DROP INDEX]', v_output); assert_equals('DROP INDEX', 'DDL|DROP|DROP INDEX|10', concat(v_output));
-	classify(q'[DROP INDEXTYPE]', v_output); assert_equals('DROP INDEXTYPE', 'DDL|DROP|DROP INDEXTYPE|165', concat(v_output));
-	classify(q'[DROP JAVA]', v_output); assert_equals('DROP JAVA', 'DDL|DROP|DROP JAVA|162', concat(v_output));
-	classify(q'[DROP LIBRARY]', v_output); assert_equals('DROP LIBRARY', 'DDL|DROP|DROP LIBRARY|84', concat(v_output));
-	classify(q'[DROP MATERIALIZED VIEW ]', v_output); assert_equals('DROP MATERIALIZED VIEW ', 'DDL|DROP|DROP MATERIALIZED VIEW |76', concat(v_output));
-	classify(q'[DROP MATERIALIZED VIEW  LOG]', v_output); assert_equals('DROP MATERIALIZED VIEW  LOG', 'DDL|DROP|DROP MATERIALIZED VIEW  LOG|73', concat(v_output));
-	classify(q'[DROP MATERIALIZED ZONEMAP]', v_output); assert_equals('DROP MATERIALIZED ZONEMAP', 'DDL|DROP|DROP MATERIALIZED ZONEMAP|241', concat(v_output));
-	classify(q'[DROP OPERATOR]', v_output); assert_equals('DROP OPERATOR', 'DDL|DROP|DROP OPERATOR|167', concat(v_output));
-	classify(q'[DROP OUTLINE]', v_output); assert_equals('DROP OUTLINE', 'DDL|DROP|DROP OUTLINE|181', concat(v_output));
-	classify(q'[DROP PACKAGE]', v_output); assert_equals('DROP PACKAGE', 'DDL|DROP|DROP PACKAGE|96', concat(v_output));
-	classify(q'[DROP PACKAGE BODY]', v_output); assert_equals('DROP PACKAGE BODY', 'DDL|DROP|DROP PACKAGE BODY|99', concat(v_output));
-	classify(q'[DROP PLUGGABLE DATABASE]', v_output); assert_equals('DROP PLUGGABLE DATABASE', 'DDL|DROP|DROP PLUGGABLE DATABASE|228', concat(v_output));
-	classify(q'[DROP PROCEDURE]', v_output); assert_equals('DROP PROCEDURE', 'DDL|DROP|DROP PROCEDURE|68', concat(v_output));
-	classify(q'[DROP PROFILE]', v_output); assert_equals('DROP PROFILE', 'DDL|DROP|DROP PROFILE|66', concat(v_output));
-	classify(q'[DROP RESTORE POINT]', v_output); assert_equals('DROP RESTORE POINT', 'DDL|DROP|DROP RESTORE POINT|207', concat(v_output));
-	classify(q'[DROP REWRITE EQUIVALENCE]', v_output); assert_equals('DROP REWRITE EQUIVALENCE', 'DDL|DROP|DROP REWRITE EQUIVALENCE|211', concat(v_output));
-	classify(q'[DROP ROLE]', v_output); assert_equals('DROP ROLE', 'DDL|DROP|DROP ROLE|54', concat(v_output));
-	classify(q'[DROP ROLLBACK SEGMENT]', v_output); assert_equals('DROP ROLLBACK SEGMENT', 'DDL|DROP|DROP ROLLBACK SEGMENT|38', concat(v_output));
-	classify(q'[DROP SCHEMA SYNONYM]', v_output); assert_equals('DROP SCHEMA SYNONYM', 'DDL|DROP|DROP SCHEMA SYNONYM|224', concat(v_output));
-	classify(q'[DROP SEQUENCE]', v_output); assert_equals('DROP SEQUENCE', 'DDL|DROP|DROP SEQUENCE|16', concat(v_output));
+	classify(q'[DROP DISKGROUP fradg force including contents;]', v_output); assert_equals('DROP DISK GROUP', 'DDL|DROP|DROP DISK GROUP|195', concat(v_output));
+	classify(q'[DROP EDITION my_edition cascade;]', v_output); assert_equals('DROP EDITION', 'DDL|DROP|DROP EDITION|214', concat(v_output));
+	classify(q'[DROP FLASHBACK ARCHIVE my_fba;]', v_output); assert_equals('DROP FLASHBACK ARCHIVE', 'DDL|DROP|DROP FLASHBACK ARCHIVE|220', concat(v_output));
+	classify(q'[DROP FUNCTION my_schema.my_function;]', v_output); assert_equals('DROP FUNCTION', 'DDL|DROP|DROP FUNCTION|93', concat(v_output));
+	classify(q'[DROP INDEX my_schema.my_index online force;]', v_output); assert_equals('DROP INDEX', 'DDL|DROP|DROP INDEX|10', concat(v_output));
+	classify(q'[DROP INDEXTYPE my_indextype force;]', v_output); assert_equals('DROP INDEXTYPE', 'DDL|DROP|DROP INDEXTYPE|165', concat(v_output));
+	classify(q'[DROP JAVA resourse some_resource;]', v_output); assert_equals('DROP JAVA', 'DDL|DROP|DROP JAVA|162', concat(v_output));
+	classify(q'[DROP LIBRARY my_library]', v_output); assert_equals('DROP LIBRARY', 'DDL|DROP|DROP LIBRARY|84', concat(v_output));
+	--Commands have an extra space in them.
+	classify(q'[DROP MATERIALIZED VIEW my_mv preserve table]', v_output); assert_equals('DROP MATERIALIZED VIEW', 'DDL|DROP|DROP MATERIALIZED VIEW |76', concat(v_output));
+	classify(q'[DROP MATERIALIZED VIEW LOG on some_table;]', v_output); assert_equals('DROP MATERIALIZED VIEW LOG', 'DDL|DROP|DROP MATERIALIZED VIEW  LOG|73', concat(v_output));
+	classify(q'[DROP MATERIALIZED ZONEMAP my_schema.my_zonemap]', v_output); assert_equals('DROP MATERIALIZED ZONEMAP', 'DDL|DROP|DROP MATERIALIZED ZONEMAP|241', concat(v_output));
+	classify(q'[DROP OPERATOR my_operator force;]', v_output); assert_equals('DROP OPERATOR', 'DDL|DROP|DROP OPERATOR|167', concat(v_output));
+	classify(q'[DROP OUTLINE my_outline;]', v_output); assert_equals('DROP OUTLINE', 'DDL|DROP|DROP OUTLINE|181', concat(v_output));
+	classify(q'[DROP PACKAGE my_package]', v_output); assert_equals('DROP PACKAGE', 'DDL|DROP|DROP PACKAGE|96', concat(v_output));
+	classify(q'[DROP PACKAGE BODY my_package;]', v_output); assert_equals('DROP PACKAGE BODY', 'DDL|DROP|DROP PACKAGE BODY|99', concat(v_output));
+	classify(q'[DROP PLUGGABLE DATABASE my_pdb]', v_output); assert_equals('DROP PLUGGABLE DATABASE', 'DDL|DROP|DROP PLUGGABLE DATABASE|228', concat(v_output));
+	classify(q'[DROP PROCEDURE my_proc]', v_output); assert_equals('DROP PROCEDURE', 'DDL|DROP|DROP PROCEDURE|68', concat(v_output));
+	classify(q'[DROP PROFILE my_profile cascade;]', v_output); assert_equals('DROP PROFILE', 'DDL|DROP|DROP PROFILE|66', concat(v_output));
+	classify(q'[DROP RESTORE POINT my_restore_point]', v_output); assert_equals('DROP RESTORE POINT', 'DDL|DROP|DROP RESTORE POINT|207', concat(v_output));
+	--This is not a real command.
+	--classify(q'[DROP REWRITE EQUIVALENCE]', v_output); assert_equals('DROP REWRITE EQUIVALENCE', 'DDL|DROP|DROP REWRITE EQUIVALENCE|211', concat(v_output));
+	classify(q'[DROP ROLE my_role]', v_output); assert_equals('DROP ROLE', 'DDL|DROP|DROP ROLE|54', concat(v_output));
+	classify(q'[DROP ROLLBACK SEGMENT my_rbs]', v_output); assert_equals('DROP ROLLBACK SEGMENT', 'DDL|DROP|DROP ROLLBACK SEGMENT|38', concat(v_output));
+	--Undocumented feature.
+	classify(q'[DROP SCHEMA SYNONYM a_schema_synonym]', v_output); assert_equals('DROP SCHEMA SYNONYM', 'DDL|DROP|DROP SCHEMA SYNONYM|224', concat(v_output));
+	classify(q'[DROP SEQUENCE my_sequence;]', v_output); assert_equals('DROP SEQUENCE', 'DDL|DROP|DROP SEQUENCE|16', concat(v_output));
 	--An old version of "DROP SNAPSHOT"?  This is not supported in 11gR2+.
 	--classify(q'[DROP SUMMARY]', v_output); assert_equals('DROP SUMMARY', 'DDL|DROP|DROP SUMMARY|173', concat(v_output));
-	classify(q'[DROP SYNONYM]', v_output); assert_equals('DROP SYNONYM', 'DDL|DROP|DROP SYNONYM|20', concat(v_output));
-	classify(q'[DROP TABLE]', v_output); assert_equals('DROP TABLE', 'DDL|DROP|DROP TABLE|12', concat(v_output));
-	classify(q'[DROP TABLESPACE]', v_output); assert_equals('DROP TABLESPACE', 'DDL|DROP|DROP TABLESPACE|41', concat(v_output));
-	classify(q'[DROP TRIGGER]', v_output); assert_equals('DROP TRIGGER', 'DDL|DROP|DROP TRIGGER|61', concat(v_output));
-	classify(q'[DROP TYPE]', v_output); assert_equals('DROP TYPE', 'DDL|DROP|DROP TYPE|78', concat(v_output));
-	classify(q'[DROP TYPE BODY]', v_output); assert_equals('DROP TYPE BODY', 'DDL|DROP|DROP TYPE BODY|83', concat(v_output));
-	classify(q'[DROP USER]', v_output); assert_equals('DROP USER', 'DDL|DROP|DROP USER|53', concat(v_output));
-	classify(q'[DROP VIEW]', v_output); assert_equals('DROP VIEW', 'DDL|DROP|DROP VIEW|22', concat(v_output));
+	classify(q'[DROP SYNONYM my_synonym]', v_output); assert_equals('DROP SYNONYM', 'DDL|DROP|DROP SYNONYM|20', concat(v_output));
+	classify(q'[DROP public SYNONYM my_synonym]', v_output); assert_equals('DROP SYNONYM', 'DDL|DROP|DROP SYNONYM|20', concat(v_output));
+	classify(q'[DROP TABLE my_schema.my_table cascade constraints purge]', v_output); assert_equals('DROP TABLE', 'DDL|DROP|DROP TABLE|12', concat(v_output));
+	classify(q'[DROP TABLESPACE my_tbs including contents and datafiles cascade constraints;]', v_output); assert_equals('DROP TABLESPACE', 'DDL|DROP|DROP TABLESPACE|41', concat(v_output));
+	classify(q'[DROP TRIGGER my_trigger]', v_output); assert_equals('DROP TRIGGER', 'DDL|DROP|DROP TRIGGER|61', concat(v_output));
+	classify(q'[DROP TYPE my_type validate]', v_output); assert_equals('DROP TYPE', 'DDL|DROP|DROP TYPE|78', concat(v_output));
+	classify(q'[DROP TYPE BODY my_type]', v_output); assert_equals('DROP TYPE BODY', 'DDL|DROP|DROP TYPE BODY|83', concat(v_output));
+	classify(q'[DROP USER my_user cascde;]', v_output); assert_equals('DROP USER', 'DDL|DROP|DROP USER|53', concat(v_output));
+	classify(q'[DROP VIEW my_schema.my_view cascade constraints;]', v_output); assert_equals('DROP VIEW', 'DDL|DROP|DROP VIEW|22', concat(v_output));
 	--classify(q'[Do not use 184]', v_output); assert_equals('Do not use 184', 'DDL|ALTER|Do not use 184|184', concat(v_output));
 	--classify(q'[Do not use 185]', v_output); assert_equals('Do not use 185', 'DDL|ALTER|Do not use 185|185', concat(v_output));
 	--classify(q'[Do not use 186]', v_output); assert_equals('Do not use 186', 'DDL|ALTER|Do not use 186|186', concat(v_output));

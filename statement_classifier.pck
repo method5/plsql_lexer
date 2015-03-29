@@ -218,7 +218,7 @@ begin
 				and upper(v_tokens_with_extra_stuff(i).value) in
 				(
 					--Removed COMPILE
-					'AND','BIGFILE','BITMAP','EDITIONABLE','FORCE','FORCE','GLOBAL',
+					'AND','BIGFILE','BITMAP','EDITIONABLE','EDITIONING','FORCE','FORCE','GLOBAL',
 					'NO','NOFORCE','NONEDITIONABLE','OR','PRIVATE','PUBLIC','REPLACE','RESOLVE',
 					'SHARED','SMALLFILE','STANDBY','TEMPORARY','UNDO','UNIQUE'
 				)
@@ -555,8 +555,9 @@ begin
 		p_category := C_DDL; p_statement_type := 'DROP'; p_command_name := 'DROP ASSEMBLY'; p_command_type := 215;
 	elsif v_words_1_to_3 = 'DROP AUDIT POLICY' then
 		p_category := C_DDL; p_statement_type := 'DROP'; p_command_name := 'DROP AUDIT POLICY'; p_command_type := 231;
-	elsif v_words_1_to_2 = 'DROP BITMAPFILE' then --I don't think this is a real command.
-		p_category := C_DDL; p_statement_type := 'DROP'; p_command_name := 'DROP BITMAPFILE'; p_command_type := 89;
+	--This is not a real command.
+	--elsif v_words_1_to_2 = 'DROP BITMAPFILE' then --I don't think this is a real command.
+	--	p_category := C_DDL; p_statement_type := 'DROP'; p_command_name := 'DROP BITMAPFILE'; p_command_type := 89;
 	elsif v_words_1_to_2 = 'DROP CLUSTER' then
 		p_category := C_DDL; p_statement_type := 'DROP'; p_command_name := 'DROP CLUSTER'; p_command_type := 8;
 	elsif v_words_1_to_2 = 'DROP CONTEXT' then
@@ -607,8 +608,9 @@ begin
 		p_category := C_DDL; p_statement_type := 'DROP'; p_command_name := 'DROP PROFILE'; p_command_type := 66;
 	elsif v_words_1_to_3 = 'DROP RESTORE POINT' then
 		p_category := C_DDL; p_statement_type := 'DROP'; p_command_name := 'DROP RESTORE POINT'; p_command_type := 207;
-	elsif v_words_1_to_3 = 'DROP REWRITE EQUIVALENCE' then --I don't think this is a real command.
-		p_category := C_DDL; p_statement_type := 'DROP'; p_command_name := 'DROP REWRITE EQUIVALENCE'; p_command_type := 211;
+	--This is not a real command.
+	--elsif v_words_1_to_3 = 'DROP REWRITE EQUIVALENCE' then
+	--	p_category := C_DDL; p_statement_type := 'DROP'; p_command_name := 'DROP REWRITE EQUIVALENCE'; p_command_type := 211;
 	elsif v_words_1_to_2 = 'DROP ROLE' then
 		p_category := C_DDL; p_statement_type := 'DROP'; p_command_name := 'DROP ROLE'; p_command_type := 54;
 	elsif v_words_1_to_3 = 'DROP ROLLBACK SEGMENT' then
