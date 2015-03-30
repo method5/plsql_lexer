@@ -159,7 +159,7 @@ begin
 	assert_equals('String not terminated 4', 'quoted string not properly terminated', v_output.lex_sqlerrm);
 
 	--Cannot parse.
-	assert_equals('Cannot classify', 'ORA-20001: Cannot classify statement.', get_sqlerrm(q'[asdf]'));
+	assert_equals('Cannot classify', 'ORA-20330: Cannot classify statement.', get_sqlerrm(q'[asdf]'));
 	--TODO: Add more tests
 end test_errors;
 
