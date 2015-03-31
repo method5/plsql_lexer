@@ -119,6 +119,13 @@ end get_sqlerrm;
 --------------------------------------------------------------------------------
 procedure test_errors is
 	v_output output_rec;
+
+	--Helper function that concatenates results for easy string comparison.
+	function concat(p_output output_rec) return varchar2 is
+	begin
+		return nvl(p_output.fatal_error,
+			p_output.category||'|'||p_output.statement_type||'|'||p_output.command_name||'|'||p_output.command_type);
+	end;
 begin
 	classify('(select * from dual)', v_output);
 	assert_equals('No errors 1', null, v_output.lex_sqlcode);
@@ -159,8 +166,13 @@ begin
 	assert_equals('String not terminated 4', 'quoted string not properly terminated', v_output.lex_sqlerrm);
 
 	--Cannot parse.
-	assert_equals('Cannot classify', 'ORA-20330: Cannot classify statement.', get_sqlerrm(q'[asdf]'));
-	--TODO: Add more tests
+	classify(q'[asdf]', v_output); assert_equals('Cannot classify 1', '|||', concat(v_output));
+	classify(q'[create tableS test1(a number);]', v_output); assert_equals('Cannot classify 2', '|||', concat(v_output));
+	classify(q'[]', v_output); assert_equals('Cannot classify 3', '|||', concat(v_output));
+	classify(q'[/*]', v_output); assert_equals('Cannot classify 4', '|||', concat(v_output));
+	classify(q'[alter what_is_this set x = y;]', v_output); assert_equals('Cannot classify 5', '|||', concat(v_output));
+	classify(q'[upsert my_table using other_table on (my_table.a = other_table.a) when matched then update set b = 1]', v_output); assert_equals('Cannot classify 6', '|||', concat(v_output));
+
 end test_errors;
 
 
@@ -212,7 +224,9 @@ begin
 	classify(q'[ALTER java  source my_schema.some_object compile;]', v_output); assert_equals('ALTER JAVA', 'DDL|ALTER|ALTER JAVA|161', concat(v_output));
 	classify(q'[alter library test_library editionable compile;]', v_output); assert_equals('ALTER LIBRARY', 'DDL|ALTER|ALTER LIBRARY|196', concat(v_output));
 	classify(q'[ALTER  MATERIALIZED  VIEW a_schema.mv_name cache consider fresh;]', v_output); assert_equals('ALTER MATERIALIZED VIEW ', 'DDL|ALTER|ALTER MATERIALIZED VIEW |75', concat(v_output));
+	classify(q'[ALTER  SNAPSHOT a_schema.mv_name cache consider fresh;]', v_output); assert_equals('ALTER MATERIALIZED VIEW ', 'DDL|ALTER|ALTER MATERIALIZED VIEW |75', concat(v_output));
 	classify(q'[ALTER /*a*/ MATERIALIZED /*b*/ VIEW /*c*/LOG force on my_table parallel 10]', v_output); assert_equals('ALTER MATERIALIZED VIEW LOG', 'DDL|ALTER|ALTER MATERIALIZED VIEW LOG|72', concat(v_output));
+	classify(q'[ALTER /*a*/ SNAPSHOT /*c*/LOG force on my_table parallel 10]', v_output); assert_equals('ALTER MATERIALIZED VIEW LOG', 'DDL|ALTER|ALTER MATERIALIZED VIEW LOG|72', concat(v_output));
 	classify(q'[ alter  materialized	zonemap my_schema.my_zone enable pruning]', v_output); assert_equals('ALTER MATERIALIZED ZONEMAP', 'DDL|ALTER|ALTER MATERIALIZED ZONEMAP|240', concat(v_output));
 	classify(q'[alter operator my_operator add binding (number) return (number) using my_function]', v_output); assert_equals('ALTER OPERATOR', 'DDL|ALTER|ALTER OPERATOR|183', concat(v_output));
 	classify(q'[alter outline public my_outline disable;]', v_output); assert_equals('ALTER OUTLINE', 'DDL|ALTER|ALTER OUTLINE|179', concat(v_output));
@@ -351,7 +365,9 @@ begin
 	classify(q'[CREATE editionable LIBRARY ext_lib AS 'ddl_1' IN ddl_dir;]'||chr(10)||'/', v_output); assert_equals('CREATE LIBRARY', 'DDL|CREATE|CREATE LIBRARY|159', concat(v_output));
 	classify(q'[CREATE noneditionable LIBRARY ext_lib AS 'ddl_1' IN ddl_dir;]'||chr(10)||'/', v_output); assert_equals('CREATE LIBRARY', 'DDL|CREATE|CREATE LIBRARY|159', concat(v_output));
 	classify(q'[CREATE MATERIALIZED VIEW my_mv as select 1 a from dual;]', v_output); assert_equals('CREATE MATERIALIZED VIEW ', 'DDL|CREATE|CREATE MATERIALIZED VIEW |74', concat(v_output));
+	classify(q'[CREATE SNAPSHOT my_mv as select 1 a from dual;]', v_output); assert_equals('CREATE MATERIALIZED VIEW ', 'DDL|CREATE|CREATE MATERIALIZED VIEW |74', concat(v_output));
 	classify(q'[CREATE MATERIALIZED VIEW LOG on my_table with (a)]', v_output); assert_equals('CREATE MATERIALIZED VIEW LOG', 'DDL|CREATE|CREATE MATERIALIZED VIEW LOG|71', concat(v_output));
+	classify(q'[CREATE SNAPSHOT LOG on my_table with (a)]', v_output); assert_equals('CREATE MATERIALIZED VIEW LOG', 'DDL|CREATE|CREATE MATERIALIZED VIEW LOG|71', concat(v_output));
 	classify(q'[CREATE MATERIALIZED ZONEMAP sales_zmap ON sales(cust_id, prod_id);]', v_output); assert_equals('CREATE MATERIALIZED ZONEMAP', 'DDL|CREATE|CREATE MATERIALIZED ZONEMAP|239', concat(v_output));
 	classify(q'[CREATE OPERATOR eq_op BINDING (VARCHAR2, VARCHAR2) RETURN NUMBER USING eq_f; ]', v_output); assert_equals('CREATE OPERATOR', 'DDL|CREATE|CREATE OPERATOR|163', concat(v_output));
 	classify(q'[CREATE OR REPLACE OPERATOR eq_op BINDING (VARCHAR2, VARCHAR2) RETURN NUMBER USING eq_f; ]', v_output); assert_equals('CREATE OPERATOR', 'DDL|CREATE|CREATE OPERATOR|163', concat(v_output));
@@ -495,7 +511,9 @@ begin
 	classify(q'[DROP LIBRARY my_library]', v_output); assert_equals('DROP LIBRARY', 'DDL|DROP|DROP LIBRARY|84', concat(v_output));
 	--Commands have an extra space in them.
 	classify(q'[DROP MATERIALIZED VIEW my_mv preserve table]', v_output); assert_equals('DROP MATERIALIZED VIEW', 'DDL|DROP|DROP MATERIALIZED VIEW |76', concat(v_output));
+	classify(q'[DROP SNAPSHOT my_mv preserve table]', v_output); assert_equals('DROP MATERIALIZED VIEW', 'DDL|DROP|DROP MATERIALIZED VIEW |76', concat(v_output));
 	classify(q'[DROP MATERIALIZED VIEW LOG on some_table;]', v_output); assert_equals('DROP MATERIALIZED VIEW LOG', 'DDL|DROP|DROP MATERIALIZED VIEW  LOG|73', concat(v_output));
+	classify(q'[DROP snapshot LOG on some_table;]', v_output); assert_equals('DROP MATERIALIZED VIEW LOG', 'DDL|DROP|DROP MATERIALIZED VIEW  LOG|73', concat(v_output));
 	classify(q'[DROP MATERIALIZED ZONEMAP my_schema.my_zonemap]', v_output); assert_equals('DROP MATERIALIZED ZONEMAP', 'DDL|DROP|DROP MATERIALIZED ZONEMAP|241', concat(v_output));
 	classify(q'[DROP OPERATOR my_operator force;]', v_output); assert_equals('DROP OPERATOR', 'DDL|DROP|DROP OPERATOR|167', concat(v_output));
 	classify(q'[DROP OUTLINE my_outline;]', v_output); assert_equals('DROP OUTLINE', 'DDL|DROP|DROP OUTLINE|181', concat(v_output));
