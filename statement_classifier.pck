@@ -670,8 +670,9 @@ begin
 		p_category := C_DML; p_statement_type := 'INSERT'; p_command_name := 'INSERT'; p_command_type := 2;
 	elsif v_words_1_to_2 = 'LOCK TABLE' then
 		p_category := C_DML; p_statement_type := 'LOCK TABLE'; p_command_name := 'LOCK TABLE'; p_command_type := 26;
-	elsif v_words_1 = 'NO-OP' then --I don't think this is a real command.
-		p_category := C_DDL; p_statement_type := 'NO-OP'; p_command_name := 'NO-OP'; p_command_type := 27;
+	--This is not a real command.
+	--elsif v_words_1 = 'NO-OP' then
+	--	p_category := C_DDL; p_statement_type := 'NO-OP'; p_command_name := 'NO-OP'; p_command_type := 27;
 	elsif v_words_1 = 'NOAUDIT' then --Command name is more specific than statement type.
 		p_category := C_DDL; p_statement_type := 'NOAUDIT'; p_command_name := 'NOAUDIT OBJECT'; p_command_type := 31;
 	elsif (v_types(1) = '<' and v_types(2) = '<') --PL/SQL is custom.
@@ -707,8 +708,9 @@ begin
 		p_category := C_DDL; p_statement_type := 'TRUNCATE'; p_command_name := 'TRUNCATE CLUSTER'; p_command_type := 86;
 	elsif v_words_1_to_2 = 'TRUNCATE TABLE' then
 		p_category := C_DDL; p_statement_type := 'TRUNCATE'; p_command_name := 'TRUNCATE TABLE'; p_command_type := 85;
-	elsif v_words_1_to_2 = 'UNDROP OBJECT' then --Not a real command.
-		p_category := C_DDL; p_statement_type := 'UNDROP'; p_command_name := 'UNDROP OBJECT'; p_command_type := 202;
+	--This is not a real command.
+	--elsif v_words_1_to_2 = 'UNDROP OBJECT' then
+	--	p_category := C_DDL; p_statement_type := 'UNDROP'; p_command_name := 'UNDROP OBJECT'; p_command_type := 202;
 	elsif v_words_1 = 'UPDATE' then
 		p_category := C_DML; p_statement_type := 'UPDATE'; p_command_name := 'UPDATE'; p_command_type := 6;
 	--These are not real commands (they are part of alter table) and they could be ambiguous with an UPDATE statement
