@@ -139,17 +139,20 @@ begin
 	assert_equals('Missing double quote error 1', -1740, v_output.lex_sqlcode);
 	assert_equals('Missing double quote error 2', 'missing double quote in identifier', v_output.lex_sqlerrm);
 
+	--"Zero-length identifier" error, but must be caught by the parser.
 	classify('(select 1 "" from dual)', v_output);
-	assert_equals('Zero-length identifier 1', -1741, v_output.lex_sqlcode);
-	assert_equals('Zero-length identifier 2', 'illegal zero-length identifier', v_output.lex_sqlerrm);
+	assert_equals('Zero-length identifier 1', null, v_output.lex_sqlcode);
+	assert_equals('Zero-length identifier 2', null, v_output.lex_sqlerrm);
 
+	--"identifier is too long" error, but must be caught by the parser.
 	classify('(select 1 a123456789012345678901234567890 from dual)', v_output);
-	assert_equals('Identifier too long error 1', -972, v_output.lex_sqlcode);
-	assert_equals('Identifier too long error 2', 'identifier is too long', v_output.lex_sqlerrm);
+	assert_equals('Identifier too long error 1', null, v_output.lex_sqlcode);
+	assert_equals('Identifier too long error 2', null, v_output.lex_sqlerrm);
 
+	--"identifier is too long" error, but must be caught by the parser.
 	classify('(select 1 "a123456789012345678901234567890" from dual)', v_output);
-	assert_equals('Identifier too long error 3', -972, v_output.lex_sqlcode);
-	assert_equals('Identifier too long error 4', 'identifier is too long', v_output.lex_sqlerrm);
+	assert_equals('Identifier too long error 3', null, v_output.lex_sqlcode);
+	assert_equals('Identifier too long error 4', null, v_output.lex_sqlerrm);
 
 	classify(q'<declare v_test varchar2(100) := q'  '; begin null; end;>', v_output);
 	assert_equals('Invalid character 1', -911, v_output.lex_sqlcode);

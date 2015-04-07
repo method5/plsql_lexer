@@ -1,24 +1,56 @@
 create or replace package plsql_lexer is
+--Copyright (C) 2015 Jon Heller.  This program is licensed under the LGPLv3.
+g_version constant varchar2(10) := '0.1.0';
+
+
 /*
 ## Purpose ##
 
-Tokenize a SQL or PL/SQL statement.  This package is intended for use with
-Statement Classifier.
+Tokenize a SQL or PL/SQL statement.
 
-Tokens may be one of these:
-	whitespace               - 0,9,10,11,12,13,32,and \3000 (ideographic space)
-	comment                  - Single and multiline, does not include newline at end of the single lin comment.
-	text                     - Includes quotation marks, alternative quote delimiters, and "N"
-	numeric                  - Everything but initial + or -: ^([0-9]+\.[0-9]+|\.[0-9]+|[0-9]+)((e|E)(\+|-)?[0-9]+)?(f|F|d|D)?
-	word                     - May be a keyword, identifier, or operator.
-	                           The parser must distinguish between them because SQL keywords are frequently not reserved.
-	~!@%^*()-+=[]|:;<,>./    - All SQL and PL/SQL special characters
-	unexpected               - Everything else.  For example "&", a SQL*Plus characters.  (Should this be included above?)
+Tokens may be one of these types:
+    whitespace
+        Characters 0,9,10,11,12,13,32,and unistr('\3000') (ideographic space)
+    comment
+        Single and multiline.  Does not include newline at end of the single line comment
+    text
+        Includes quotation marks, alternative quote delimiters, "Q", and "N"
+    numeric
+        Everything but initial + or -: ^([0-9]+\.[0-9]+|\.[0-9]+|[0-9]+)((e|E)(\+|-)?[0-9]+)?(f|F|d|D)?
+    word
+        May be a keyword, identifier, or (alphabetic) operator.
+        The parser must distinguish between them because keywords are frequently not reserved.
+    inquiry_directive
+        PL/SQL preprocessor (conditional compilation) feature that is like: $$name
+    preprocessor_control_token
+		PL/SQL preprocessor (conditional compilation) feature that is like: $plsql_identifier
+    ~= != ^= <> := => >= <= ** || << >>
+        2-character punctuation operators.
+    @ % * ( ) - + = [ ] : ; < , > . /
+        1-character punctuation operators.
+    unexpected
+        Everything else.  For example "&", a SQL*Plus characters.
+
+
+## Output ##
+
+The most important output is a Token type:
+	type     varchar2(4000),
+	value    nclob,
+	sqlcode  number,
+	sqlerrm  varchar2(4000)
+
+- type: One of the names listed in the Purpose section above.
+- value: The exact string value.
+- sqlcode: The SQLCODE for a serious error that prevents effective lexing.
+	For example, this could be "ORA-1756: quoted string not properly terminated".
+- sqlerrm: The SQLERRM that goes with the SQLCODE above.
+
 
 ## Requirements ##
 
-- EBCDIC is not supported.
-- Only 11gR2 and above are supported.
+- Only 11gR2 and above are supported.  But this will likely work well in lower versions.
+- EBCDIC character set is not supported.
 
 
 ## Example ##
@@ -28,6 +60,8 @@ begin
 		'select * from dual;'
 	)));
 end;
+
+Results:  word whitespace * whitespace word whitespace word ; EOF
 
 */
 
@@ -215,34 +249,6 @@ function is_alpha_numeric_or__#$(p_char nvarchar2) return boolean is
 begin
 	return regexp_like(p_char, '[[:alpha:]]|[0-9]|\_|#|\$');
 end is_alpha_numeric_or__#$;
-
-
---------------------------------------------------------------------------------
---Create a word token and potentially throw one of these two errors:
---ORA-00972: identifier is too long
---ORA-01741: illegal zero-length identifier
-function create_word_check_length(p_token_text nclob) return token is
-	v_token_string varchar2(4000);
-begin
-	--Don't bother converting NCLOB if it's obviously too long.
-	if dbms_lob.getlength(p_token_text) >= 200 then
-		return token('word', p_token_text, -972, 'identifier is too long');
-	--Else convert to VARCHAR2, return error if it's > 30 bytes (excluding quotation marks).
-	else
-		--Grab much more than necessary to ensure we don't land in the middle of a 2-code point character.
-		v_token_string := dbms_lob.substr(lob_loc => p_token_text, amount => 1000);
-
-		--Look for empty quoted identifier.
-		if v_token_string = '""' then
-			return token('word', p_token_text, -1741, 'illegal zero-length identifier');
-		--Look for identifer is too long.
-		elsif lengthb(replace(v_token_string, '"', null)) > 30 then
-			return token('word', p_token_text, -972, 'identifier is too long');
-		else
-			return token('word', p_token_text, null, null);
-		end if;
-	end if;
-end create_word_check_length;
 
 
 --------------------------------------------------------------------------------
@@ -479,6 +485,10 @@ begin
 	end if;
 
 	--Word - quoted identifier.  Note that quoted identifers are not escaped.
+	--Do *not* check for these errors in words:
+	--"ORA-00972: identifier is too long" or "ORA-01741: illegal zero-length identifier".
+	--Database links have different rules, like 128 bytes instead of 30, and we
+	--won't know if it's a database link name until parse time.
 	if g_last_char = '"' then
 		g_token_text := g_last_char;
 		loop
@@ -495,7 +505,7 @@ begin
 			end if;
 			g_token_text := g_token_text || g_last_char;
 		end loop;
-		return create_word_check_length(g_token_text);
+		return token('word', g_token_text, null, null);
 	end if;
 
 	--Word.
@@ -509,13 +519,49 @@ begin
 			end if;
 			g_token_text := g_token_text || g_last_char;
 		end loop;
-		return create_word_check_length(g_token_text);
+		return token('word', g_token_text, null, null);
 	end if;
 
-	--Special characters used for operators. starting from top-left of keyboard.
+	--Inquiry Directive.
+	--Starts with $$ alpha (in any language!), may contain number, "_", "$", and "#".
+	if g_last_char = '$' and look_ahead(1) = '$' and is_alpha(look_ahead(2)) then
+		g_token_text := g_last_char || get_char;
+		g_token_text := g_token_text || get_char;
+		loop
+			g_last_char := get_char;
+			if g_last_char is null or not is_alpha_numeric_or__#$(g_last_char) then
+				exit;
+			end if;
+			g_token_text := g_token_text || g_last_char;
+		end loop;
+		return token('inquiry_directive', g_token_text, null, null);
+	end if;
+
+	--Inquiry Directive.
+	--Starts with $ alpha (in any language!), may contain number, "_", "$", and "#".
+	if g_last_char = '$' and is_alpha(look_ahead(1)) then
+		g_token_text := g_last_char || get_char;
+		loop
+			g_last_char := get_char;
+			if g_last_char is null or not is_alpha_numeric_or__#$(g_last_char) then
+				exit;
+			end if;
+			g_token_text := g_token_text || g_last_char;
+		end loop;
+		return token('preprocessor_control_token', g_token_text, null, null);
+	end if;
+
+	--2-character punctuation operators.
 	--Igore the IBM "not" character - it's in the manual but is only supported
 	--on obsolete platforms: http://stackoverflow.com/q/9305925/409172
-	if g_last_char in ('~','!','@','%','^','*','(',')','-','+','=','[',']','|',':',';','<',',','>','.','/') then
+	if g_last_char||look_ahead(1) in ('~=','!=','^=','<>',':=','=>','>=','<=','**','||','<<','>>') then
+		g_token_text := g_last_char || get_char;
+		g_last_char := get_char;
+		return token(g_token_text, g_token_text, null, null);
+	end if;
+
+	--1-character punctuation operators.
+	if g_last_char in ('@','%','*','(',')','-','+','=','[',']',':',';','<',',','>','.','/') then
 		g_token_text := g_last_char;
 		g_last_char := get_char;
 		return token(g_token_text, g_token_text, null, null);

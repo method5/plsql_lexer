@@ -1,5 +1,4 @@
 create or replace package plsql_lexer_test authid current_user is
-
 /*
 ## Purpose ##
 
@@ -14,24 +13,29 @@ begin
 end;
 
 */
+pragma serially_reusable;
 
 --Globals to select which test suites to run.
-c_test_whitespace  constant number := power(2, 1);
-c_test_comment     constant number := power(2, 2);
-c_test_text        constant number := power(2, 3);
-c_test_numeric     constant number := power(2, 4);
-c_test_word        constant number := power(2, 5);
-c_test_punctuation constant number := power(2, 6);
-c_test_unexpected  constant number := power(2, 7);
-c_test_utf8        constant number := power(2, 8);
-c_test_other       constant number := power(2, 9);
+c_test_whitespace              constant number := power(2, 1);
+c_test_comment                 constant number := power(2, 2);
+c_test_text                    constant number := power(2, 3);
+c_test_numeric                 constant number := power(2, 4);
+c_test_word                    constant number := power(2, 5);
+c_test_inquiry_directive       constant number := power(2, 6);
+c_test_preproc_control_token   constant number := power(2, 7);
+c_test_2_character_punctuation constant number := power(2, 8);
+c_test_1_character_punctuation constant number := power(2, 9);
+c_test_unexpected              constant number := power(2, 10);
+c_test_utf8                    constant number := power(2, 11);
+c_test_other                   constant number := power(2, 12);
 
-c_dynamic_tests    constant number := power(2, 30);
+c_dynamic_tests             constant number := power(2, 30);
 
 --Default option is to run all static test suites.
-c_all_static_tests constant number := c_test_whitespace+c_test_comment+c_test_text+
-	c_test_numeric+c_test_word+c_test_punctuation+c_test_unexpected+c_test_utf8+
-	c_test_other;
+c_all_static_tests          constant number := c_test_whitespace+c_test_comment+
+	c_test_text+c_test_numeric+c_test_word+c_test_inquiry_directive+
+	c_test_preproc_control_token+c_test_2_character_punctuation+
+	c_test_1_character_punctuation+c_test_unexpected+c_test_utf8+c_test_other;
 
 --Run the unit tests and display the results in dbms output.
 procedure run(p_tests number default c_all_static_tests);
@@ -39,12 +43,16 @@ procedure run(p_tests number default c_all_static_tests);
 end;
 /
 create or replace package body plsql_lexer_test is
+pragma serially_reusable;
 
 --Global counters.
 g_test_count number := 0;
 g_passed_count number := 0;
 g_failed_count number := 0;
 
+--Global characters for testing.
+g_4_byte_utf8 varchar2(1 char) := unistr('\d841\df79');  --The "cut" character in Cantonese.
+g_2_byte_utf8 varchar2(1 char) := unistr('\00d0');       --The "eth" character, an upper case D with a line.
 
 --Helper procedures.
 
@@ -264,18 +272,18 @@ begin
 	--Names can include numbers, #, $, and _, but not at the beginning.
 	assert_equals('word: identifier 1', 'word EOF', lex('asdfQWER1234#$_asdf'));
 	assert_equals('word: identifier 2', 'unexpected word EOF', lex('#a'));
-	assert_equals('word: identifier 3', 'unexpected word EOF', lex('$a'));
+	assert_equals('word: identifier 3', 'preprocessor_control_token EOF', lex('$a'));
 	assert_equals('word: identifier 4', 'unexpected word EOF', lex('_a'));
 	assert_equals('word: identifier 5', 'numeric word EOF', lex('1a'));
 	assert_equals('word: identifier 6', '+ word + EOF', lex('+a1#$_+'));
 
 	--4 byte supplementary character for "cut".
-	assert_equals('word: utf8 identifier 1', 'word EOF', lex(unistr('\d849\df79')));
+	assert_equals('word: utf8 identifier 1', 'word EOF', lex(g_4_byte_utf8));
 	--2 byte D - Latin Capital Letter ETH.
-	assert_equals('word: utf8 identifier 2', 'word EOF', lex(unistr('\00d0')));
+	assert_equals('word: utf8 identifier 2', 'word EOF', lex(g_2_byte_utf8));
 	--Putting different letters together.
-	assert_equals('word: utf8 identifier 3', 'word + EOF', lex(unistr('\00d0')||unistr('\00d0')||unistr('\d849\df79')||'A+'));
-	assert_equals('word: utf8 identifier 4', unistr('\00d0')||unistr('\00d0')||unistr('\d849\df79')||'A', get_value_n(unistr('\00d0')||unistr('\00d0')||unistr('\d849\df79')||'A+', 1));
+	assert_equals('word: utf8 identifier 3', 'word + EOF', lex(g_2_byte_utf8||g_2_byte_utf8||g_4_byte_utf8||'A+'));
+	assert_equals('word: utf8 identifier 4', g_2_byte_utf8||g_2_byte_utf8||g_4_byte_utf8||'A', get_value_n(g_2_byte_utf8||g_2_byte_utf8||g_4_byte_utf8||'A+', 1));
 
 	assert_equals('word: double quote 1', 'word word EOF', lex('"asdf"a'));
 	assert_equals('word: double quote 2', 'word word EOF', lex('"!@#$%^&*()"a'));
@@ -286,9 +294,11 @@ begin
 	assert_equals('word: missing double quote 1b', '-1740', get_sqlcode_n('"!@#$%^&*()', 1));
 	assert_equals('word: missing double quote 1c', 'missing double quote in identifier', get_sqlerrm_n('"!@#$%^&*()', 1));
 
+	--This should be an error, but must be enforced later by the parser.
 	assert_equals('word: zero-length identifier 1a', 'numeric word EOF', lex('1""'));
-	assert_equals('word: zero-length identifier 1b', '-1741', get_sqlcode_n('1""', 2));
-	assert_equals('word: zero-length identifier 1c', 'illegal zero-length identifier', get_sqlerrm_n('1""', 2));
+	assert_equals('word: zero-length identifier 1b', '""', get_value_n('1""', 2));
+	assert_equals('word: zero-length identifier 1c', null, get_sqlcode_n('1""', 2));
+	assert_equals('word: zero-length identifier 1d', null, get_sqlerrm_n('1""', 2));
 
 	assert_equals('word: identifier is too long 30 bytes 1a', 'word EOF', lex('abcdefghijabcdefghijabcdefghij'));
 	assert_equals('word: identifier is too long 30 bytes 1b', null, get_sqlcode_n('abcdefghijabcdefghijabcdefghij', 1));
@@ -297,50 +307,170 @@ begin
 	assert_equals('word: identifier is too long 30 bytes 2b', null, get_sqlcode_n('"abcdefghijabcdefghijabcdefghij"', 1));
 	assert_equals('word: identifier is too long 30 bytes 2c', null, get_sqlerrm_n('"abcdefghijabcdefghijabcdefghij"', 1));
 
+	--These should be errors, but must be enforced later by the parser.
 	assert_equals('word: identifier is too long 31 bytes 1a', 'word EOF', lex('abcdefghijabcdefghijabcdefghijK'));
-	assert_equals('word: identifier is too long 31 bytes 1b', '-972', get_sqlcode_n('abcdefghijabcdefghijabcdefghijK', 1));
-	assert_equals('word: identifier is too long 31 bytes 1c', 'identifier is too long', get_sqlerrm_n('abcdefghijabcdefghijabcdefghijK', 1));
+	assert_equals('word: identifier is too long 31 bytes 1b', null, get_sqlcode_n('abcdefghijabcdefghijabcdefghijK', 1));
+	assert_equals('word: identifier is too long 31 bytes 1c', null, get_sqlerrm_n('abcdefghijabcdefghijabcdefghijK', 1));
 	assert_equals('word: identifier is too long 31 bytes 2a', 'word EOF', lex('"abcdefghijabcdefghijabcdefghijK"'));
-	assert_equals('word: identifier is too long 31 bytes 2b', '-972', get_sqlcode_n('"abcdefghijabcdefghijabcdefghijK"', 1));
-	assert_equals('word: identifier is too long 31 bytes 2c', 'identifier is too long', get_sqlerrm_n('"abcdefghijabcdefghijabcdefghijK"', 1));
+	assert_equals('word: identifier is too long 31 bytes 2b', null, get_sqlcode_n('"abcdefghijabcdefghijabcdefghijK"', 1));
+	assert_equals('word: identifier is too long 31 bytes 2c', null, get_sqlerrm_n('"abcdefghijabcdefghijabcdefghijK"', 1));
 
-	assert_equals('word: identifier is too long 29 chars 31 bytes 1a', 'word EOF', lex('abcdefghijabcdefghijabcdefghi'||unistr('\00d0')));
-	assert_equals('word: identifier is too long 29 chars 31 bytes 1b', '-972', get_sqlcode_n('abcdefghijabcdefghijabcdefghi'||unistr('\00d0'), 1));
-	assert_equals('word: identifier is too long 29 chars 31 bytes 1c', 'identifier is too long', get_sqlerrm_n('abcdefghijabcdefghijabcdefghi'||unistr('\00d0'), 1));
+	assert_equals('word: identifier is too long 29 chars 31 bytes 1a', 'word EOF', lex('abcdefghijabcdefghijabcdefghi'||g_2_byte_utf8));
+	assert_equals('word: identifier is too long 29 chars 31 bytes 1b', null, get_sqlcode_n('abcdefghijabcdefghijabcdefghi'||g_2_byte_utf8, 1));
+	assert_equals('word: identifier is too long 29 chars 31 bytes 1c', null, get_sqlerrm_n('abcdefghijabcdefghijabcdefghi'||g_2_byte_utf8, 1));
+
+	--Database links can have 128 bytes.  This example is valid.
+	assert_equals('word: database link 1', 'word whitespace * whitespace word whitespace word @ word . word @ word EOF', lex('select * from dual@abcdefghijabcdefghijabcdefghijabcdefghij.abcdefghijabcdefghijabcdefghijabcdefghij@abcdefghijabcdefghijabcdefghijabcdefghij'));
+	assert_equals('word: database link 2', '@', get_value_n('select * from dual@abcdefghijabcdefghijabcdefghijabcdefghij1.abcdefghijabcdefghijabcdefghijabcdefghij2@abcdefghijabcdefghijabcdefghijabcdefghij3', 8));
+	assert_equals('word: database link 3', 'abcdefghijabcdefghijabcdefghijabcdefghij1', get_value_n('select * from dual@abcdefghijabcdefghijabcdefghijabcdefghij1.abcdefghijabcdefghijabcdefghijabcdefghij2@abcdefghijabcdefghijabcdefghijabcdefghij3', 9));
+	assert_equals('word: database link 4', '.', get_value_n('select * from dual@abcdefghijabcdefghijabcdefghijabcdefghij1.abcdefghijabcdefghijabcdefghijabcdefghij2@abcdefghijabcdefghijabcdefghijabcdefghij3', 10));
+	assert_equals('word: database link 5', 'abcdefghijabcdefghijabcdefghijabcdefghij2', get_value_n('select * from dual@abcdefghijabcdefghijabcdefghijabcdefghij1.abcdefghijabcdefghijabcdefghijabcdefghij2@abcdefghijabcdefghijabcdefghijabcdefghij3', 11));
+	assert_equals('word: database link 6', '@', get_value_n('select * from dual@abcdefghijabcdefghijabcdefghijabcdefghij1.abcdefghijabcdefghijabcdefghijabcdefghij2@abcdefghijabcdefghijabcdefghijabcdefghij3', 12));
+	assert_equals('word: database link 7', 'abcdefghijabcdefghijabcdefghijabcdefghij3', get_value_n('select * from dual@abcdefghijabcdefghijabcdefghijabcdefghij1.abcdefghijabcdefghijabcdefghijabcdefghij2@abcdefghijabcdefghijabcdefghijabcdefghij3', 13));
+	assert_equals('word: database link 8', null, get_sqlcode_n('abcdefghijabcdefghijabcdefghi'||g_2_byte_utf8, 1));
+	assert_equals('word: database link 9', null, get_sqlerrm_n('abcdefghijabcdefghijabcdefghi'||g_2_byte_utf8, 1));
 end test_word;
 
 
 --------------------------------------------------------------------------------
-procedure test_punctuation is
+procedure test_inquiry_directive is
 begin
-	assert_equals('punctuation: 01', '~ ! @ % ^ * ( ) - + = [ ] | : ; < , > . / EOF', lex(q'[~!@%^*()-+=[]|:;<,>./]'));
+	assert_equals('inquiry directive: simple 1', 'word whitespace word . word ( inquiry_directive ) ; whitespace word ; EOF', lex('begin dbms_output.put_line($$asdf); end;'));
+	assert_equals('inquiry directive: simple 2', '$$asdf', get_value_n('begin dbms_output.put_line($$asdf); end;', 7));
 
-	assert_equals('punctuation: 02', '~', get_value_n(q'[~!@%^*()-+=[]|:;<,>./]', 1));
-	assert_equals('punctuation: 03', '!', get_value_n(q'[~!@%^*()-+=[]|:;<,>./]', 2));
-	assert_equals('punctuation: 04', '@', get_value_n(q'[~!@%^*()-+=[]|:;<,>./]', 3));
-	assert_equals('punctuation: 05', '%', get_value_n(q'[~!@%^*()-+=[]|:;<,>./]', 4));
-	assert_equals('punctuation: 06', '^', get_value_n(q'[~!@%^*()-+=[]|:;<,>./]', 5));
-	assert_equals('punctuation: 07', '*', get_value_n(q'[~!@%^*()-+=[]|:;<,>./]', 6));
-	assert_equals('punctuation: 08', '(', get_value_n(q'[~!@%^*()-+=[]|:;<,>./]', 7));
-	assert_equals('punctuation: 09', ')', get_value_n(q'[~!@%^*()-+=[]|:;<,>./]', 8));
-	assert_equals('punctuation: 10', '-', get_value_n(q'[~!@%^*()-+=[]|:;<,>./]', 9));
-	assert_equals('punctuation: 11', '+', get_value_n(q'[~!@%^*()-+=[]|:;<,>./]', 10));
-	assert_equals('punctuation: 12', '=', get_value_n(q'[~!@%^*()-+=[]|:;<,>./]', 11));
-	assert_equals('punctuation: 13', '[', get_value_n(q'[~!@%^*()-+=[]|:;<,>./]', 12));
-	assert_equals('punctuation: 14', ']', get_value_n(q'[~!@%^*()-+=[]|:;<,>./]', 13));
-	assert_equals('punctuation: 15', '|', get_value_n(q'[~!@%^*()-+=[]|:;<,>./]', 14));
-	assert_equals('punctuation: 16', ':', get_value_n(q'[~!@%^*()-+=[]|:;<,>./]', 15));
-	assert_equals('punctuation: 17', ';', get_value_n(q'[~!@%^*()-+=[]|:;<,>./]', 16));
-	assert_equals('punctuation: 18', '<', get_value_n(q'[~!@%^*()-+=[]|:;<,>./]', 17));
-	assert_equals('punctuation: 19', ',', get_value_n(q'[~!@%^*()-+=[]|:;<,>./]', 18));
-	assert_equals('punctuation: 20', '>', get_value_n(q'[~!@%^*()-+=[]|:;<,>./]', 19));
-	assert_equals('punctuation: 21', '.', get_value_n(q'[~!@%^*()-+=[]|:;<,>./]', 20));
-	assert_equals('punctuation: 22', '/', get_value_n(q'[~!@%^*()-+=[]|:;<,>./]', 21));
+	assert_equals('inquiry directive: name characters 1', 'word whitespace word . word ( inquiry_directive ) ; whitespace word ; EOF', lex('begin dbms_output.put_line($$asdf$_#1); end;'));
+	assert_equals('inquiry directive: name characters 2', '$$asdf$_#1', get_value_n('begin dbms_output.put_line($$asdf$_#1); end;', 7));
 
-	assert_equals('punctuation: 241',
-		'< < word > > word whitespace word whitespace word : = numeric ; whitespace word whitespace word ; whitespace word ; EOF',
+	assert_equals('inquiry directive: unexpected (empty name)', 'word whitespace word . word ( unexpected unexpected ) ; whitespace word ; EOF', lex('begin dbms_output.put_line($$); end;'));
+
+	assert_equals('inquiry directive: 30 characters 1', 'word whitespace word . word ( inquiry_directive ) ; whitespace word ; EOF', lex('begin dbms_output.put_line($$abcdefghijabcdefghijabcdefghij); end;'));
+	assert_equals('inquiry directive: 30 characters 2', '$$abcdefghijabcdefghijabcdefghij', get_value_n('begin dbms_output.put_line($$abcdefghijabcdefghijabcdefghij); end;', 7));
+
+	--These should be errors, but must be enforced later by the parser.
+	assert_equals('inquiry directive: 31 characters 1', 'word whitespace word . word ( inquiry_directive ) ; whitespace word ; EOF', lex('begin dbms_output.put_line($$abcdefghijabcdefghijabcdefghijK); end;'));
+	assert_equals('inquiry directive: 31 characters 2', null, get_sqlcode_n('begin dbms_output.put_line($$abcdefghijabcdefghijabcdefghijK); end;', 1));
+	assert_equals('inquiry directive: 31 characters 3', null, get_sqlerrm_n('begin dbms_output.put_line($$abcdefghijabcdefghijabcdefghijK); end;', 1));
+
+	--PL/SQL Bug(?): Inquiry directive can be over 31 bytes if the last character starts before byte 30.
+	assert_equals('inquiry directive: 30 characters 31 bytes 1', 'word whitespace word . word ( inquiry_directive ) ; whitespace word ; EOF', lex('begin dbms_output.put_line($$abcdefghijabcdefghijabcdefghi'||g_2_byte_utf8||'); end;'));
+	assert_equals('inquiry directive: 30 characters 31 bytes 2', '$$abcdefghijabcdefghijabcdefghi'||g_2_byte_utf8, get_value_n('begin dbms_output.put_line($$abcdefghijabcdefghijabcdefghi'||g_2_byte_utf8||'); end;', 7));
+	assert_equals('inquiry directive: 30 characters 31 bytes 3', null, get_sqlcode_n('begin dbms_output.put_line($$abcdefghijabcdefghijabcdefghi'||g_2_byte_utf8||'); end;', 1));
+	assert_equals('inquiry directive: 30 characters 31 bytes 4', null, get_sqlerrm_n('begin dbms_output.put_line($$abcdefghijabcdefghijabcdefghi'||g_2_byte_utf8||'); end;', 1));
+
+	--These should be errors, but must be enforced later by the parser.
+	assert_equals('inquiry directive: 30 characters 33 bytes 1', 'word whitespace word . word ( inquiry_directive ) ; whitespace word ; EOF', lex('begin dbms_output.put_line($$'||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||'); end;'));
+	assert_equals('inquiry directive: 30 characters 33 bytes 2', '$$'||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8, get_value_n('begin dbms_output.put_line($$'||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||'); end;', 7));
+	assert_equals('inquiry directive: 30 characters 33 bytes 3', null, get_sqlcode_n('begin dbms_output.put_line($$'||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||'); end;', 1));
+	assert_equals('inquiry directive: 30 characters 33 bytes 4', null, get_sqlerrm_n('begin dbms_output.put_line($$'||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||'); end;', 1));
+
+	--These should be errors, but must be enforced later by the parser.
+	assert_equals('inquiry directive: 30 characters 31 bytes 1', 'word whitespace word . word ( inquiry_directive ) ; whitespace word ; EOF', lex('begin dbms_output.put_line($$abcdefghijabcdefghijabcdefghi'||g_2_byte_utf8||'); end;'));
+	assert_equals('inquiry directive: 30 characters 31 bytes2', null, get_sqlcode_n('begin dbms_output.put_line($$abcdefghijabcdefghijabcdefghi'||g_2_byte_utf8||'); end;', 1));
+	assert_equals('inquiry directive: 30 characters 31 bytes3', null, get_sqlerrm_n('begin dbms_output.put_line($$abcdefghijabcdefghijabcdefghi'||g_2_byte_utf8||'); end;', 1));
+end test_inquiry_directive;
+
+
+--------------------------------------------------------------------------------
+procedure test_preproc_control_token is
+begin
+	assert_equals('preprocessor control token: valid example 1', 'word whitespace preprocessor_control_token whitespace numeric = numeric whitespace preprocessor_control_token whitespace word ; whitespace preprocessor_control_token whitespace word ; EOF', lex('begin $if 1=1 $then null; $end end;'));
+	assert_equals('preprocessor control token: valid example 2', 'begin', get_value_n('begin $if 1=1 $then null; $end end;', 1));
+	assert_equals('preprocessor control token: valid example 3', ' ', get_value_n('begin $if 1=1 $then null; $end end;', 2));
+	assert_equals('preprocessor control token: valid example 4', '$if', get_value_n('begin $if 1=1 $then null; $end end;', 3));
+	assert_equals('preprocessor control token: valid example 5', ' ', get_value_n('begin $if 1=1 $then null; $end end;', 4));
+	assert_equals('preprocessor control token: valid example 6', '1', get_value_n('begin $if 1=1 $then null; $end end;', 5));
+	assert_equals('preprocessor control token: valid example 7', '=', get_value_n('begin $if 1=1 $then null; $end end;', 6));
+	assert_equals('preprocessor control token: valid example 8', '1', get_value_n('begin $if 1=1 $then null; $end end;', 7));
+	assert_equals('preprocessor control token: valid example 9', ' ', get_value_n('begin $if 1=1 $then null; $end end;', 8));
+	assert_equals('preprocessor control token: valid example 10', '$then', get_value_n('begin $if 1=1 $then null; $end end;', 9));
+	assert_equals('preprocessor control token: valid example 11', ' ', get_value_n('begin $if 1=1 $then null; $end end;', 10));
+	assert_equals('preprocessor control token: valid example 12', 'null', get_value_n('begin $if 1=1 $then null; $end end;', 11));
+	assert_equals('preprocessor control token: valid example 13', ';', get_value_n('begin $if 1=1 $then null; $end end;', 12));
+	assert_equals('preprocessor control token: valid example 14', ' ', get_value_n('begin $if 1=1 $then null; $end end;', 13));
+	assert_equals('preprocessor control token: valid example 15', '$end', get_value_n('begin $if 1=1 $then null; $end end;', 14));
+	assert_equals('preprocessor control token: valid example 16', ' ', get_value_n('begin $if 1=1 $then null; $end end;', 15));
+	assert_equals('preprocessor control token: valid example 17', 'end', get_value_n('begin $if 1=1 $then null; $end end;', 16));
+	assert_equals('preprocessor control token: valid example 18', ';', get_value_n('begin $if 1=1 $then null; $end end;', 17));
+	assert_equals('preprocessor control token: valid example 19', '', get_value_n('begin $if 1=1 $then null; $end end;', 18));
+
+	assert_equals('preprocessor control token: name characters 1', 'word whitespace preprocessor_control_token whitespace numeric = numeric whitespace preprocessor_control_token whitespace word ; whitespace preprocessor_control_token whitespace word ; EOF', lex('begin $if_#$1 1=1 $then null; $end end;'));
+	assert_equals('preprocessor control token: name characters 2', '$if_#$1', get_value_n('begin $if_#$1 1=1 $then null; $end end;', 3));
+
+	assert_equals('preprocessor control token: unexpected (empty name)', 'word whitespace word . word ( unexpected ) ; whitespace word ; EOF', lex('begin dbms_output.put_line($); end;'));
+
+	--These should be errors, but must be enforced later by the parser.
+	assert_equals('preprocessor control token: 31 characters 1', 'word whitespace word . word ( preprocessor_control_token ) ; whitespace word ; EOF', lex('begin dbms_output.put_line($abcdefghijabcdefghijabcdefghijK); end;'));
+	assert_equals('preprocessor control token: 31 characters 2', null, get_sqlcode_n('begin dbms_output.put_line($abcdefghijabcdefghijabcdefghijK); end;', 1));
+	assert_equals('preprocessor control token: 31 characters 3', null, get_sqlerrm_n('begin dbms_output.put_line($abcdefghijabcdefghijabcdefghijK); end;', 1));
+
+	--PL/SQL Bug(?): Preprocessor control tokens can be over 31 bytes if the last character starts before byte 30.
+	--Although all preprocessor control tokens are predefined.  Using anything else will throw an additional error.
+	--It may not be worth catching this second error.
+	assert_equals('preprocessor control token: 30 characters 31 bytes 1', 'word whitespace word . word ( preprocessor_control_token ) ; whitespace word ; EOF', lex('begin dbms_output.put_line($abcdefghijabcdefghijabcdefghi'||g_2_byte_utf8||'); end;'));
+	assert_equals('preprocessor control token: 30 characters 31 bytes 2', '$abcdefghijabcdefghijabcdefghi'||g_2_byte_utf8, get_value_n('begin dbms_output.put_line($abcdefghijabcdefghijabcdefghi'||g_2_byte_utf8||'); end;', 7));
+	assert_equals('preprocessor control token: 30 characters 31 bytes 3', null, get_sqlcode_n('begin dbms_output.put_line($abcdefghijabcdefghijabcdefghi'||g_2_byte_utf8||'); end;', 1));
+	assert_equals('preprocessor control token: 30 characters 31 bytes 4', null, get_sqlerrm_n('begin dbms_output.put_line($abcdefghijabcdefghijabcdefghi'||g_2_byte_utf8||'); end;', 1));
+
+	--These should be errors, but must be enforced later by the parser.
+	assert_equals('preprocessor control token: 30 characters 33 bytes 1', 'word whitespace word . word ( preprocessor_control_token ) ; whitespace word ; EOF', lex('begin dbms_output.put_line($'||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||'); end;'));
+	assert_equals('preprocessor control token: 30 characters 33 bytes 2', '$'||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8, get_value_n('begin dbms_output.put_line($'||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||'); end;', 7));
+	assert_equals('preprocessor control token: 30 characters 33 bytes 3', null, get_sqlcode_n('begin dbms_output.put_line($'||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||'); end;', 1));
+	assert_equals('preprocessor control token: 30 characters 33 bytes 4', null, get_sqlerrm_n('begin dbms_output.put_line($'||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||'); end;', 1));
+
+	--These should be errors, but must be enforced later by the parser.
+	assert_equals('preprocessor control token: 30 characters 31 bytes 1', 'word whitespace word . word ( preprocessor_control_token ) ; whitespace word ; EOF', lex('begin dbms_output.put_line($abcdefghijabcdefghijabcdefghi'||g_2_byte_utf8||'); end;'));
+	assert_equals('preprocessor control token: 30 characters 31 bytes2', null, get_sqlcode_n('begin dbms_output.put_line($abcdefghijabcdefghijabcdefghi'||g_2_byte_utf8||'); end;', 1));
+	assert_equals('preprocessor control token: 30 characters 31 bytes3', null, get_sqlerrm_n('begin dbms_output.put_line($abcdefghijabcdefghijabcdefghi'||g_2_byte_utf8||'); end;', 1));
+end test_preproc_control_token;
+
+
+--------------------------------------------------------------------------------
+procedure test_2_character_punctuation is
+begin
+	assert_equals('2-char punctuation: 01', '~= != ^= <> := => >= <= ** || << >> EOF', lex(q'[~=!=^=<>:==>>=<=**||<<>>]'));
+
+	assert_equals('2-char punctuation: 02', '~=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>]', 1));
+	assert_equals('2-char punctuation: 03', '!=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>]', 2));
+	assert_equals('2-char punctuation: 04', '^=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>]', 3));
+	assert_equals('2-char punctuation: 05', '<>', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>]', 4));
+	assert_equals('2-char punctuation: 06', ':=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>]', 5));
+	assert_equals('2-char punctuation: 07', '=>', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>]', 6));
+	assert_equals('2-char punctuation: 08', '>=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>]', 7));
+	assert_equals('2-char punctuation: 09', '<=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>]', 8));
+	assert_equals('2-char punctuation: 10', '**', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>]', 9));
+	assert_equals('2-char punctuation: 11', '||', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>]', 10));
+	assert_equals('2-char punctuation: 12', '<<', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>]', 11));
+	assert_equals('2-char punctuation: 13', '>>', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>]', 12));
+end test_2_character_punctuation;
+
+
+--------------------------------------------------------------------------------
+procedure test_1_character_punctuation is
+begin
+	assert_equals('1-char punctuation: 01', '@ % * ( ) - + = [ ] : ; < , > . / EOF', lex(q'[@%*()-+=[]:;<,>./]'));
+
+	assert_equals('1-char punctuation: 02', '@', get_value_n(q'[@%*()-+=[]:;<,>./]', 1));
+	assert_equals('1-char punctuation: 03', '%', get_value_n(q'[@%*()-+=[]:;<,>./]', 2));
+	assert_equals('1-char punctuation: 04', '*', get_value_n(q'[@%*()-+=[]:;<,>./]', 3));
+	assert_equals('1-char punctuation: 05', '(', get_value_n(q'[@%*()-+=[]:;<,>./]', 4));
+	assert_equals('1-char punctuation: 06', ')', get_value_n(q'[@%*()-+=[]:;<,>./]', 5));
+	assert_equals('1-char punctuation: 07', '-', get_value_n(q'[@%*()-+=[]:;<,>./]', 6));
+	assert_equals('1-char punctuation: 08', '+', get_value_n(q'[@%*()-+=[]:;<,>./]', 7));
+	assert_equals('1-char punctuation: 09', '=', get_value_n(q'[@%*()-+=[]:;<,>./]', 8));
+	assert_equals('1-char punctuation: 10', '[', get_value_n(q'[@%*()-+=[]:;<,>./]', 9));
+	assert_equals('1-char punctuation: 11', ']', get_value_n(q'[@%*()-+=[]:;<,>./]', 10));
+	assert_equals('1-char punctuation: 12', ':', get_value_n(q'[@%*()-+=[]:;<,>./]', 11));
+	assert_equals('1-char punctuation: 13', ';', get_value_n(q'[@%*()-+=[]:;<,>./]', 12));
+	assert_equals('1-char punctuation: 14', '<', get_value_n(q'[@%*()-+=[]:;<,>./]', 13));
+	assert_equals('1-char punctuation: 15', ',', get_value_n(q'[@%*()-+=[]:;<,>./]', 14));
+	assert_equals('1-char punctuation: 16', '>', get_value_n(q'[@%*()-+=[]:;<,>./]', 15));
+	assert_equals('1-char punctuation: 17', '.', get_value_n(q'[@%*()-+=[]:;<,>./]', 16));
+	assert_equals('1-char punctuation: 18', '/', get_value_n(q'[@%*()-+=[]:;<,>./]', 17));
+
+	assert_equals('1-char punctuation: 241',
+		'<< word >> word whitespace word whitespace word := numeric ; whitespace word whitespace word ; whitespace word ; EOF',
 		lex(q'[<<my_label>>declare v_test number:=1; begin null; end;]'));
-end test_punctuation;
+end test_1_character_punctuation;
 
 
 --------------------------------------------------------------------------------
@@ -356,12 +486,11 @@ end test_unexpected;
 --------------------------------------------------------------------------------
 procedure test_utf8 is
 begin
-	--Unistr('\D841\DF79') is one 4-byte character.
 	--Try to trip-up substrings with multiples of that character.
-	assert_equals('utf8: 4-byte 1', 'word EOF', lex(unistr('\D841\DF79')));
-	assert_equals('utf8: 4-byte 2', 'word whitespace word EOF', lex(unistr('\D841\DF79') || ' ' || unistr('\D841\DF79')));
-	assert_equals('utf8: 4-byte 4', 'word whitespace word EOF', lex(unistr('\D841\DF79')||unistr('\D841\DF79')||unistr('\D841\DF79')||' a'));
-	assert_equals('utf8: 4-byte 3', 'word whitespace word EOF', lex(unistr('\D841\DF79')||unistr('\D841\DF79')||'asdf'||unistr('\D841\DF79')||' a'));
+	assert_equals('utf8: 4-byte 1', 'word EOF', lex(g_4_byte_utf8));
+	assert_equals('utf8: 4-byte 2', 'word whitespace word EOF', lex(g_4_byte_utf8 || ' ' || g_4_byte_utf8));
+	assert_equals('utf8: 4-byte 4', 'word whitespace word EOF', lex(g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||' a'));
+	assert_equals('utf8: 4-byte 3', 'word whitespace word EOF', lex(g_4_byte_utf8||g_4_byte_utf8||'asdf'||g_4_byte_utf8||' a'));
 end test_utf8;
 
 
@@ -418,16 +547,19 @@ begin
 	g_failed_count := 0;
 
 	--Run the chosen tests.
-	if bitand(p_tests, c_test_whitespace)  > 0 then test_whitespace; end if;
-	if bitand(p_tests, c_test_comment)     > 0 then test_comment; end if;
-	if bitand(p_tests, c_test_text)        > 0 then test_text; end if;
-	if bitand(p_tests, c_test_numeric)     > 0 then test_numeric; end if;
-	if bitand(p_tests, c_test_word)        > 0 then test_word; end if;
-	if bitand(p_tests, c_test_punctuation) > 0 then test_punctuation; end if;
-	if bitand(p_tests, c_test_unexpected)  > 0 then test_unexpected; end if;
-	if bitand(p_tests, c_test_utf8)        > 0 then test_utf8; end if;
-	if bitand(p_tests, c_test_other)       > 0 then test_other; end if;
-	if bitand(p_tests, c_dynamic_tests)    > 0 then dynamic_tests; end if;
+	if bitand(p_tests, c_test_whitespace)              > 0 then test_whitespace; end if;
+	if bitand(p_tests, c_test_comment)                 > 0 then test_comment; end if;
+	if bitand(p_tests, c_test_text)                    > 0 then test_text; end if;
+	if bitand(p_tests, c_test_numeric)                 > 0 then test_numeric; end if;
+	if bitand(p_tests, c_test_word)                    > 0 then test_word; end if;
+	if bitand(p_tests, c_test_inquiry_directive)       > 0 then test_inquiry_directive; end if;
+	if bitand(p_tests, c_test_preproc_control_token)   > 0 then test_preproc_control_token; end if;
+	if bitand(p_tests, c_test_2_character_punctuation) > 0 then test_2_character_punctuation; end if;
+	if bitand(p_tests, c_test_1_character_punctuation) > 0 then test_1_character_punctuation; end if;
+	if bitand(p_tests, c_test_unexpected)              > 0 then test_unexpected; end if;
+	if bitand(p_tests, c_test_utf8)                    > 0 then test_utf8; end if;
+	if bitand(p_tests, c_test_other)                   > 0 then test_other; end if;
+	if bitand(p_tests, c_dynamic_tests)                > 0 then dynamic_tests; end if;
 
 
 	--Print summary of results.

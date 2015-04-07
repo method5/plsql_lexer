@@ -1,5 +1,5 @@
 create or replace package statement_classifier is
-
+--Copyright (C) 2015 Jon Heller.  This program is licensed under the LGPLv3.
 g_version constant varchar2(10) := '0.4.0';
 
 procedure classify(
@@ -151,7 +151,6 @@ C_PLSQL               constant varchar2(100) := 'PL/SQL';
 
 
 --------------------------------------------------------------------------------
---Return the category and statement type for a single statement.
 procedure classify(
 		p_statement in nclob,
 		p_category out varchar2,
@@ -675,7 +674,7 @@ begin
 	--	p_category := C_DDL; p_statement_type := 'NO-OP'; p_command_name := 'NO-OP'; p_command_type := 27;
 	elsif v_words_1 = 'NOAUDIT' then --Command name is more specific than statement type.
 		p_category := C_DDL; p_statement_type := 'NOAUDIT'; p_command_name := 'NOAUDIT OBJECT'; p_command_type := 31;
-	elsif (v_types(1) = '<' and v_types(2) = '<') --PL/SQL is custom.
+	elsif (v_types(1) = '<<') --PL/SQL is custom.
 			or v_types(1)='word' and v_values(1) in ('DECLARE', 'BEGIN') then
 		p_category := C_PLSQL; p_statement_type := 'BLOCK'; p_command_name := 'PL/SQL EXECUTE'; p_command_type := 47;
 	elsif v_words_1_to_2 = 'PURGE DBA_RECYCLEBIN' then --Command name has space instead of underscore.
