@@ -121,10 +121,10 @@ syntax issues that prevent code from running.  For example, "select /* from dual
 would generate "ORA-01742: comment not terminated properly".
 
 
-## Lexer details ##
+## Tokenizer details ##
 
-Classifying statements does not require a full lexer and parser.  Many shortcuts
-are possible because only the first four (non-optional) keywords are usually
+Classifying statements does not require a full parser.  Many shortcuts are
+possible because only the first four (non-optional) keywords are usually
 needed.  However, the lexer still tokenizes everything and may catch some
 serious syntax errors, such as a non-terminated string.
 
@@ -134,7 +134,7 @@ For example, "CREATE" must start with keyword CREATE.  Some notable exceptions
 are SELECT can start with "WITH" or "(", and a PL/SQL BLOCK can start with "<<",
 "DECLARE", or "BEGIN".
 
-See PLSQL_LEXER for more details on possible tokens.
+See TOKENIZER for more details on possible tokens.
 */
 
 end;
@@ -160,7 +160,7 @@ procedure classify(
 		p_lex_sqlcode out number,
 		p_lex_sqlerrm out varchar2
 ) is
-	v_tokens_with_extra_stuff token_table := plsql_lexer.tokenize(p_statement);
+	v_tokens_with_extra_stuff token_table := tokenizer.tokenize(p_statement);
 	v_tokens token_table := token_table();
 	type string_table is table of varchar2(4000) index by pls_integer; 
 	v_types string_table;
@@ -173,7 +173,7 @@ begin
 	--DEBUG:
 	--dbms_output.put_line(print_tokens(v_tokens_with_whitespace));
 
-	--Find the first lexer error.
+	--Find the first tokenizer error.
 	--Lexing errors are so serious that there will rarely be more than one anyway.
 	for i in 1 .. v_tokens_with_extra_stuff.count loop
 		if v_tokens_with_extra_stuff(i).sqlcode is not null then

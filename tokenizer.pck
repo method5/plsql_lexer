@@ -1,4 +1,4 @@
-create or replace package plsql_lexer is
+create or replace package tokenizer is
 --Copyright (C) 2015 Jon Heller.  This program is licensed under the LGPLv3.
 g_version constant varchar2(10) := '0.1.0';
 
@@ -56,7 +56,7 @@ The most important output is a Token type:
 ## Example ##
 
 begin
-	dbms_output.put_line(plsql_lexer.print_tokens(plsql_lexer.tokenize(
+	dbms_output.put_line(tokenizer.print_tokens(tokenizer.tokenize(
 		'select * from dual;'
 	)));
 end;
@@ -70,7 +70,7 @@ function print_tokens(p_tokens token_table) return nclob;
 
 end;
 /
-create or replace package body plsql_lexer is
+create or replace package body tokenizer is
 
 --Globals
 
@@ -254,7 +254,7 @@ end is_alpha_numeric_or__#$;
 --------------------------------------------------------------------------------
 --Return the next token from a string.
 --Type is one of: EOF, whitespace, comment, text, numeric, word, or special charcters.
---See the package specification for some information on the lexer.
+--See the package specification for some information on the tokenizer.
 function get_token return token is
 	v_quote_delimiter nvarchar2(1 char);
 begin

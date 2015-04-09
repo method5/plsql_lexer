@@ -1,15 +1,15 @@
-create or replace package plsql_lexer_test authid current_user is
+create or replace package tokenizer_test authid current_user is
 /*
 ## Purpose ##
 
-Unit tests for plsql_lexer.
+Unit tests for tokenizer.
 
 
 ## Example ##
 
 begin
-	plsql_lexer_test.run;
-	plsql_lexer_test.run(plsql_lexer_test.c_dynamic_tests);
+	tokenzier_test.run;
+	tokenizer_test.run(tokenzier_test.c_dynamic_tests);
 end;
 
 */
@@ -42,7 +42,7 @@ procedure run(p_tests number default c_all_static_tests);
 
 end;
 /
-create or replace package body plsql_lexer_test is
+create or replace package body tokenizer_test is
 pragma serially_reusable;
 
 --Global counters.
@@ -77,7 +77,7 @@ end assert_equals;
 function get_value_n(p_source nclob, n number) return nvarchar2 is
 	v_tokens token_table;
 begin
-	v_tokens := plsql_lexer.tokenize(p_source);
+	v_tokens := tokenizer.tokenize(p_source);
 	return v_tokens(n).value;
 end get_value_n;
 
@@ -86,7 +86,7 @@ end get_value_n;
 function get_sqlcode_n(p_source nclob, n number) return nvarchar2 is
 	v_tokens token_table;
 begin
-	v_tokens := plsql_lexer.tokenize(p_source);
+	v_tokens := tokenizer.tokenize(p_source);
 	return v_tokens(n).sqlcode;
 end get_sqlcode_n;
 
@@ -95,7 +95,7 @@ end get_sqlcode_n;
 function get_sqlerrm_n(p_source nclob, n number) return nvarchar2 is
 	v_tokens token_table;
 begin
-	v_tokens := plsql_lexer.tokenize(p_source);
+	v_tokens := tokenizer.tokenize(p_source);
 	return v_tokens(n).sqlerrm;
 end get_sqlerrm_n;
 
@@ -104,7 +104,7 @@ end get_sqlerrm_n;
 --Simplifies calls to tokenize and print_tokens.
 function lex(p_source nclob) return nclob is
 begin
-	return plsql_lexer.print_tokens(plsql_lexer.tokenize(p_source));
+	return tokenizer.print_tokens(tokenizer.tokenize(p_source));
 end lex;
 
 

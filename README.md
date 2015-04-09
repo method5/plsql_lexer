@@ -114,12 +114,12 @@ only happen if the statement has major syntax problems.
 2. Install packages on the desired schema:
 
         alter session set current_schema=&SCHEMA_NAME;
-        @plsql_lexer.pck
+        @tokenizer.pck
         @statement_classifier.pck
 
 3. Install unit tests (optional):
 
-        @/tests/plsql_lexer_test.pck
+        @/tests/tokenizer_test.pck
         @/tests/statement_classifier_test.pck
 
 ## License
