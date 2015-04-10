@@ -1,6 +1,5 @@
 create or replace package statement_classifier is
 --Copyright (C) 2015 Jon Heller.  This program is licensed under the LGPLv3.
-g_version constant varchar2(10) := '0.4.0';
 
 procedure classify(
 	p_statement       in nclob,
