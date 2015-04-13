@@ -1,8 +1,7 @@
 `PLSQL_LEXER`
 ============
 
-PL/SQL Lexer is a toolkit for PL/SQL language problems.  It is designed to solve
-real-world language problems from within PL/SQL.
+PL/SQL Lexer is a toolkit for solving real-world language problems, in PL/SQL.
 
 ## Procedures
 

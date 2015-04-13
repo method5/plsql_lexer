@@ -587,6 +587,8 @@ begin
 	classify(q'[/*asdf*/select * from dual;]', v_output); assert_equals('SELECT 2', 'DML|SELECT|SELECT|3', concat(v_output));
 	classify(q'[((((select * from dual))));]', v_output); assert_equals('SELECT 3', 'DML|SELECT|SELECT|3', concat(v_output));
 	classify(q'[with test1 as (select 1 a from dual) select * from test1;]', v_output); assert_equals('SELECT 4', 'DML|SELECT|SELECT|3', concat(v_output));
+	classify(q'[with function test_function return number is begin return 1; end; select test_function from dual;
+	/]', v_output); assert_equals('SELECT 4', 'DML|SELECT|SELECT|3', concat(v_output));
 
 	--There are two versions of CONSTRAINT[S].
 	classify(q'[SET CONSTRAINTS all deferred]', v_output); assert_equals('SET CONSTRAINT', 'Transaction Control|SET CONSTRAINT|SET CONSTRAINTS|90', concat(v_output));

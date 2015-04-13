@@ -8,6 +8,14 @@ procedure get_feedback_message(
 		p_compile_warning_message out varchar2
 );
 
+--It's faster to use the COMMAND_NAME if it's already known.
+procedure get_feedback_message(
+		p_command_name in varchar2,
+		p_rowcount in number,
+		p_success_message out varchar2,
+		p_compile_warning_message out varchar2
+);
+
 
 /*
 ## Purpose ##
@@ -75,11 +83,209 @@ p_rowcount - The number of rows modified by the statement.
 p_success_message - The message SQL*Plus would display if the statement was successful.
 p_compile_warning_message - The message SQL*Plus would display if a PL/SQL object compiled with errors.
                             Catch "ORA-24344: success with compilation error" to detect this situation.
+
+p_command_name - The V$SQLCOMMAND.COMMAND_NAME of the statement.  This value
+                 can be retrieved from statement_classifier.classify.
+
 */
 
 end;
 /
 create or replace package body statement_feedback is
+
+--------------------------------------------------------------------------------
+procedure get_feedback_message(
+		p_command_name in varchar2,
+		p_rowcount in number,
+		p_success_message out varchar2,
+		p_compile_warning_message out varchar2
+) is
+begin
+	--If classification failed then return NULLs.
+	if p_command_name is null then
+		null;
+	--If classification succeeded, set the outputs.
+	else
+		--These are one-offs and exceptions.
+		--Note that some of these seem to have extra spaces because the command names
+		--do not always perfectly line up with the real syntax.
+
+		if p_command_name = 'ADMINISTER KEY MANAGEMENT' then
+			p_success_message := 'keystore altered.';
+		elsif p_command_name = 'ALTER DISK GROUP' then
+			p_success_message := 'Diskgroup altered.';
+		elsif p_command_name = 'ALTER MATERIALIZED VIEW ' then
+			p_success_message := 'Materialized view altered.';
+		elsif p_command_name = 'ANALYZE CLUSTER' then
+			p_success_message := 'Cluster analyzed.';
+		elsif p_command_name = 'ANALYZE INDEX' then
+			p_success_message := 'Index analyzed.';
+		elsif p_command_name = 'ANALYZE TABLE' then
+			p_success_message := 'Table analyzed.';
+		elsif p_command_name = 'ASSOCIATE STATISTICS' then
+			p_success_message := 'Statistics associated.';
+		elsif p_command_name = 'AUDIT OBJECT' then
+			p_success_message := 'Audit succeeded.';
+		elsif p_command_name = 'CALL' then
+			p_success_message := 'Call completed.';
+		elsif p_command_name = 'COMMENT' then
+			p_success_message := 'Comment created.';
+		elsif p_command_name = 'COMMIT' then
+			p_success_message := 'Commit complete.';
+		elsif p_command_name = 'CREATE DISK GROUP' then
+			p_success_message := 'Diskgroup created.';
+		elsif p_command_name = 'CREATE MATERIALIZED VIEW ' then
+			p_success_message := 'Materialized view created.';
+		elsif p_command_name = 'DELETE' then
+			if p_rowcount is null then
+				p_success_message := 'ERROR: Unknown number of rows deleted.';
+			elsif p_rowcount = 1 then
+				p_success_message := '1 row deleted.';
+			else
+				p_success_message := p_rowcount||' rows deleted.';
+			end if;
+		elsif p_command_name = 'DISASSOCIATE STATISTICS' then
+			p_success_message := 'Statistics disassociated.';
+		elsif p_command_name = 'DROP DISK GROUP' then
+			p_success_message := 'Diskgroup dropped.';
+		elsif p_command_name = 'DROP MATERIALIZED VIEW  LOG' then
+			p_success_message := 'Materialized view log dropped.';
+		elsif p_command_name = 'DROP MATERIALIZED VIEW ' then
+			p_success_message := 'Drop materialized view.';
+		elsif p_command_name = 'EXPLAIN' then
+			p_success_message := 'Explained.';
+		elsif p_command_name = 'FLASHBACK DATABASE' then
+			p_success_message := 'Flashback complete.';
+		elsif p_command_name = 'FLASHBACK TABLE' then
+			p_success_message := 'Flashback complete.';
+		elsif p_command_name = 'GRANT OBJECT' then
+			p_success_message := 'Grant succeeded.';
+		elsif p_command_name = 'INSERT' then
+			if p_rowcount is null then
+				p_success_message := 'ERROR: Unknown number of rows created.';
+			elsif p_rowcount = 1 then
+				p_success_message := '1 row created.';
+			else
+				p_success_message := p_rowcount||' rows created.';
+			end if;
+		elsif p_command_name = 'LOCK TABLE' then
+			p_success_message := 'Table(s) Locked.';
+		elsif p_command_name = 'NOAUDIT OBJECT' then
+			p_success_message := 'Noaudit succeeded.';
+		elsif p_command_name = 'PL/SQL EXECUTE' then
+			p_success_message := 'PL/SQL procedure successfully completed.';
+		elsif p_command_name = 'PURGE DBA_RECYCLEBIN' then
+			p_success_message := 'DBA Recyclebin purged.';
+		elsif p_command_name = 'PURGE INDEX' then
+			p_success_message := 'Index purged.';
+		elsif p_command_name = 'PURGE TABLE' then
+			p_success_message := 'Table purged.';
+		elsif p_command_name = 'PURGE TABLESPACE' then
+			p_success_message := 'Tablespace purged.';
+		elsif p_command_name = 'PURGE USER RECYCLEBIN' then
+			p_success_message := 'Recyclebin purged.';
+		elsif p_command_name = 'RENAME' then
+			p_success_message := 'Table renamed.';
+		elsif p_command_name = 'REVOKE OBJECT' then
+			p_success_message := 'Revoke succeeded.';
+		elsif p_command_name = 'ROLLBACK' then
+			p_success_message := 'Rollback complete.';
+		elsif p_command_name = 'SAVEPOINT' then
+			p_success_message := 'Savepoint created.';
+		elsif p_command_name = 'SELECT' then
+			if p_rowcount is null then
+				p_success_message := 'ERROR: Unknown number of rows selected.';
+			elsif p_rowcount = 0 then
+				p_success_message := 'no rows selected';
+			elsif p_rowcount = 1 then
+				p_success_message := '1 row selected.';
+			else
+				p_success_message := p_rowcount||' rows selected.';
+			end if;
+		elsif p_command_name = 'SET CONSTRAINTS' then
+			p_success_message := 'Constraint set.';
+		elsif p_command_name = 'SET ROLE' then
+			p_success_message := 'Role set.';
+		elsif p_command_name = 'SET TRANSACTION' then
+			p_success_message := 'Transaction set.';
+		elsif p_command_name = 'TRUNCATE CLUSTER' then
+			p_success_message := 'Cluster truncated.';
+		elsif p_command_name = 'TRUNCATE TABLE' then
+			p_success_message := 'Table truncated.';
+		elsif p_command_name = 'UPDATE' then
+			if p_rowcount is null then
+				p_success_message := 'ERROR: Unknown number of rows updated.';
+			elsif p_rowcount = 1 then
+				p_success_message := '1 row updated.';
+			else
+				p_success_message := p_rowcount||' rows updated.';
+			end if;
+		elsif p_command_name = 'UPSERT' then
+			if p_rowcount is null then
+				p_success_message := 'ERROR: Unknown number of rows merged.';
+			elsif p_rowcount = 1 then
+				p_success_message := '1 row merged.';
+			else
+				p_success_message := p_rowcount||' rows merged.';
+			end if;
+
+		--Standard "ALTER", "CREATE", and "DROP".
+		--Remove first word, change to lower case, initialize first letter, add verb.
+		elsif p_command_name like 'ALTER %' then
+			p_success_message := lower(replace(p_command_name, 'ALTER '))||' altered.';
+			p_success_message := upper(substr(p_success_message, 1, 1))||substr(p_success_message, 2);
+		elsif p_command_name like 'CREATE %' then
+			p_success_message := lower(replace(p_command_name, 'CREATE '))||' created.';
+			p_success_message := upper(substr(p_success_message, 1, 1))||substr(p_success_message, 2);
+		elsif p_command_name like 'DROP %' then
+			p_success_message := lower(replace(p_command_name, 'DROP '))||' dropped.';
+			p_success_message := upper(substr(p_success_message, 1, 1))||substr(p_success_message, 2);
+
+
+		--Print error message if statement type could not be determined.
+		else
+			p_success_message := 'Cannot determine statement type.';
+		end if;
+
+
+		--Get compile warning message for PL/SQL objects
+		if p_command_name like 'ALTER%'
+			and
+			(
+				p_command_name like '%ASSEMBLY' or
+				p_command_name like '%FUNCTION' or
+				p_command_name like '%JAVA' or
+				p_command_name like '%LIBRARY' or
+				p_command_name like '%PACKAGE' or
+				p_command_name like '%PACKAGE BODY' or
+				p_command_name like '%PROCEDURE' or
+				p_command_name like '%TRIGGER' or
+				p_command_name like '%TYPE' or
+				p_command_name like '%TYPE BODY'
+			) then
+				p_compile_warning_message := 'Warning: '||initcap(replace(p_command_name, 'ALTER '))
+					||' altered with compilation errors.';
+		elsif p_command_name like 'CREATE%'
+			and
+			(
+				p_command_name like '%ASSEMBLY' or
+				p_command_name like '%FUNCTION' or
+				p_command_name like '%JAVA' or
+				p_command_name like '%LIBRARY' or
+				p_command_name like '%PACKAGE' or
+				p_command_name like '%PACKAGE BODY' or
+				p_command_name like '%PROCEDURE' or
+				p_command_name like '%TRIGGER' or
+				p_command_name like '%TYPE' or
+				p_command_name like '%TYPE BODY'
+			) then
+				p_compile_warning_message := 'Warning: '||initcap(replace(p_command_name, 'ALTER '))
+					||' created with compilation errors.';
+		end if;
+	end if;
+
+end get_feedback_message;
+
 
 --------------------------------------------------------------------------------
 procedure get_feedback_message(
@@ -100,188 +306,7 @@ begin
 		v_category,v_statement_type,v_command_name,v_command_type,v_lex_sqlcode,v_lex_sqlerrm
 	);
 
-	--If classification failed then return NULLs.
-	if v_category is null then
-		null;
-	--If classification succeeded, set the outputs.
-	else
-		--These are one-offs and exceptions.
-		--Note that some of these seem to have extra spaces because the command names
-		--do not always perfectly line up with the real syntax.
-
-		if v_command_name = 'ADMINISTER KEY MANAGEMENT' then
-			p_success_message := 'keystore altered.';
-		elsif v_command_name = 'ALTER DISK GROUP' then
-			p_success_message := 'Diskgroup altered.';
-		elsif v_command_name = 'ALTER MATERIALIZED VIEW ' then
-			p_success_message := 'Materialized view altered.';
-		elsif v_command_name = 'ANALYZE CLUSTER' then
-			p_success_message := 'Cluster analyzed.';
-		elsif v_command_name = 'ANALYZE INDEX' then
-			p_success_message := 'Index analyzed.';
-		elsif v_command_name = 'ANALYZE TABLE' then
-			p_success_message := 'Table analyzed.';
-		elsif v_command_name = 'ASSOCIATE STATISTICS' then
-			p_success_message := 'Statistics associated.';
-		elsif v_command_name = 'AUDIT OBJECT' then
-			p_success_message := 'Audit succeeded.';
-		elsif v_command_name = 'CALL' then
-			p_success_message := 'Call completed.';
-		elsif v_command_name = 'COMMENT' then
-			p_success_message := 'Comment created.';
-		elsif v_command_name = 'COMMIT' then
-			p_success_message := 'Commit complete.';
-		elsif v_command_name = 'CREATE DISK GROUP' then
-			p_success_message := 'Diskgroup created.';
-		elsif v_command_name = 'CREATE MATERIALIZED VIEW ' then
-			p_success_message := 'Materialized view created.';
-		elsif v_command_name = 'DELETE' then
-			if p_rowcount is null then
-				p_success_message := 'ERROR: Unknown number of rows deleted.';
-			elsif p_rowcount = 1 then
-				p_success_message := '1 row deleted.';
-			else
-				p_success_message := p_rowcount||' rows deleted.';
-			end if;
-		elsif v_command_name = 'DISASSOCIATE STATISTICS' then
-			p_success_message := 'Statistics disassociated.';
-		elsif v_command_name = 'DROP DISK GROUP' then
-			p_success_message := 'Diskgroup dropped.';
-		elsif v_command_name = 'DROP MATERIALIZED VIEW  LOG' then
-			p_success_message := 'Materialized view log dropped.';
-		elsif v_command_name = 'DROP MATERIALIZED VIEW ' then
-			p_success_message := 'Drop materialized view.';
-		elsif v_command_name = 'EXPLAIN' then
-			p_success_message := 'Explained.';
-		elsif v_command_name = 'FLASHBACK DATABASE' then
-			p_success_message := 'Flashback complete.';
-		elsif v_command_name = 'FLASHBACK TABLE' then
-			p_success_message := 'Flashback complete.';
-		elsif v_command_name = 'GRANT OBJECT' then
-			p_success_message := 'Grant succeeded.';
-		elsif v_command_name = 'INSERT' then
-			if p_rowcount is null then
-				p_success_message := 'ERROR: Unknown number of rows created.';
-			elsif p_rowcount = 1 then
-				p_success_message := '1 row created.';
-			else
-				p_success_message := p_rowcount||' rows created.';
-			end if;
-		elsif v_command_name = 'LOCK TABLE' then
-			p_success_message := 'Table(s) Locked.';
-		elsif v_command_name = 'NOAUDIT OBJECT' then
-			p_success_message := 'Noaudit succeeded.';
-		elsif v_command_name = 'PL/SQL EXECUTE' then
-			p_success_message := 'PL/SQL procedure successfully completed.';
-		elsif v_command_name = 'PURGE DBA_RECYCLEBIN' then
-			p_success_message := 'DBA Recyclebin purged.';
-		elsif v_command_name = 'PURGE INDEX' then
-			p_success_message := 'Index purged.';
-		elsif v_command_name = 'PURGE TABLE' then
-			p_success_message := 'Table purged.';
-		elsif v_command_name = 'PURGE TABLESPACE' then
-			p_success_message := 'Tablespace purged.';
-		elsif v_command_name = 'PURGE USER RECYCLEBIN' then
-			p_success_message := 'Recyclebin purged.';
-		elsif v_command_name = 'RENAME' then
-			p_success_message := 'Table renamed.';
-		elsif v_command_name = 'REVOKE OBJECT' then
-			p_success_message := 'Revoke succeeded.';
-		elsif v_command_name = 'ROLLBACK' then
-			p_success_message := 'Rollback complete.';
-		elsif v_command_name = 'SAVEPOINT' then
-			p_success_message := 'Savepoint created.';
-		elsif v_command_name = 'SELECT' then
-			if p_rowcount is null then
-				p_success_message := 'ERROR: Unknown number of rows selected.';
-			elsif p_rowcount = 0 then
-				p_success_message := 'no rows selected';
-			elsif p_rowcount = 1 then
-				p_success_message := '1 row selected.';
-			else
-				p_success_message := p_rowcount||' rows selected.';
-			end if;
-		elsif v_command_name = 'SET CONSTRAINTS' then
-			p_success_message := 'Constraint set.';
-		elsif v_command_name = 'SET ROLE' then
-			p_success_message := 'Role set.';
-		elsif v_command_name = 'SET TRANSACTION' then
-			p_success_message := 'Transaction set.';
-		elsif v_command_name = 'TRUNCATE CLUSTER' then
-			p_success_message := 'Cluster truncated.';
-		elsif v_command_name = 'TRUNCATE TABLE' then
-			p_success_message := 'Table truncated.';
-		elsif v_command_name = 'UPDATE' then
-			if p_rowcount is null then
-				p_success_message := 'ERROR: Unknown number of rows updated.';
-			elsif p_rowcount = 1 then
-				p_success_message := '1 row updated.';
-			else
-				p_success_message := p_rowcount||' rows updated.';
-			end if;
-		elsif v_command_name = 'UPSERT' then
-			if p_rowcount is null then
-				p_success_message := 'ERROR: Unknown number of rows merged.';
-			elsif p_rowcount = 1 then
-				p_success_message := '1 row merged.';
-			else
-				p_success_message := p_rowcount||' rows merged.';
-			end if;
-
-		--Standard "ALTER", "CREATE", and "DROP".
-		--Remove first word, change to lower case, initialize first letter, add verb.
-		elsif v_command_name like 'ALTER %' then
-			p_success_message := lower(replace(v_command_name, 'ALTER '))||' altered.';
-			p_success_message := upper(substr(p_success_message, 1, 1))||substr(p_success_message, 2);
-		elsif v_command_name like 'CREATE %' then
-			p_success_message := lower(replace(v_command_name, 'CREATE '))||' created.';
-			p_success_message := upper(substr(p_success_message, 1, 1))||substr(p_success_message, 2);
-		elsif v_command_name like 'DROP %' then
-			p_success_message := lower(replace(v_command_name, 'DROP '))||' dropped.';
-			p_success_message := upper(substr(p_success_message, 1, 1))||substr(p_success_message, 2);
-
-
-		--Print error message if statement type could not be determined.
-		else
-			p_success_message := 'Cannot determine statement type.';
-		end if;
-
-
-		--Get compile warning message for PL/SQL objects
-		if v_command_name like 'ALTER%'
-			and
-			(
-				v_command_name like '%ASSEMBLY' or
-				v_command_name like '%FUNCTION' or
-				v_command_name like '%JAVA' or
-				v_command_name like '%LIBRARY' or
-				v_command_name like '%PACKAGE' or
-				v_command_name like '%PACKAGE BODY' or
-				v_command_name like '%PROCEDURE' or
-				v_command_name like '%TRIGGER' or
-				v_command_name like '%TYPE' or
-				v_command_name like '%TYPE BODY'
-			) then
-				p_compile_warning_message := 'Warning: '||initcap(replace(v_command_name, 'ALTER '))
-					||' altered with compilation errors.';
-		elsif v_command_name like 'CREATE%'
-			and
-			(
-				v_command_name like '%ASSEMBLY' or
-				v_command_name like '%FUNCTION' or
-				v_command_name like '%JAVA' or
-				v_command_name like '%LIBRARY' or
-				v_command_name like '%PACKAGE' or
-				v_command_name like '%PACKAGE BODY' or
-				v_command_name like '%PROCEDURE' or
-				v_command_name like '%TRIGGER' or
-				v_command_name like '%TYPE' or
-				v_command_name like '%TYPE BODY'
-			) then
-				p_compile_warning_message := 'Warning: '||initcap(replace(v_command_name, 'ALTER '))
-					||' created with compilation errors.';
-		end if;
-	end if;
+	get_feedback_message(v_command_name, p_rowcount, p_success_message, p_compile_warning_message);
 
 end get_feedback_message;
 
