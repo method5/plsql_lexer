@@ -17,7 +17,7 @@ See the individual packages for details on each procedure.
 
 - `split_statements` - Split a series of statements separated by ";" or "/".
 
-		TODO
+		function split(p_statements in nclob) return nclob_table;
 
 - `statement_classifier.classify_statement` - Classify a statement as DDL, PL/SQL, SELECT, ALTER, etc.
 
@@ -69,6 +69,7 @@ See the individual packages for details on each procedure.
 
         alter session set current_schema=&SCHEMA_NAME;
         @tokenizer.pck
+        @statement_splitter.pck
         @statement_classifier.pck
         @statement_feedback.pck
 
@@ -76,7 +77,6 @@ See the individual packages for details on each procedure.
 
         @/tests/tokenizer_test.pck
         @/tests/statement_classifier_test.pck
-        @/tests/statement_feedback_test.pck
 
 
 ## License
