@@ -51,6 +51,8 @@ See the individual packages for details on each procedure.
 
         alter session set current_schema=&SCHEMA_NAME;
         
+        create or replace type nclob_table is table of nclob;
+        
         create or replace type token is object
         (
             type     varchar2(4000),

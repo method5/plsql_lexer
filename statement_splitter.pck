@@ -32,7 +32,6 @@ TODO
 
 */
 
-type nclob_table is table of nclob;
 function split(p_statements in nclob) return nclob_table;
 
 end;
@@ -74,12 +73,14 @@ begin
 				src_lob => v_new_statement,
 				amount => dbms_lob.getLength(v_new_statement)-1,
 				src_offset => 2);
+			dbms_lob.trim(lob_loc => v_new_statement, newlen => dbms_lob.getLength(v_new_statement)-1);
 		elsif substr(v_new_statement, 1, 2) = chr(13)||chr(10) and dbms_lob.getLength(v_new_statement) > 2 then
 			dbms_lob.copy(
 				dest_lob => v_new_statement,
 				src_lob => v_new_statement,
 				amount => dbms_lob.getLength(v_new_statement)-2,
 				src_offset => 3);
+			dbms_lob.trim(lob_loc => v_new_statement, newlen => dbms_lob.getLength(v_new_statement)-2);
 		end if;
 
 		--Add new statement to array
@@ -112,6 +113,7 @@ begin
 
 	--Tokenize.
 	v_tokens := tokenizer.tokenize(p_statements);
+	--TODO: Remove
 	dbms_output.put_line(tokenizer.print_tokens(v_tokens));
 
 	--Split into statements.
@@ -155,18 +157,10 @@ begin
 		end if;
 
 		--Quit when there are no more tokens.
-		dbms_output.put_line('Count: '||v_tokens.count);
 		exit when v_tokens.count = 0;
 	end loop;
 
-	--TEST: Print statements
-	for i in 1 .. v_split_statements.count loop
-		--TODO:
-		dbms_output.put_line('Statement '||i||': '||v_split_statements(i));
-	end loop;
-
-	--TODO
-	return null;
+	return v_split_statements;
 end split;
 
 end;
