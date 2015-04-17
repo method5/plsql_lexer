@@ -79,6 +79,7 @@ See the individual packages for details on each procedure.
 
         @/tests/tokenizer_test.pck
         @/tests/statement_classifier_test.pck
+        @/tests/statement_splitter_test.pck
 
 
 ## License
