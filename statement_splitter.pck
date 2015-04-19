@@ -48,6 +48,18 @@ end has_plsql_declaration;
 
 
 --------------------------------------------------------------------------------
+function only_ws_comments_eof_remain(p_tokens in out nocopy token_table, p_token_index in number)  return boolean is
+begin
+	for i in p_token_index .. p_tokens.count loop
+		if p_tokens(i).type not in ('whitespace', 'comment', 'EOF') then
+			return false;
+		end if;
+	end loop;
+	return true;
+end only_ws_comments_eof_remain;
+
+
+--------------------------------------------------------------------------------
 procedure add_statement_consume_tokens(
 	p_split_statements in out nocopy nclob_table,
 	p_tokens in out nocopy token_table,
@@ -61,9 +73,27 @@ begin
 	if p_terminator = ';' then
 		--Build new statement and count tokens.
 		loop
+			exit when v_token_index = p_tokens.count;
 			v_token_index := v_token_index + 1;
 			v_new_statement := v_new_statement || p_tokens(v_token_index).value;
-			exit when p_tokens(v_token_index).type = ';' or p_tokens(v_token_index).type = 'EOF';
+
+			if p_tokens(v_token_index).type = ';' or p_tokens(v_token_index).type = 'EOF' then
+				--Stop if no more tokens.
+				if v_token_index = p_tokens.count then
+					exit;
+				--Consume all tokens if only whitespace, comments, and EOF remain.
+				elsif only_ws_comments_eof_remain(p_tokens, v_token_index+1) then
+					--Consume all tokens.
+					loop
+						v_token_index := v_token_index + 1;
+						v_new_statement := v_new_statement || p_tokens(v_token_index).value;
+						exit when v_token_index = p_tokens.count;
+					end loop;
+				--Otherwise stop at this spot.
+				else
+					exit;
+				end if;
+			end if;
 		end loop;
 
 		--Remove the first character if it's a newline.
@@ -91,7 +121,8 @@ begin
 		null;
 	end if;
 
-	--Include the remaining tokens if they are only whitespace, comments, and EOF.
+
+
 	--TODO
 
 	--Create new tokens table excluding the tokens used for the new statement.

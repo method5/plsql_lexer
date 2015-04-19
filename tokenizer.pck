@@ -27,6 +27,8 @@ Tokens may be one of these types:
         2-character punctuation operators.
     @ % * ( ) - + = [ ] : ; < , > . /
         1-character punctuation operators.
+    EOF
+        End of File.
     unexpected
         Everything else.  For example "&", a SQL*Plus characters.
 
