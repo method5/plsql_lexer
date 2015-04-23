@@ -494,7 +494,7 @@ begin
 		p_category := C_DDL; p_statement_type := 'CREATE'; p_command_name := 'CREATE INDEXTYPE'; p_command_type := 164;
 	--COMPILE is optional here, but not elsewhere.
 	--Since it's not always thrown out, it must be handled here.
-	elsif v_words_1_to_2 = 'CREATE JAVA'  or v_words_1_to_3 = 'CREATE COMPILE JAVA' then
+	elsif v_words_1_to_2 = 'CREATE JAVA' or v_words_1_to_3 = 'CREATE COMPILE JAVA' then
 		p_category := C_DDL; p_statement_type := 'CREATE'; p_command_name := 'CREATE JAVA'; p_command_type := 160;
 	elsif v_words_1_to_2 = 'CREATE LIBRARY' then
 		p_category := C_DDL; p_statement_type := 'CREATE'; p_command_name := 'CREATE LIBRARY'; p_command_type := 159;
@@ -695,7 +695,7 @@ begin
 	elsif v_words_1 = 'SAVEPOINT' then
 		p_category := C_Transaction_Control; p_statement_type := 'SAVEPOINT'; p_command_name := 'SAVEPOINT'; p_command_type := 46;
 	elsif v_types(1) = '(' or v_words_1 in ('SELECT', 'WITH') then --SELECT is custom.
-		p_category := C_DML; p_statement_type := 'SELECT';  p_command_name := 'SELECT'; p_command_type := 3;
+		p_category := C_DML; p_statement_type := 'SELECT'; p_command_name := 'SELECT'; p_command_type := 3;
 	elsif v_words_1_to_2 in ('SET CONSTRAINTS', 'SET CONSTRAINT') then --Custom, there are two forms.
 		p_category := C_Transaction_Control; p_statement_type := 'SET CONSTRAINT'; p_command_name := 'SET CONSTRAINTS'; p_command_type := 90;
 	elsif v_words_1_to_2 = 'SET ROLE' then

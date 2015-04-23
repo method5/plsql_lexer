@@ -23,9 +23,11 @@ Tokens may be one of these types:
         PL/SQL preprocessor (conditional compilation) feature that is like: $$name
     preprocessor_control_token
 		PL/SQL preprocessor (conditional compilation) feature that is like: $plsql_identifier
-    ~= != ^= <> := => >= <= ** || << >>
+    ,}?
+        3-character punctuation operators (Row Pattern Quantifier).
+    ~= != ^= <> := => >= <= ** || << >> *? +? ?? ,} }? {,
         2-character punctuation operators.
-    @ % * ( ) - + = [ ] : ; < , > . /
+    @ % * ( ) - + = [ ] { } : ; < , > . / ?
         1-character punctuation operators.
     EOF
         End of File.
@@ -552,17 +554,25 @@ begin
 		return token('preprocessor_control_token', g_token_text, null, null);
 	end if;
 
+	--3-character punctuation operators.
+	--12c Row Pattern Quantifiers introduced a lot of regular-expression operators.
+	if g_last_char||look_ahead(1)||look_ahead(2) in (',}?') then
+		g_token_text := g_last_char || get_char || get_char;
+		g_last_char := get_char;
+		return token(g_token_text, g_token_text, null, null);
+	end if;
+
 	--2-character punctuation operators.
 	--Igore the IBM "not" character - it's in the manual but is only supported
 	--on obsolete platforms: http://stackoverflow.com/q/9305925/409172
-	if g_last_char||look_ahead(1) in ('~=','!=','^=','<>',':=','=>','>=','<=','**','||','<<','>>') then
+	if g_last_char||look_ahead(1) in ('~=','!=','^=','<>',':=','=>','>=','<=','**','||','<<','>>','*?','+?','??',',}','}?','{,') then
 		g_token_text := g_last_char || get_char;
 		g_last_char := get_char;
 		return token(g_token_text, g_token_text, null, null);
 	end if;
 
 	--1-character punctuation operators.
-	if g_last_char in ('@','%','*','(',')','-','+','=','[',']',':',';','<',',','>','.','/') then
+	if g_last_char in ('@','%','*','(',')','-','+','=','[',']','{','}',':',';','<',',','>','.','/','?') then
 		g_token_text := g_last_char;
 		g_last_char := get_char;
 		return token(g_token_text, g_token_text, null, null);

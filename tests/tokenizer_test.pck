@@ -23,18 +23,19 @@ c_test_numeric                 constant number := power(2, 4);
 c_test_word                    constant number := power(2, 5);
 c_test_inquiry_directive       constant number := power(2, 6);
 c_test_preproc_control_token   constant number := power(2, 7);
-c_test_2_character_punctuation constant number := power(2, 8);
-c_test_1_character_punctuation constant number := power(2, 9);
-c_test_unexpected              constant number := power(2, 10);
-c_test_utf8                    constant number := power(2, 11);
-c_test_other                   constant number := power(2, 12);
+c_test_3_character_punctuation constant number := power(2, 9);
+c_test_2_character_punctuation constant number := power(2, 10);
+c_test_1_character_punctuation constant number := power(2, 11);
+c_test_unexpected              constant number := power(2, 12);
+c_test_utf8                    constant number := power(2, 13);
+c_test_other                   constant number := power(2, 14);
 
 c_dynamic_tests             constant number := power(2, 30);
 
 --Default option is to run all static test suites.
 c_all_static_tests          constant number := c_test_whitespace+c_test_comment+
 	c_test_text+c_test_numeric+c_test_word+c_test_inquiry_directive+
-	c_test_preproc_control_token+c_test_2_character_punctuation+
+	c_test_preproc_control_token+c_test_3_character_punctuation+c_test_2_character_punctuation+
 	c_test_1_character_punctuation+c_test_unexpected+c_test_utf8+c_test_other;
 
 --Run the unit tests and display the results in dbms output.
@@ -425,8 +426,22 @@ end test_preproc_control_token;
 
 
 --------------------------------------------------------------------------------
+procedure test_3_character_punctuation is
+begin
+	assert_equals('3-char punctuation: 01', ', , ,}? , , EOF', lex(q'[,,,}?,,]'));
+
+	assert_equals('3-char punctuation: 02', ',', get_value_n(q'[,,,}?,,]', 1));
+	assert_equals('2-char punctuation: 03', ',', get_value_n(q'[,,,}?,,]', 2));
+	assert_equals('2-char punctuation: 04', ',}?', get_value_n(q'[,,,}?,,]', 3));
+	assert_equals('2-char punctuation: 05', ',', get_value_n(q'[,,,}?,,]', 4));
+	assert_equals('2-char punctuation: 06', ',', get_value_n(q'[,,,}?,,]', 5));
+end test_3_character_punctuation;
+
+
+--------------------------------------------------------------------------------
 procedure test_2_character_punctuation is
 begin
+	--TODO: Add row pattern quantifiers.
 	assert_equals('2-char punctuation: 01', '~= != ^= <> := => >= <= ** || << >> EOF', lex(q'[~=!=^=<>:==>>=<=**||<<>>]'));
 
 	assert_equals('2-char punctuation: 02', '~=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>]', 1));
@@ -447,6 +462,7 @@ end test_2_character_punctuation;
 --------------------------------------------------------------------------------
 procedure test_1_character_punctuation is
 begin
+	--TODO: Add row pattern quantifiers.
 	assert_equals('1-char punctuation: 01', '@ % * ( ) - + = [ ] : ; < , > . / EOF', lex(q'[@%*()-+=[]:;<,>./]'));
 
 	assert_equals('1-char punctuation: 02', '@', get_value_n(q'[@%*()-+=[]:;<,>./]', 1));
@@ -514,6 +530,8 @@ procedure dynamic_tests is
 begin
 	--This is a test against infinite loops.
 
+	--TODO: There should not be any unexpected tokens.
+
 	open sql_cursor for '
 		--Select distinct SQL statements.
 		select sql_fulltext, sql_id
@@ -554,6 +572,7 @@ begin
 	if bitand(p_tests, c_test_word)                    > 0 then test_word; end if;
 	if bitand(p_tests, c_test_inquiry_directive)       > 0 then test_inquiry_directive; end if;
 	if bitand(p_tests, c_test_preproc_control_token)   > 0 then test_preproc_control_token; end if;
+	if bitand(p_tests, c_test_3_character_punctuation) > 0 then test_3_character_punctuation; end if;
 	if bitand(p_tests, c_test_2_character_punctuation) > 0 then test_2_character_punctuation; end if;
 	if bitand(p_tests, c_test_1_character_punctuation) > 0 then test_1_character_punctuation; end if;
 	if bitand(p_tests, c_test_unexpected)              > 0 then test_unexpected; end if;

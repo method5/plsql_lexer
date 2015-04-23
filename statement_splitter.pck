@@ -121,10 +121,6 @@ begin
 		null;
 	end if;
 
-
-
-	--TODO
-
 	--Create new tokens table excluding the tokens used for the new statement.
 	for i in v_token_index+1 .. p_tokens.count loop
 		v_new_tokens.extend;
