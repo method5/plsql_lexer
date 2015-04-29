@@ -28,7 +28,8 @@ c_test_2_character_punctuation constant number := power(2, 10);
 c_test_1_character_punctuation constant number := power(2, 11);
 c_test_unexpected              constant number := power(2, 12);
 c_test_utf8                    constant number := power(2, 13);
-c_test_other                   constant number := power(2, 14);
+c_row_pattern_matching         constant number := power(2, 14);
+c_test_other                   constant number := power(2, 15);
 
 c_dynamic_tests             constant number := power(2, 30);
 
@@ -36,7 +37,8 @@ c_dynamic_tests             constant number := power(2, 30);
 c_all_static_tests          constant number := c_test_whitespace+c_test_comment+
 	c_test_text+c_test_numeric+c_test_word+c_test_inquiry_directive+
 	c_test_preproc_control_token+c_test_3_character_punctuation+c_test_2_character_punctuation+
-	c_test_1_character_punctuation+c_test_unexpected+c_test_utf8+c_test_other;
+	c_test_1_character_punctuation+c_test_unexpected+c_test_utf8+c_row_pattern_matching+
+	c_test_other;
 
 --Run the unit tests and display the results in dbms output.
 procedure run(p_tests number default c_all_static_tests);
@@ -67,7 +69,7 @@ begin
 		g_passed_count := g_passed_count + 1;
 	else
 		g_failed_count := g_failed_count + 1;
-		dbms_output.put_line('Failure with '||p_test);
+		dbms_output.put_line('Failure with: '||p_test);
 		dbms_output.put_line('Expected: '||p_expected);
 		dbms_output.put_line('Actual  : '||p_actual);
 	end if;
@@ -441,47 +443,61 @@ end test_3_character_punctuation;
 --------------------------------------------------------------------------------
 procedure test_2_character_punctuation is
 begin
-	--TODO: Add row pattern quantifiers.
-	assert_equals('2-char punctuation: 01', '~= != ^= <> := => >= <= ** || << >> EOF', lex(q'[~=!=^=<>:==>>=<=**||<<>>]'));
+	assert_equals('2-char punctuation: 01', '~= != ^= <> := => >= <= ** || << >> {- -} *? +? ?? ,} }? {, EOF', lex(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]'));
 
-	assert_equals('2-char punctuation: 02', '~=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>]', 1));
-	assert_equals('2-char punctuation: 03', '!=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>]', 2));
-	assert_equals('2-char punctuation: 04', '^=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>]', 3));
-	assert_equals('2-char punctuation: 05', '<>', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>]', 4));
-	assert_equals('2-char punctuation: 06', ':=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>]', 5));
-	assert_equals('2-char punctuation: 07', '=>', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>]', 6));
-	assert_equals('2-char punctuation: 08', '>=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>]', 7));
-	assert_equals('2-char punctuation: 09', '<=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>]', 8));
-	assert_equals('2-char punctuation: 10', '**', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>]', 9));
-	assert_equals('2-char punctuation: 11', '||', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>]', 10));
-	assert_equals('2-char punctuation: 12', '<<', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>]', 11));
-	assert_equals('2-char punctuation: 13', '>>', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>]', 12));
+	assert_equals('2-char punctuation: 02', '~=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 1));
+	assert_equals('2-char punctuation: 03', '!=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 2));
+	assert_equals('2-char punctuation: 04', '^=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 3));
+	assert_equals('2-char punctuation: 05', '<>', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 4));
+	assert_equals('2-char punctuation: 06', ':=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 5));
+	assert_equals('2-char punctuation: 07', '=>', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 6));
+	assert_equals('2-char punctuation: 08', '>=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 7));
+	assert_equals('2-char punctuation: 09', '<=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 8));
+	assert_equals('2-char punctuation: 10', '**', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 9));
+	assert_equals('2-char punctuation: 11', '||', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 10));
+	assert_equals('2-char punctuation: 12', '<<', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 11));
+	assert_equals('2-char punctuation: 13', '>>', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 12));
+	assert_equals('2-char punctuation: 14', '{-', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 13));
+	assert_equals('2-char punctuation: 15', '-}', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 14));
+	assert_equals('2-char punctuation: 16', '*?', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 15));
+	assert_equals('2-char punctuation: 17', '+?', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 16));
+	assert_equals('2-char punctuation: 18', '??', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 17));
+	assert_equals('2-char punctuation: 19', ',}', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 18));
+	assert_equals('2-char punctuation: 20', '}?', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 19));
+	assert_equals('2-char punctuation: 21', '{,', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 20));
+	assert_equals('2-char punctuation: 22', null, get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 21));
 end test_2_character_punctuation;
 
 
 --------------------------------------------------------------------------------
 procedure test_1_character_punctuation is
 begin
-	--TODO: Add row pattern quantifiers.
-	assert_equals('1-char punctuation: 01', '@ % * ( ) - + = [ ] : ; < , > . / EOF', lex(q'[@%*()-+=[]:;<,>./]'));
+	assert_equals('1-char punctuation: 01', '@ % ^ * ( ) - + = [ ] { } | : ; < , > . / ? EOF', lex(q'[@%^*()-+=[]{}|:;<,>./?]'));
+	assert_equals('1-char punctuation: 02', '@',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 1));
+	assert_equals('1-char punctuation: 03', '%',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 2));
+	assert_equals('1-char punctuation: 04', '^',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 3));
+	assert_equals('1-char punctuation: 05', '*',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 4));
+	assert_equals('1-char punctuation: 06', '(',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 5));
+	assert_equals('1-char punctuation: 07', ')',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 6));
+	assert_equals('1-char punctuation: 08', '-',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 7));
+	assert_equals('1-char punctuation: 09', '+',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 8));
+	assert_equals('1-char punctuation: 10', '=',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 9));
+	assert_equals('1-char punctuation: 11', '[',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 10));
+	assert_equals('1-char punctuation: 12', ']',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 11));
+	assert_equals('1-char punctuation: 13', '{',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 12));
+	assert_equals('1-char punctuation: 14', '}',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 13));
+	assert_equals('1-char punctuation: 15', '|',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 14));
+	assert_equals('1-char punctuation: 16', ':',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 15));
+	assert_equals('1-char punctuation: 17', ';',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 16));
+	assert_equals('1-char punctuation: 18', '<',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 17));
+	assert_equals('1-char punctuation: 19', ',',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 18));
+	assert_equals('1-char punctuation: 20', '>',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 19));
+	assert_equals('1-char punctuation: 21', '.',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 20));
+	assert_equals('1-char punctuation: 22', '/',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 21));
+	assert_equals('1-char punctuation: 23', '?',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 22));
+	assert_equals('1-char punctuation: 24', null, get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 23));
 
-	assert_equals('1-char punctuation: 02', '@', get_value_n(q'[@%*()-+=[]:;<,>./]', 1));
-	assert_equals('1-char punctuation: 03', '%', get_value_n(q'[@%*()-+=[]:;<,>./]', 2));
-	assert_equals('1-char punctuation: 04', '*', get_value_n(q'[@%*()-+=[]:;<,>./]', 3));
-	assert_equals('1-char punctuation: 05', '(', get_value_n(q'[@%*()-+=[]:;<,>./]', 4));
-	assert_equals('1-char punctuation: 06', ')', get_value_n(q'[@%*()-+=[]:;<,>./]', 5));
-	assert_equals('1-char punctuation: 07', '-', get_value_n(q'[@%*()-+=[]:;<,>./]', 6));
-	assert_equals('1-char punctuation: 08', '+', get_value_n(q'[@%*()-+=[]:;<,>./]', 7));
-	assert_equals('1-char punctuation: 09', '=', get_value_n(q'[@%*()-+=[]:;<,>./]', 8));
-	assert_equals('1-char punctuation: 10', '[', get_value_n(q'[@%*()-+=[]:;<,>./]', 9));
-	assert_equals('1-char punctuation: 11', ']', get_value_n(q'[@%*()-+=[]:;<,>./]', 10));
-	assert_equals('1-char punctuation: 12', ':', get_value_n(q'[@%*()-+=[]:;<,>./]', 11));
-	assert_equals('1-char punctuation: 13', ';', get_value_n(q'[@%*()-+=[]:;<,>./]', 12));
-	assert_equals('1-char punctuation: 14', '<', get_value_n(q'[@%*()-+=[]:;<,>./]', 13));
-	assert_equals('1-char punctuation: 15', ',', get_value_n(q'[@%*()-+=[]:;<,>./]', 14));
-	assert_equals('1-char punctuation: 16', '>', get_value_n(q'[@%*()-+=[]:;<,>./]', 15));
-	assert_equals('1-char punctuation: 17', '.', get_value_n(q'[@%*()-+=[]:;<,>./]', 16));
-	assert_equals('1-char punctuation: 18', '/', get_value_n(q'[@%*()-+=[]:;<,>./]', 17));
+	--TODO: "$"
 
 	assert_equals('1-char punctuation: 241',
 		'<< word >> word whitespace word whitespace word := numeric ; whitespace word whitespace word ; whitespace word ; EOF',
@@ -508,6 +524,124 @@ begin
 	assert_equals('utf8: 4-byte 4', 'word whitespace word EOF', lex(g_4_byte_utf8||g_4_byte_utf8||g_4_byte_utf8||' a'));
 	assert_equals('utf8: 4-byte 3', 'word whitespace word EOF', lex(g_4_byte_utf8||g_4_byte_utf8||'asdf'||g_4_byte_utf8||' a'));
 end test_utf8;
+
+
+--------------------------------------------------------------------------------
+--Row pattern matching in 12c adds complexity because of operator ambiguity.
+procedure test_row_pattern_matching is
+begin
+	--Inquiry directives and preprocessor control tokens still work in row pattern matching.
+	--'$' matches the single character, it is not allowed as part of a name inside row pattern matching.
+	--This is valid code that should run on 12c+.
+	assert_equals(
+		'Row pattern matching: valid PL/SQL 1',
+		/*declare                                */ 'whitespace word ' ||
+		/*	v_test number;                       */ 'whitespace word whitespace word ; ' ||
+		/*begin                                  */ 'whitespace word ' ||
+		/*	select $$inq_dir_test inq_dir_test$$ */ 'whitespace word whitespace inquiry_directive whitespace word ' ||
+		/*	into v_test                          */ 'whitespace word whitespace word ' ||
+		/*	from dual                            */ 'whitespace word whitespace word ' ||
+		/*	match_recognize(                     */ 'whitespace word ( ' ||
+		/*		measures x.dummy dummy           */ 'whitespace word whitespace word . word whitespace word ' ||
+		/*		pattern(                         */ 'whitespace word ( ' ||
+		/*			^x$$|                        */ 'whitespace ^ word $ $ | ' ||
+		/*			x{$$inq_dir_test}|           */ 'whitespace word { inquiry_directive } | ' ||
+		/*			x{$IF 1=1 $THEN 1 $END}      */ 'whitespace word { preprocessor_control_token whitespace numeric = numeric whitespace preprocessor_control_token whitespace numeric whitespace preprocessor_control_token } ' ||
+		/*		)                                */ 'whitespace ) ' ||
+		/*		define x as (1=1)                */ 'whitespace word whitespace word whitespace word whitespace ( numeric = numeric ) ' ||
+		/*	);                                   */ 'whitespace ) ; ' ||
+		/*end;                                   */ 'whitespace word ; whitespace EOF'
+		,
+		--To work correctly in the real world, execute this alter first:
+		--alter session set plsql_ccflags = 'inq_dir_test:1';
+		lex('
+			declare
+				v_test number;
+			begin
+				select $$inq_dir_test inq_dir_test$$
+				into v_test
+				from dual
+				match_recognize(
+					measures x.dummy dummy
+					pattern(
+						^x$$|
+						x{$$inq_dir_test}|
+						x{$IF 1=1 $THEN 1 $END}
+					)
+					define x as (1=1)
+				);
+			end;
+		')
+	);
+
+	--Valid code that returns 'X'.
+	assert_equals(
+		'Row pattern matching: valid SQL 1',
+		/*select *                 */ 'whitespace word whitespace * ' ||
+		/*from dual                */ 'whitespace word whitespace word ' ||
+		/*match_recognize(         */ 'whitespace word ( ' ||
+		/*	measures x.dummy dummy */ 'whitespace word whitespace word . word whitespace word ' ||
+		/*	pattern(^x$)           */ 'whitespace word ( ^ word $ ) ' ||
+		/*	define x as (1=1)      */ 'whitespace word whitespace word whitespace word whitespace ( numeric = numeric ) ' ||
+		/*)                        */ 'whitespace ) whitespace EOF',
+		lex('
+			select *
+			from dual
+			match_recognize(
+				measures x.dummy dummy
+				pattern(^x$)
+				define x as (1=1)
+			)
+		'));
+
+	--Although "**" and "||" are invalid, they are tokenized differently in pattern matching.
+	--This may matter for error handling.
+	assert_equals(
+		'Row pattern matching: invalid SQL 2',
+		/*select *                 */ 'whitespace word whitespace * ' ||
+		/*from dual                */ 'whitespace word whitespace word ' ||
+		/*match_recognize(         */ 'whitespace word ( ' ||
+		/*	measures x.dummy dummy */ 'whitespace word whitespace word . word whitespace word ' ||
+		/*	pattern(^x**||$)       */ 'whitespace word ( ^ word * * | | $ ) ' ||
+		/*	define x as (1=1)      */ 'whitespace word whitespace word whitespace word whitespace ( numeric = numeric ) ' ||
+		/*)                        */ 'whitespace ) whitespace EOF',
+		lex('
+			select *
+			from dual
+			match_recognize(
+				measures x.dummy dummy
+				pattern(^x**||$)
+				define x as (1=1)
+			)
+		'));
+
+	--Tokenizer bug, although it's astronomically unlikely to happen.
+	--Creating functions with these specific names, calling them in this order, and
+	--using "$", "**", and "||" may tokenize incorrectly because it looks like it's
+	--part of pattern matching.
+	assert_equals(
+		'Row pattern matching: Bug 1',
+		/*begin                                           */ 'whitespace word ' ||
+		/*	match_recognize(pattern(p_name$ => 2**2||1)); */ 'whitespace word ( word ( word $ whitespace => whitespace numeric * * numeric | | numeric ) ) ; ' ||
+		/*end;                                            */ 'whitespace word ; whitespace EOF',
+		lex('
+			begin
+				match_recognize(pattern(p_name$ => 2**2||1));
+			end;
+		'));
+
+	--TODO: Test with function named "pattern".
+	--TODO: Test that values are correct.
+	/*
+	--Adhoc test
+	declare
+		v_tokens token_table;
+	begin
+		dbms_output.put_line(tokenizer.print_tokens(tokenizer.tokenize('asdf match_recognize(pattern(()()(())((()))x$))')));
+	end;
+	*/
+end test_row_pattern_matching;
+
 
 
 --------------------------------------------------------------------------------
@@ -577,6 +711,7 @@ begin
 	if bitand(p_tests, c_test_1_character_punctuation) > 0 then test_1_character_punctuation; end if;
 	if bitand(p_tests, c_test_unexpected)              > 0 then test_unexpected; end if;
 	if bitand(p_tests, c_test_utf8)                    > 0 then test_utf8; end if;
+	if bitand(p_tests, c_row_pattern_matching)         > 0 then test_row_pattern_matching; end if;
 	if bitand(p_tests, c_test_other)                   > 0 then test_other; end if;
 	if bitand(p_tests, c_dynamic_tests)                > 0 then dynamic_tests; end if;
 

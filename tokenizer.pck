@@ -1,5 +1,6 @@
 create or replace package tokenizer is
 --Copyright (C) 2015 Jon Heller.  This program is licensed under the LGPLv3.
+C_VERSION constant varchar2(10) := '0.1.0';
 
 
 /*
@@ -25,9 +26,9 @@ Tokens may be one of these types:
 		PL/SQL preprocessor (conditional compilation) feature that is like: $plsql_identifier
     ,}?
         3-character punctuation operators (Row Pattern Quantifier).
-    ~= != ^= <> := => >= <= ** || << >> *? +? ?? ,} }? {,
+    ~= != ^= <> := => >= <= ** || << >> {- -} *? +? ?? ,} }? {,
         2-character punctuation operators.
-    @ % * ( ) - + = [ ] { } : ; < , > . / ?
+    @ $ % ^ * ( ) - + = [ ] { } | : ; < , > . / ?
         1-character punctuation operators.
     EOF
         End of File.
@@ -86,6 +87,14 @@ g_chars char_table := char_table();
 g_last_char nvarchar2(2 char);
 g_last_char_position number;
 g_token_text nclob;
+
+--Last non-whitespace, non-comment token.
+g_last_concrete_token token;
+--Track when we're inside a MATCH_RECOGNIZE and a PATTERN to disambiguate "$".
+--"$" is a pattern row when inside, else it could be for conditional compilation
+--or an identifier name.  
+g_match_recognize_paren_count number;
+g_pattern_paren_count number;
 
 
 --------------------------------------------------------------------------------
@@ -252,6 +261,45 @@ function is_alpha_numeric_or__#$(p_char nvarchar2) return boolean is
 begin
 	return regexp_like(p_char, '[[:alpha:]]|[0-9]|\_|#|\$');
 end is_alpha_numeric_or__#$;
+
+
+--------------------------------------------------------------------------------
+--Is the character alphabetic (in any language), numeric, or one of "_", or "#".
+function is_alpha_numeric_or__#(p_char nvarchar2) return boolean is
+begin
+	return regexp_like(p_char, '[[:alpha:]]|[0-9]|\_|#');
+end is_alpha_numeric_or__#;
+
+
+--------------------------------------------------------------------------------
+--Track tokens to detect if inside a row pattern matching.
+--Row pattern matching introduces some ambiguity because the regular-expression
+--syntax conflicts with "$", "**", and "||".
+procedure track_row_pattern_matching(p_token token) is
+begin
+	--Start counters.
+	if p_token.type = '('
+	and g_last_concrete_token.type = 'word'
+	and lower(g_last_concrete_token.value) = 'pattern'
+	and g_match_recognize_paren_count > 0
+	and g_pattern_paren_count = 0 then
+		g_pattern_paren_count := 1;
+	elsif p_token.type = '('
+	and g_last_concrete_token.type = 'word'
+	and lower(g_last_concrete_token.value) = 'match_recognize'
+	and g_match_recognize_paren_count = 0 then
+		g_match_recognize_paren_count := 1;
+	--Increment or decrement parentheses counters.
+	elsif g_pattern_paren_count > 0 and p_token.type = '(' then
+		g_pattern_paren_count := g_pattern_paren_count + 1;
+	elsif g_pattern_paren_count > 0 and p_token.type = ')' then
+		g_pattern_paren_count := g_pattern_paren_count - 1;
+	elsif g_match_recognize_paren_count > 0 and p_token.type = '(' then
+		g_match_recognize_paren_count := g_match_recognize_paren_count + 1;
+	elsif g_match_recognize_paren_count > 0 and p_token.type = ')' then
+		g_match_recognize_paren_count := g_match_recognize_paren_count - 1;
+	end if;
+end track_row_pattern_matching;
 
 
 --------------------------------------------------------------------------------
@@ -517,9 +565,18 @@ begin
 		g_token_text := g_last_char;
 		loop
 			g_last_char := get_char;
-			if g_last_char is null or not is_alpha_numeric_or__#$(g_last_char) then
-				exit;
+
+			--"$" does not count as part of the word when inside a row pattern match.
+			if g_pattern_paren_count > 0 then
+				if g_last_char is null or not is_alpha_numeric_or__#(g_last_char) then
+					exit;
+				end if;
+			else
+				if g_last_char is null or not is_alpha_numeric_or__#$(g_last_char) then
+					exit;
+				end if;
 			end if;
+
 			g_token_text := g_token_text || g_last_char;
 		end loop;
 		return token('word', g_token_text, null, null);
@@ -565,14 +622,27 @@ begin
 	--2-character punctuation operators.
 	--Igore the IBM "not" character - it's in the manual but is only supported
 	--on obsolete platforms: http://stackoverflow.com/q/9305925/409172
-	if g_last_char||look_ahead(1) in ('~=','!=','^=','<>',':=','=>','>=','<=','**','||','<<','>>','*?','+?','??',',}','}?','{,') then
+	if g_last_char||look_ahead(1) in ('~=','!=','^=','<>',':=','=>','>=','<=','<<','>>','{-','-}','*?','+?','??',',}','}?','{,') then
+		g_token_text := g_last_char || get_char;
+		g_last_char := get_char;
+		return token(g_token_text, g_token_text, null, null);
+	end if;
+
+	if g_last_char||look_ahead(1) in ('**','||') and g_pattern_paren_count = 0 then
 		g_token_text := g_last_char || get_char;
 		g_last_char := get_char;
 		return token(g_token_text, g_token_text, null, null);
 	end if;
 
 	--1-character punctuation operators.
-	if g_last_char in ('@','%','*','(',')','-','+','=','[',']','{','}',':',';','<',',','>','.','/','?') then
+	if g_last_char in ('@','%','^','*','(',')','-','+','=','[',']','{','}','|',':',';','<',',','>','.','/','?') then
+		g_token_text := g_last_char;
+		g_last_char := get_char;
+		return token(g_token_text, g_token_text, null, null);
+	end if;
+
+	--"$" only counts as "$" inside row pattern matching.
+	if g_last_char = '$' and g_pattern_paren_count > 0 then
 		g_token_text := g_last_char;
 		g_last_char := get_char;
 		return token(g_token_text, g_token_text, null, null);
@@ -591,15 +661,22 @@ function tokenize(p_source nclob) return token_table is
 	v_token token;
 	v_tokens token_table := token_table();
 begin
-	--Set some globals.
+	--Initialize globals.
 	set_g_chars(p_source);
 	g_last_char_position := 0;
+	g_last_concrete_token := token(null, null, null, null);
+	g_match_recognize_paren_count := 0;
+	g_pattern_paren_count := 0;
 
 	--Get all the tokens.
 	loop
 		v_token := get_token;
 		v_tokens.extend;
 		v_tokens(v_tokens.count) := v_token;
+		track_row_pattern_matching(v_token);
+		if v_token.type not in ('whitespace', 'comment', 'EOF') then
+			g_last_concrete_token := v_token;
+		end if;
 		exit when v_token.type = 'EOF';
 	end loop;
 
