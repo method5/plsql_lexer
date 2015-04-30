@@ -472,6 +472,8 @@ end test_2_character_punctuation;
 --------------------------------------------------------------------------------
 procedure test_1_character_punctuation is
 begin
+	--Note that "$" is not included here.  "$" is only a token in a row pattern
+	--matching context.  See the separate unit tests for row pattern matching.
 	assert_equals('1-char punctuation: 01', '@ % ^ * ( ) - + = [ ] { } | : ; < , > . / ? EOF', lex(q'[@%^*()-+=[]{}|:;<,>./?]'));
 	assert_equals('1-char punctuation: 02', '@',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 1));
 	assert_equals('1-char punctuation: 03', '%',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 2));
@@ -497,9 +499,7 @@ begin
 	assert_equals('1-char punctuation: 23', '?',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 22));
 	assert_equals('1-char punctuation: 24', null, get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 23));
 
-	--TODO: "$"
-
-	assert_equals('1-char punctuation: 241',
+	assert_equals('1-char punctuation: realistic example',
 		'<< word >> word whitespace word whitespace word := numeric ; whitespace word whitespace word ; whitespace word ; EOF',
 		lex(q'[<<my_label>>declare v_test number:=1; begin null; end;]'));
 end test_1_character_punctuation;
@@ -630,18 +630,25 @@ begin
 			end;
 		'));
 
-	--TODO: Test with function named "pattern".
-	--TODO: Test that values are correct.
-	/*
-	--Adhoc test
-	declare
-		v_tokens token_table;
-	begin
-		dbms_output.put_line(tokenizer.print_tokens(tokenizer.tokenize('asdf match_recognize(pattern(()()(())((()))x$))')));
-	end;
-	*/
-end test_row_pattern_matching;
+	assert_equals('Row pattern matching: Paren-counting 1','word ( word ( ( ) word $ ) ) EOF',lex('match_recognize(pattern(()x$))'));
+	assert_equals('Row pattern matching: Paren-counting 2','word ( word ( ( ( ) ) word $ ) ) EOF',lex('match_recognize(pattern((())x$))'));
+	assert_equals('Row pattern matching: Paren-counting 3','word ( word ( ( word ( word ) ) word $ ) ) EOF',lex('match_recognize(pattern((x(y))x$))'));
 
+	assert_equals('Row pattern matching: Value 1' ,'pattern',get_value_n('match_recognize(pattern((x(y))x$))', 3));
+	assert_equals('Row pattern matching: Value 2' ,'x'      ,get_value_n('match_recognize(pattern((x(y))x$))', 6));
+	assert_equals('Row pattern matching: Value 3' ,'('      ,get_value_n('match_recognize(pattern((x(y))x$))', 7));
+	assert_equals('Row pattern matching: Value 4' ,')'      ,get_value_n('match_recognize(pattern((x(y))x$))', 10));
+	assert_equals('Row pattern matching: Value 5' ,'x'      ,get_value_n('match_recognize(pattern((x(y))x$))', 11));
+	assert_equals('Row pattern matching: Value 6' ,'$'      ,get_value_n('match_recognize(pattern((x(y))x$))', 12));
+	assert_equals('Row pattern matching: Value 7' ,')'      ,get_value_n('match_recognize(pattern((x(y))x$))', 13));
+
+	assert_equals('Row pattern matching: Value 8' ,'('      ,get_value_n('match_recognize(pattern(**||)||', 4));
+	assert_equals('Row pattern matching: Value 9' ,'*'      ,get_value_n('match_recognize(pattern(**||)||', 5));
+	assert_equals('Row pattern matching: Value 10','*'      ,get_value_n('match_recognize(pattern(**||)||', 6));
+	assert_equals('Row pattern matching: Value 11','|'      ,get_value_n('match_recognize(pattern(**||)||', 7));
+	assert_equals('Row pattern matching: Value 12','|'      ,get_value_n('match_recognize(pattern(**||)||', 8));
+	assert_equals('Row pattern matching: Value 13','||'     ,get_value_n('match_recognize(pattern(**||)||', 10));
+end test_row_pattern_matching;
 
 
 --------------------------------------------------------------------------------
