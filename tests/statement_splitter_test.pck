@@ -92,8 +92,6 @@ begin
 	assert_equals('No split 1', v_statements, v_split_statements(1));
 	v_statements:='select * from dual';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('No split 2', v_statements, v_split_statements(1));
-	v_statements:='select * from dual'||chr(10)||'/';v_split_statements:=statement_splitter.split(v_statements);
-	assert_equals('No split 3', v_statements, v_split_statements(1));
 
 	v_statements:='select * from dual a;select * from dual b;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Simple split 1a', 'select * from dual a;', v_split_statements(1));
@@ -103,6 +101,7 @@ begin
 	assert_equals('Simple split 2a', 'select * from dual a;', v_split_statements(1));
 	assert_equals('Simple split 2b', ' select * from dual b; ', v_split_statements(2));
 	assert_equals('Simple split 2c', 2, v_split_statements.count);
+
 
 
 	--TODO

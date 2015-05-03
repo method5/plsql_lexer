@@ -40,9 +40,73 @@ create or replace package body statement_splitter is
 
 
 --------------------------------------------------------------------------------
+/*
+Purpose: Detect PLSQL_DECLARATION, a new 12c feature that allows PL/SQL in SQL.
+
+Description:
+A PL/SQL Declaration must have this pattern before the first ";":
+
+	(null or not "START") "WITH" "FUNCTION" (not "(" or "AS")
+
+This was discovered by analyzing all "with" strings in the Oracle documentation
+text descriptions.  That is, download the library and run a command like this:
+
+	C:\E11882_01\E11882_01\server.112\e26088\img_text>findstr /s /i "with" *.*
+
+There are a lot of potential ambiguities as SQL does not have many fully
+reserved words.  And the pattern "with" "function" can be found in 2 cases:the following:
+
+	1. Hierarchical queries.  Exclude them by looking for "start" before "with".
+	select *
+	from
+	(
+		select 1 function from dual
+	)
+	connect by function = 1
+	start with function = 1;
+
+	Note: "start" cannot be the name of a table, no need to worry about DML
+	statements like `insert into start with ...`.
+
+	2. Subquery factoring that uses "function" as a name.  Stupid, but possible.
+
+	with function as (select 1 a from dual) select * from function;
+	with function(a) as (select 1 a from dual) select * from function;
+*/
 function has_plsql_declaration(p_tokens token_table) return boolean is
+	v_previous_concrete_token_1 token := token(null, null, null, null);
+	v_previous_concrete_token_2 token := token(null, null, null, null);
+	v_previous_concrete_token_3 token := token(null, null, null, null);
 begin
-	--TODO
+	--TODO: Test this.
+
+	for i in 1 .. p_tokens.count loop
+		--Detect PL/SQL Declaration and return true
+		if
+		--For performance, check types first, instead of potentially large values.
+		(
+			p_tokens(i).type = 'word' and
+			v_previous_concrete_token_1.type = 'word' and
+			v_previous_concrete_token_2.type = 'word' and
+			(v_previous_concrete_token_3.type = 'word' or v_previous_concrete_token_3.type is null)
+		)
+		and
+		(
+			lower(p_tokens(i).value) <> 'as' and
+			lower(v_previous_concrete_token_1.value) = 'function' and
+			lower(v_previous_concrete_token_2.value) = 'with' and
+			(lower(v_previous_concrete_token_3.value) <> 'start' or v_previous_concrete_token_3.value is null)
+		) then
+			return true;
+		--Shift tokens if it is not a whitespace or comment.
+		elsif p_tokens(i).type not in ('whitespace', 'comment') then
+			v_previous_concrete_token_1 := p_tokens(i);
+			v_previous_concrete_token_2 := v_previous_concrete_token_1;
+			v_previous_concrete_token_3 := v_previous_concrete_token_2;
+		end if;
+	end loop;
+
+	--Return false is nothing found.
 	return false;
 end has_plsql_declaration;
 
@@ -163,11 +227,111 @@ begin
 
 		--Find a terminating token based on the classification.
 		--
-		--Throw error if statement could not be classified:
+		--#1: Throw error if statement could not be classified:
 		if v_command_name is null then
 			raise_application_error(-20000, 'Cannot classify and split statement(s).  Check the syntax.');
-		--Go to next "/":
+		--#2: Match "}" for Java code.
+		/*
+			'CREATE JAVA', if "{" is found before first ";"
+			Note: Single-line comments are different, "//".  Exclude any "", "", or "" after a 
+				Create java_partial_tokenizer to lex Java statements (Based on: https://docs.oracle.com/javase/specs/jls/se7/html/jls-3.html), just need:
+					- multi-line comment
+					- single-line comment - Note Lines are terminated by the ASCII characters CR, or LF, or CR LF.
+					- character literal - don't count \'
+					- string literal - don't count \"
+					- {
+					- }
+					- other
+					- Must all files end with }?  What about packages only, or annotation only file?
+
+				CREATE JAVA CLASS USING BFILE (java_dir, 'Agent.class')
+				CREATE JAVA SOURCE NAMED "Welcome" AS public class Welcome { public static String welcome() { return "Welcome World";   } }
+				CREATE JAVA RESOURCE NAMED "appText" USING BFILE (java_dir, 'textBundle.dat')
+
+				TODO: More examples using lexical structures.
+		*/
+		elsif v_command_name in ('CREATE JAVA') then
+			--TODO
+			raise_application_error(-20000, 'CREATE JAVA is not yet supported.');
+		--#3: Match BEGIN and END
 		elsif
+		v_command_name in ('CREATE FUNCTION','CREATE PROCEDURE','CREATE TRIGGER','CREATE TYPE BODY')
+		OR
+		(
+			v_command_name in ('CREATE MATERIALIZED VIEW ', 'CREATE SCHEMA', 'CREATE TABLE', 'CREATE VIEW', 'DELETE', 'EXPLAIN', 'INSERT', 'SELECT', 'UPDATE', 'UPSERT')
+			AND
+			has_plsql_declaration(v_tokens)
+		)
+		then
+			--TODO
+			null;
+		--#4: Stop at possibly unbalanced BEGIN/END;
+		/*
+		4a
+		create or replace package test_package is
+		end;
+
+		4b
+		create or replace package body test_package is
+		begin
+			null;
+		end;
+
+		4c
+		create or replace package body test_package is
+			procedure test1 is begin null; end;
+		end;
+
+		4d
+		create or replace package body test_package is
+			procedure test1 is begin null; end;
+		begin
+			null;
+		end;
+
+		4e
+		create or replace package body test_package is
+			cursor my_cursor is with function test_function return number is begin return 1; end; select test_function from dual;
+			procedure test1 is begin null; end;
+		begin
+			null;
+		end;
+		*/
+		elsif v_command_name in ('CREATE PACKAGE BODY') then
+			--TODO
+			null;
+			/*
+			if CREATE PACKAGE BODY then
+				--Nested BEGIN/ENDs in the declare section.
+				if is_plsql_declaration or is_procedure_declaration or is_function_declaration then
+					loop through begin ends
+				--Nested BEGIN/ENDs in initialize section.
+				elsif is_begin
+					loop through begin ends
+				--End of package.
+				elsif is_end
+					end of package
+				if is_begin
+			end if;
+			*/
+		--#5: Stop at first END.
+		--(TODO: Can declaration have unbalanced begin and end for cursors?)
+		elsif v_command_name in ('CREATE PACKAGE') then
+			--TODO
+			null;
+
+		--#6: Stop at first ";" for everything else.
+		else
+			add_statement_consume_tokens(v_split_statements, v_tokens, ';');
+		end if;
+
+		--TODO:
+		--Stop whenever "/" on a line by itself with only comments or whitespace
+
+
+
+
+/*
 			--Commands that always require a "/":
 			v_command_name in ('CREATE ASSEMBLY','CREATE FUNCTION','CREATE JAVA','CREATE LIBRARY','CREATE PACKAGE',
 				'CREATE PACKAGE BODY','CREATE PROCEDURE','CREATE TRIGGER','CREATE TYPE','CREATE TYPE BODY')
@@ -182,6 +346,7 @@ begin
 		else
 			add_statement_consume_tokens(v_split_statements, v_tokens, ';');
 		end if;
+*/
 
 		--Quit when there are no more tokens.
 		exit when v_tokens.count = 0;
