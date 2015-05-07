@@ -73,12 +73,12 @@ reserved words.  And the pattern "with" "function" can be found in 2 cases:the f
 	with function as (select 1 a from dual) select * from function;
 	with function(a) as (select 1 a from dual) select * from function;
 */
-function has_plsql_declaration(p_tokens token_table) return boolean is
+function has_plsql_declaration(p_tokens token_table, p_token_start_index in number) return boolean is
 	v_previous_concrete_token_1 token := token(null, null, null, null);
 	v_previous_concrete_token_2 token := token(null, null, null, null);
 	v_previous_concrete_token_3 token := token(null, null, null, null);
 begin
-	for i in 1 .. p_tokens.count loop
+	for i in p_token_start_index .. p_tokens.count loop
 		--Return true if PL/SQL Declaration found.
 		if
 		--For performance, check types first, instead of potentially large values.
@@ -128,10 +128,10 @@ end only_ws_comments_eof_remain;
 procedure add_statement_consume_tokens(
 	p_split_statements in out nocopy nclob_table,
 	p_tokens in out nocopy token_table,
-	p_terminator varchar2
+	p_terminator varchar2,
+	p_new_statement in out nclob,
+	p_token_index in out number
 ) is
-	v_token_index number := 0;
-	v_new_statement nclob;
 	v_new_tokens token_table := token_table();
 begin
 	--Look for a ';' anywhere.
@@ -139,28 +139,29 @@ begin
 		--Build new statement and count tokens.
 		loop
 			--Increment.
-			exit when v_token_index = p_tokens.count;
-			v_token_index := v_token_index + 1;
-			v_new_statement := v_new_statement || p_tokens(v_token_index).value;
+			exit when p_token_index >= p_tokens.count;
+			p_new_statement := p_new_statement || p_tokens(p_token_index).value;
 
 			--Detect end of statement.
-			if p_tokens(v_token_index).type = ';' or p_tokens(v_token_index).type = 'EOF' then
+			if p_tokens(p_token_index).type = ';' or p_tokens(p_token_index).type = 'EOF' then
 				--Stop if no more tokens.
-				if v_token_index = p_tokens.count then
+				if p_token_index = p_tokens.count then
 					exit;
 				--Consume all tokens if only whitespace, comments, and EOF remain.
-				elsif only_ws_comments_eof_remain(p_tokens, v_token_index+1) then
+				elsif only_ws_comments_eof_remain(p_tokens, p_token_index+1) then
 					--Consume all tokens.
 					loop
-						v_token_index := v_token_index + 1;
-						v_new_statement := v_new_statement || p_tokens(v_token_index).value;
-						exit when v_token_index = p_tokens.count;
+						p_token_index := p_token_index + 1;
+						p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+						exit when p_token_index = p_tokens.count;
 					end loop;
 				--Otherwise stop at this spot.
 				else
 					exit;
 				end if;
 			end if;
+
+			p_token_index := p_token_index + 1;
 		end loop;
 
 	--Look for a '/' on a line by itself, separated only by whitespace.
@@ -194,13 +195,12 @@ begin
 			--Build new statement and count tokens.
 			loop
 				--Increment
-				exit when v_token_index = p_tokens.count;
-				v_token_index := v_token_index + 1;
-				v_new_statement := v_new_statement || p_tokens(v_token_index).value;
+				exit when p_token_index >= p_tokens.count;
+				p_new_statement := p_new_statement || p_tokens(p_token_index).value;
 
 				--Detect BEGIN
 				if
-				lower(p_tokens(v_token_index).value) = 'begin'
+				lower(p_tokens(p_token_index).value) = 'begin'
 				and
 				(
 					lower(v_previous_concrete_token_1.value) in ('as', 'is', ';', '>>')
@@ -213,7 +213,7 @@ begin
 
 				--Detect END
 				if
-				p_tokens(v_token_index).type = ';'
+				p_tokens(p_token_index).type = ';'
 				and
 				(
 					(
@@ -235,60 +235,70 @@ begin
 				end if;
 
 				--Detect end of statement.
-				if (v_has_entered_block and v_block_counter = 0) or p_tokens(v_token_index).type = 'EOF' then
+				if (v_has_entered_block and v_block_counter = 0) or p_tokens(p_token_index).type = 'EOF' then
 					--Stop if no more tokens.
-					if v_token_index = p_tokens.count then
+					if p_token_index = p_tokens.count then
 						exit;
 					--Consume all tokens if only whitespace, comments, and EOF remain.
-					elsif only_ws_comments_eof_remain(p_tokens, v_token_index+1) then
+					elsif only_ws_comments_eof_remain(p_tokens, p_token_index+1) then
 						--Consume all tokens.
 						loop
-							v_token_index := v_token_index + 1;
-							v_new_statement := v_new_statement || p_tokens(v_token_index).value;
-							exit when v_token_index = p_tokens.count;
+							p_token_index := p_token_index + 1;
+							p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+							exit when p_token_index = p_tokens.count;
 						end loop;
-					--Otherwise stop at this spot.
+					--There could be more than one function.
+					--TODO: Need new function, "is_next_plsql_declaration".
+					elsif has_plsql_declaration(p_tokens, p_token_index) then
+						p_token_index := p_token_index + 1;
+						add_statement_consume_tokens(p_split_statements, p_tokens, 'BEGIN', p_new_statement, p_token_index);
+						return;
+					--Otherwise look for the next ';'.
 					else
-						exit;
+						p_token_index := p_token_index + 1;
+						add_statement_consume_tokens(p_split_statements, p_tokens, ';', p_new_statement, p_token_index);
+						return;
 					end if;
 				end if;
 
 				--Shift tokens if it is not a whitespace or comment.
-				if p_tokens(v_token_index).type not in ('whitespace', 'comment') then
+				if p_tokens(p_token_index).type not in ('whitespace', 'comment') then
 					v_previous_concrete_token_3 := v_previous_concrete_token_2;
 					v_previous_concrete_token_2 := v_previous_concrete_token_1;
-					v_previous_concrete_token_1 := p_tokens(v_token_index);
+					v_previous_concrete_token_1 := p_tokens(p_token_index);
 				end if;
 
+				--Increment
+				p_token_index := p_token_index + 1;
 			end loop;
 		end;
 	end if;
 
 	--Remove the first character if it's a newline.
-	if substr(v_new_statement, 1, 1) = chr(10) and dbms_lob.getLength(v_new_statement) > 1 then
+	if substr(p_new_statement, 1, 1) = chr(10) and dbms_lob.getLength(p_new_statement) > 1 then
 		dbms_lob.copy(
-			dest_lob => v_new_statement,
-			src_lob => v_new_statement,
-			amount => dbms_lob.getLength(v_new_statement)-1,
+			dest_lob => p_new_statement,
+			src_lob => p_new_statement,
+			amount => dbms_lob.getLength(p_new_statement)-1,
 			src_offset => 2);
-		dbms_lob.trim(lob_loc => v_new_statement, newlen => dbms_lob.getLength(v_new_statement)-1);
-	elsif substr(v_new_statement, 1, 2) = chr(13)||chr(10) and dbms_lob.getLength(v_new_statement) > 2 then
+		dbms_lob.trim(lob_loc => p_new_statement, newlen => dbms_lob.getLength(p_new_statement)-1);
+	elsif substr(p_new_statement, 1, 2) = chr(13)||chr(10) and dbms_lob.getLength(p_new_statement) > 2 then
 		dbms_lob.copy(
-			dest_lob => v_new_statement,
-			src_lob => v_new_statement,
-			amount => dbms_lob.getLength(v_new_statement)-2,
+			dest_lob => p_new_statement,
+			src_lob => p_new_statement,
+			amount => dbms_lob.getLength(p_new_statement)-2,
 			src_offset => 3);
-		dbms_lob.trim(lob_loc => v_new_statement, newlen => dbms_lob.getLength(v_new_statement)-2);
+		dbms_lob.trim(lob_loc => p_new_statement, newlen => dbms_lob.getLength(p_new_statement)-2);
 	end if;
 
 	--Add new statement to array
 	p_split_statements.extend;
-	p_split_statements(p_split_statements.count) := v_new_statement;
+	p_split_statements(p_split_statements.count) := p_new_statement;
 
 	--TODO: Make sure every statement ends with an EOF?
 
 	--Create new tokens table excluding the tokens used for the new statement.
-	for i in v_token_index+1 .. p_tokens.count loop
+	for i in p_token_index+1 .. p_tokens.count loop
 		v_new_tokens.extend;
 		v_new_tokens(v_new_tokens.count) := p_tokens(i);
 	end loop;
@@ -302,6 +312,8 @@ function split(p_statements in nclob) return nclob_table is
 	v_split_statements nclob_table := nclob_table();
 	v_tokens token_table;
 	v_command_name varchar2(4000);
+	v_temp_new_statement nclob;
+	v_temp_token_index number;
 begin
 
 	--Tokenize.
@@ -311,6 +323,9 @@ begin
 
 	--Split into statements.
 	loop
+		v_temp_new_statement := null;
+		v_temp_token_index := 1;
+
 		--Classify.
 		declare
 			v_throwaway_number number;
@@ -364,12 +379,11 @@ begin
 		(
 			v_command_name in ('CREATE MATERIALIZED VIEW ', 'CREATE SCHEMA', 'CREATE TABLE', 'CREATE VIEW', 'DELETE', 'EXPLAIN', 'INSERT', 'SELECT', 'UPDATE', 'UPSERT')
 			AND
-			has_plsql_declaration(v_tokens)
+			has_plsql_declaration(v_tokens, 1)
 		)
 		then
 			dbms_output.put_line('HAS PLSQL_DECLARATION');
-			add_statement_consume_tokens(v_split_statements, v_tokens, 'END');
-
+			add_statement_consume_tokens(v_split_statements, v_tokens, 'END', v_temp_new_statement, v_temp_token_index);
 
 
 		--#4: Stop at possibly unbalanced BEGIN/END;
@@ -429,7 +443,7 @@ begin
 
 		--#6: Stop at first ";" for everything else.
 		else
-			add_statement_consume_tokens(v_split_statements, v_tokens, ';');
+			add_statement_consume_tokens(v_split_statements, v_tokens, ';', v_temp_new_statement, v_temp_token_index);
 		end if;
 
 		--TODO:
