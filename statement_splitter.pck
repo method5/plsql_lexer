@@ -5,17 +5,12 @@ create or replace package statement_splitter is
 /*
 ## Purpose ##
 
-Split a string into separate SQL and PL/SQL statements based on standard terminators.
+Split a string into separate SQL and PL/SQL statements terminiated by ";" or "/".
 
-Terminators work according to SQL*Plus rules, even though SQL*Plus-only commands do not work:
-	1. statements can terminate with ";" or "/".
-	2. A "/" terminator must be on a line by itself, excluding whitespace.
-	3. If the statement includes a PL/SQL block it must be terminated by a "/".
-	These statements always require a "/" at the end:
-		"CREATE ASSEMBLY|FUNCTION|JAVA|LIBRARY|PACKAGE|PACKAGE BODY|PROCEDURE|TYPE|TYPE BODY|TRIGGER"
-	These statements require a terminating "/" if they use the 12c plsql_declaration (WITH) feature:
-		CREATE MATERIALIZED VIEW, CREATE SCHEMA, DELETE, EXPLAIN, INSERT, SELECT, UPDATE, MERGE
-	4. As a convenience, terminators may be excluded from the last statement.
+Unlike SQL*Plus, even PL/SQL-like statements can be terminiated solely with a ";".
+This is helpful because it's difficult to use a "/" in strings in most IDEs.
+
+Like SQL*Plus, a "/" on a line by itself is also a terminator.
 
 
 ## Output ##
@@ -296,7 +291,6 @@ begin
 						end loop;
 					--There could be more than one function.
 					elsif has_another_plsql_declaration(p_tokens, p_token_index + 1) then
-						dbms_output.put_line('TEST2');
 						p_token_index := p_token_index + 1;
 						add_statement_consume_tokens(p_split_statements, p_tokens, 'END', p_new_statement, p_token_index);
 						return;
@@ -362,11 +356,8 @@ function split(p_statements in nclob) return nclob_table is
 	v_temp_new_statement nclob;
 	v_temp_token_index number;
 begin
-
 	--Tokenize.
 	v_tokens := tokenizer.tokenize(p_statements);
-	--TODO: Remove
-	dbms_output.put_line(tokenizer.print_tokens(v_tokens));
 
 	--Split into statements.
 	loop
@@ -429,7 +420,6 @@ begin
 			has_plsql_declaration(v_tokens, 1)
 		)
 		then
-			dbms_output.put_line('HAS PLSQL_DECLARATION');
 			add_statement_consume_tokens(v_split_statements, v_tokens, 'END', v_temp_new_statement, v_temp_token_index);
 
 

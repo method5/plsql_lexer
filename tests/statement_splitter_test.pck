@@ -16,10 +16,11 @@ end;
 pragma serially_reusable;
 
 --Globals to select which test suites to run.
-c_errors        constant number := power(2, 1);
-c_splitting      constant number := power(2, 2);
+c_errors            constant number := power(2, 1);
+c_simple            constant number := power(2, 2);
+c_plsql_declaration constant number := power(2, 3);
 
-c_static_tests  constant number := c_errors+c_splitting;
+c_static_tests  constant number := c_errors+c_simple+c_plsql_declaration;
 
 c_dynamic_tests constant number := power(2, 30);
 
@@ -84,7 +85,7 @@ end test_errors;
 
 
 --------------------------------------------------------------------------------
-procedure test_splitting is
+procedure test_simple is
 	v_statements nclob;
 	v_split_statements nclob_table := nclob_table();
 begin
@@ -106,8 +107,50 @@ begin
 
 	--TODO
 	null;
-end test_splitting;
+end test_simple;
 
+
+
+--------------------------------------------------------------------------------
+procedure test_plsql_declaration is
+	v_statements nclob;
+	v_split_statements nclob_table := nclob_table();
+begin
+	v_statements:='with function f return number is begin return 1; end; function g return number is begin return 2; end; select f from dual;select 1 from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('plsql_declaration 1a', 2, v_split_statements.count);
+	assert_equals('plsql_declaration 1b', 'with function f return number is begin return 1; end; function g return number is begin return 2; end; select f from dual;', v_split_statements(1));
+	assert_equals('plsql_declaration 1c', 'select 1 from dual;', v_split_statements(2));
+
+	v_statements:='with function f return number is begin return 1; end; function g return number is begin return 2; end; h as (select 1 a from dual) select f from dual;select 1 from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('plsql_declaration 2a', 2, v_split_statements.count);
+	assert_equals('plsql_declaration 2b', 'with function f return number is begin return 1; end; function g return number is begin return 2; end; h as (select 1 a from dual) select f from dual;', v_split_statements(1));
+	assert_equals('plsql_declaration 2c', 'select 1 from dual;', v_split_statements(2));
+
+	v_statements:='with function f return number is begin return 1; end; function g return number is begin return 2; end; h(a) as (select 1 a from dual) select f from dual;select 1 from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('plsql_declaration 3a', 2, v_split_statements.count);
+	assert_equals('plsql_declaration 3b', 'with function f return number is begin return 1; end; function g return number is begin return 2; end; h(a) as (select 1 a from dual) select f from dual;', v_split_statements(1));
+	assert_equals('plsql_declaration 3c', 'select 1 from dual;', v_split_statements(2));
+
+	v_statements:='with function f return number is begin return 1; end; function g return number is begin return 2; end; h as (select 1 a from dual), i as (select 1 a from dual) select f from dual;select 1 from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('plsql_declaration 4a', 2, v_split_statements.count);
+	assert_equals('plsql_declaration 4b', 'with function f return number is begin return 1; end; function g return number is begin return 2; end; h as (select 1 a from dual), i as (select 1 a from dual) select f from dual;', v_split_statements(1));
+	assert_equals('plsql_declaration 4c', 'select 1 from dual;', v_split_statements(2));
+
+	v_statements:='with function f return number is begin return 1; end; procedure g is begin null; end; h as (select 1 a from dual), i as (select 1 a from dual) select f from dual;select 1 from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('plsql_declaration 5a', 2, v_split_statements.count);
+	assert_equals('plsql_declaration 5b', 'with function f return number is begin return 1; end; procedure g is begin null; end; h as (select 1 a from dual), i as (select 1 a from dual) select f from dual;', v_split_statements(1));
+	assert_equals('plsql_declaration 5c', 'select 1 from dual;', v_split_statements(2));
+
+	v_statements:='with function f return number is begin return 1; end; function g return number is begin return 2; end; function as (select 1 a from dual) select f from dual;select 1 from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('plsql_declaration 6a', 2, v_split_statements.count);
+	assert_equals('plsql_declaration 6b', 'with function f return number is begin return 1; end; function g return number is begin return 2; end; function as (select 1 a from dual) select f from dual;', v_split_statements(1));
+	assert_equals('plsql_declaration 6c', 'select 1 from dual;', v_split_statements(2));
+
+	v_statements:='with function f return number is begin return 1; end; function g return number is begin return 2; end; function(a) as (select 1 a from dual) select f from dual;select 1 from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('plsql_declaration 7a', 2, v_split_statements.count);
+	assert_equals('plsql_declaration 7b', 'with function f return number is begin return 1; end; function g return number is begin return 2; end; function(a) as (select 1 a from dual) select f from dual;', v_split_statements(1));
+	assert_equals('plsql_declaration 7c', 'select 1 from dual;', v_split_statements(2));
+end test_plsql_declaration;
 
 --------------------------------------------------------------------------------
 procedure dynamic_tests is
@@ -182,9 +225,10 @@ begin
 	g_failed_count := 0;
 
 	--Run the chosen tests.
-	if bitand(p_tests, c_errors)        > 0 then test_errors;    end if;
-	if bitand(p_tests, c_splitting)     > 0 then test_splitting; end if;
-	if bitand(p_tests, c_dynamic_tests) > 0 then dynamic_tests;  end if;
+	if bitand(p_tests, c_errors)            > 0 then test_errors;            end if;
+	if bitand(p_tests, c_simple)            > 0 then test_simple;            end if;
+	if bitand(p_tests, c_plsql_declaration) > 0 then test_plsql_declaration; end if;
+	if bitand(p_tests, c_dynamic_tests)     > 0 then dynamic_tests;          end if;
 
 	--Print summary of results.
 	dbms_output.put_line(null);
