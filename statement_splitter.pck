@@ -46,7 +46,7 @@ Purpose: Detect PLSQL_DECLARATION, a new 12c feature that allows PL/SQL in SQL.
 Description:
 A PL/SQL Declaration must have this pattern before the first ";":
 
-	(null or not "START") "WITH" "FUNCTION" (not "(" or "AS")
+	(null or not "START") "WITH" ("FUNCTION"|"PROCEDURE") (not "(" or "AS")
 
 This was discovered by analyzing all "with" strings in the Oracle documentation
 text descriptions.  That is, download the library and run a command like this:
@@ -91,7 +91,7 @@ begin
 		and
 		(
 			lower(p_tokens(i).value) <> 'as' and
-			lower(v_previous_concrete_token_1.value) = 'function' and
+			lower(v_previous_concrete_token_1.value) in ('function', 'procedure') and
 			lower(v_previous_concrete_token_2.value) = 'with' and
 			(lower(v_previous_concrete_token_3.value) <> 'start' or v_previous_concrete_token_3.value is null)
 		) then
@@ -110,6 +110,53 @@ begin
 	--Return false is nothing found.
 	return false;
 end has_plsql_declaration;
+
+
+
+
+
+--------------------------------------------------------------------------------
+/*
+Purpose: Detect if there is another PLSQL_DECLARATION.  This is only valid if
+called immediately at the end of another PLSQL_DECLARATION.
+
+An additional PL/SQL Declaration must start with this pattern:
+
+	("function"|"procedure") word [anything other than "(", "is", or "as"]
+
+This is complicated because there may be a regular common table expression with
+the name "function" or "procedure".  Thanks, Oracle, for not reserving keywords.
+
+See the function has_plsql_declaration for some more information.
+*/
+function has_another_plsql_declaration(p_tokens token_table, p_token_start_index in number) return boolean is
+	v_next_concrete_token_1 token := token(null, null, null, null);
+	v_next_concrete_token_2 token := token(null, null, null, null);
+begin
+	--Loop through the tokens and find concrete tokens.
+	for i in p_token_start_index .. p_tokens.count loop
+		--If it's concrete, decide which one it is.
+		if p_tokens(i).type not in ('whitespace', 'comment', 'EOF') then
+			--Record the first one.
+			if v_next_concrete_token_1.type is null then
+				v_next_concrete_token_1 := p_tokens(i);
+			--Record the second one and exit the loop.
+			else
+				v_next_concrete_token_2 := p_tokens(i);
+				exit;
+			end if;
+		end if;
+	end loop;
+
+	--Determine if there is another PL/SQL Declaration.
+	if
+	lower(v_next_concrete_token_1.value) in ('function', 'procedure') and
+	lower(v_next_concrete_token_2.value) not in ('(', 'is', 'as') then
+		return true;
+	else
+		return false;
+	end if;
+end has_another_plsql_declaration;
 
 
 --------------------------------------------------------------------------------
@@ -248,10 +295,10 @@ begin
 							exit when p_token_index = p_tokens.count;
 						end loop;
 					--There could be more than one function.
-					--TODO: Need new function, "is_next_plsql_declaration".
-					elsif has_plsql_declaration(p_tokens, p_token_index) then
+					elsif has_another_plsql_declaration(p_tokens, p_token_index + 1) then
+						dbms_output.put_line('TEST2');
 						p_token_index := p_token_index + 1;
-						add_statement_consume_tokens(p_split_statements, p_tokens, 'BEGIN', p_new_statement, p_token_index);
+						add_statement_consume_tokens(p_split_statements, p_tokens, 'END', p_new_statement, p_token_index);
 						return;
 					--Otherwise look for the next ';'.
 					else
