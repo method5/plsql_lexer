@@ -10,7 +10,7 @@ Split a string into separate SQL and PL/SQL statements terminiated by ";" or "/"
 Unlike SQL*Plus, even PL/SQL-like statements can be terminiated solely with a ";".
 This is helpful because it's difficult to use a "/" in strings in most IDEs.
 
-Like SQL*Plus, a "/" on a line by itself is also a terminator.
+Like SQL*Plus, a "/" on a line by itself is also a terminator.  (TODO)
 
 
 ## Output ##
@@ -32,6 +32,10 @@ function split(p_statements in nclob) return nclob_table;
 end;
 /
 create or replace package body statement_splitter is
+
+C_TERMINATOR_SEMI              constant number := 1;
+C_TERMINATOR_PLSQL_DECLARE_END constant number := 2;
+C_TERMINATOR_PLSQL_END         constant number := 3;
 
 
 --------------------------------------------------------------------------------
@@ -170,14 +174,14 @@ end only_ws_comments_eof_remain;
 procedure add_statement_consume_tokens(
 	p_split_statements in out nocopy nclob_table,
 	p_tokens in out nocopy token_table,
-	p_terminator varchar2,
+	p_terminator number,
 	p_new_statement in out nclob,
 	p_token_index in out number
 ) is
 	v_new_tokens token_table := token_table();
 begin
 	--Look for a ';' anywhere.
-	if p_terminator = ';' then
+	if p_terminator = C_TERMINATOR_SEMI then
 		--Build new statement and count tokens.
 		loop
 			--Increment.
@@ -208,14 +212,13 @@ begin
 
 	--Look for a '/' on a line by itself, separated only by whitespace.
 	--TODO: Remove this?
-	elsif p_terminator = '/' then
-		null;
+	--elsif p_terminator = '/' then
+	--	null;
 
-	--TODO:
 	/*
-	Match BEGIN and ENDs
+	Match BEGIN and END for a PLSQL_DECLARATION.
 		They are not reserved words so they must only be counted when they are in the right spot.
-	BEGIN must come after "as", "is", ";", or ">>", or the beginning of the string. 
+	BEGIN must come after "begin", "as", "is", ";", or ">>", or the beginning of the string. 
 		"as" could be a column name, but it cannot be referenced as a column name:
 		select as from (select 1 as from dual);
 			   *
@@ -225,8 +228,7 @@ begin
 		It cannot come after ">>", labels can't go there without compilation error.
 		end could be an object, but the object will be invalid so things won't compile
 	*/
-	--TODO: Find OTHER plsql_declarations and last ';'
-	elsif p_terminator = 'END' then
+	elsif p_terminator = C_TERMINATOR_PLSQL_DECLARE_END then
 		declare
 			v_previous_concrete_token_1 token := token(null, null, null, null);
 			v_previous_concrete_token_2 token := token(null, null, null, null);
@@ -245,7 +247,8 @@ begin
 				lower(p_tokens(p_token_index).value) = 'begin'
 				and
 				(
-					lower(v_previous_concrete_token_1.value) in ('as', 'is', ';', '>>')
+					--TODO: Ignore some "begin begin" - such as select begin begin from (select 1 begin from dual);
+					lower(v_previous_concrete_token_1.value) in ('begin', 'as', 'is', ';', '>>')
 					or
 					v_previous_concrete_token_1.type is null
 				) then
@@ -292,13 +295,105 @@ begin
 					--There could be more than one function.
 					elsif has_another_plsql_declaration(p_tokens, p_token_index + 1) then
 						p_token_index := p_token_index + 1;
-						add_statement_consume_tokens(p_split_statements, p_tokens, 'END', p_new_statement, p_token_index);
+						add_statement_consume_tokens(p_split_statements, p_tokens, C_TERMINATOR_PLSQL_DECLARE_END, p_new_statement, p_token_index);
 						return;
 					--Otherwise look for the next ';'.
 					else
 						p_token_index := p_token_index + 1;
-						add_statement_consume_tokens(p_split_statements, p_tokens, ';', p_new_statement, p_token_index);
+						add_statement_consume_tokens(p_split_statements, p_tokens, C_TERMINATOR_SEMI, p_new_statement, p_token_index);
 						return;
+					end if;
+				end if;
+
+				--Shift tokens if it is not a whitespace or comment.
+				if p_tokens(p_token_index).type not in ('whitespace', 'comment') then
+					v_previous_concrete_token_3 := v_previous_concrete_token_2;
+					v_previous_concrete_token_2 := v_previous_concrete_token_1;
+					v_previous_concrete_token_1 := p_tokens(p_token_index);
+				end if;
+
+				--Increment
+				p_token_index := p_token_index + 1;
+			end loop;
+		end;
+
+	/*
+	Match BEGIN and END for a common PL/SQL block.
+		They are not reserved words so they must only be counted when they are in the right spot.
+	BEGIN must come after "as", "is", ";", or ">>", or the beginning of the string. 
+		"as" could be a column name, but it cannot be referenced as a column name:
+		select as from (select 1 as from dual);
+			   *
+		ERROR at line 1:
+		ORA-00936: missing expression
+	END must come after ";"
+		It cannot come after ">>", labels can't go there without compilation error.
+		end could be an object, but the object will be invalid so things won't compile
+	*/
+	elsif p_terminator = C_TERMINATOR_PLSQL_END then
+		declare
+			v_previous_concrete_token_1 token := token(null, null, null, null);
+			v_previous_concrete_token_2 token := token(null, null, null, null);
+			v_previous_concrete_token_3 token := token(null, null, null, null);
+			v_has_entered_block boolean := false;
+			v_block_counter number := 0;
+		begin
+			--Build new statement and count tokens.
+			loop
+				--Increment
+				exit when p_token_index >= p_tokens.count;
+				p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+
+				--Detect BEGIN
+				if
+				lower(p_tokens(p_token_index).value) = 'begin'
+				and
+				(
+					--TODO: Ignore some "begin begin", such as select begin begin from (select 1 begin from dual);
+					lower(v_previous_concrete_token_1.value) in ('begin', 'as', 'is', ';', '>>')
+					or
+					v_previous_concrete_token_1.type is null
+				) then
+					v_has_entered_block := true;
+					v_block_counter := v_block_counter + 1;
+				end if;
+
+				--Detect END
+				if
+				p_tokens(p_token_index).type = ';'
+				and
+				(
+					(
+						lower(v_previous_concrete_token_1.value) = 'end'
+						and
+						lower(v_previous_concrete_token_2.type) = ';'
+					)
+					or
+					--Optional block name.
+					(
+						lower(v_previous_concrete_token_1.type) = 'word'
+						and
+						lower(v_previous_concrete_token_2.value) = 'end'
+						and
+						lower(v_previous_concrete_token_3.type) = ';'
+					)
+				) then
+					v_block_counter := v_block_counter - 1;
+				end if;
+
+				--Detect end of statement.
+				if (v_has_entered_block and v_block_counter = 0) or p_tokens(p_token_index).type = 'EOF' then
+					--Consume all tokens if only whitespace, comments, and EOF remain.
+					if only_ws_comments_eof_remain(p_tokens, p_token_index+1) then
+						--Consume all tokens.
+						loop
+							p_token_index := p_token_index + 1;
+							p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+							exit when p_token_index = p_tokens.count;
+						end loop;
+					--Else stop here.
+					else
+						exit;
 					end if;
 				end if;
 
@@ -410,20 +505,20 @@ begin
 			--TODO
 			raise_application_error(-20000, 'CREATE JAVA is not yet supported.');
 
-		--#3: Match BEGIN and END
+		--#3: Match PLSQL_DECLARATION BEGIN and END.
 		elsif
-		v_command_name in ('CREATE FUNCTION','CREATE PROCEDURE','CREATE TRIGGER','CREATE TYPE BODY')
-		OR
-		(
-			v_command_name in ('CREATE MATERIALIZED VIEW ', 'CREATE SCHEMA', 'CREATE TABLE', 'CREATE VIEW', 'DELETE', 'EXPLAIN', 'INSERT', 'SELECT', 'UPDATE', 'UPSERT')
-			AND
-			has_plsql_declaration(v_tokens, 1)
-		)
+		v_command_name in ('CREATE MATERIALIZED VIEW ', 'CREATE SCHEMA', 'CREATE TABLE', 'CREATE VIEW', 'DELETE', 'EXPLAIN', 'INSERT', 'SELECT', 'UPDATE', 'UPSERT')
+		and
+		has_plsql_declaration(v_tokens, 1)
 		then
-			add_statement_consume_tokens(v_split_statements, v_tokens, 'END', v_temp_new_statement, v_temp_token_index);
+			add_statement_consume_tokens(v_split_statements, v_tokens, C_TERMINATOR_PLSQL_DECLARE_END, v_temp_new_statement, v_temp_token_index);
 
 
-		--#4: Stop at possibly unbalanced BEGIN/END;
+		--#4: Match PL/SQL BEGIN and END.
+		elsif v_command_name in ('CREATE FUNCTION','CREATE PROCEDURE','CREATE TRIGGER','CREATE TYPE BODY', 'PL/SQL EXECUTE') then
+			add_statement_consume_tokens(v_split_statements, v_tokens, C_TERMINATOR_PLSQL_END, v_temp_new_statement, v_temp_token_index);
+
+		--#5: Stop at possibly unbalanced BEGIN/END;
 		/*
 		4a
 		create or replace package test_package is
@@ -472,15 +567,15 @@ begin
 				if is_begin
 			end if;
 			*/
-		--#5: Stop at first END.
+		--#6: Stop at first END.
 		--(TODO: Can declaration have unbalanced begin and end for cursors?)
 		elsif v_command_name in ('CREATE PACKAGE') then
 			--TODO
 			null;
 
-		--#6: Stop at first ";" for everything else.
+		--#7: Stop at first ";" for everything else.
 		else
-			add_statement_consume_tokens(v_split_statements, v_tokens, ';', v_temp_new_statement, v_temp_token_index);
+			add_statement_consume_tokens(v_split_statements, v_tokens, C_TERMINATOR_SEMI, v_temp_new_statement, v_temp_token_index);
 		end if;
 
 		--TODO:
@@ -502,7 +597,7 @@ begin
 			add_statement_consume_tokens(v_split_statements, v_tokens, '/');
 		--All other commands stop at first ";" or EOF:
 		else
-			add_statement_consume_tokens(v_split_statements, v_tokens, ';');
+			add_statement_consume_tokens(v_split_statements, v_tokens, c_terminator_semi);
 		end if;
 */
 
