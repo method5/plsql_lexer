@@ -18,9 +18,11 @@ pragma serially_reusable;
 --Globals to select which test suites to run.
 c_errors            constant number := power(2, 1);
 c_simple            constant number := power(2, 2);
-c_plsql_declaration constant number := power(2, 3);
+c_slash             constant number := power(2, 3);
+c_plsql_declaration constant number := power(2, 4);
+c_plsql_block       constant number := power(2, 5);
 
-c_static_tests  constant number := c_errors+c_simple+c_plsql_declaration;
+c_static_tests  constant number := c_errors+c_simple+c_slash+c_plsql_declaration+c_plsql_block;
 
 c_dynamic_tests constant number := power(2, 30);
 
@@ -103,12 +105,80 @@ begin
 	assert_equals('Simple split 2b', ' select * from dual b; ', v_split_statements(2));
 	assert_equals('Simple split 2c', 2, v_split_statements.count);
 
-
-
 	--TODO
 	null;
 end test_simple;
 
+
+--------------------------------------------------------------------------------
+procedure test_slash is
+	v_statements nclob;
+	v_split_statements nclob_table := nclob_table();
+	c_slash constant varchar2(1) := '/';
+begin
+/*
+	--TODO:
+	v_statements:='';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Slash 1a', '2', v_split_statements.count);
+	assert_equals('Slash 1b', '', v_split_statements(1));
+	assert_equals('Slash 1c', v_statements, v_split_statements(2));
+*/
+
+/*
+	Extra slashes are kept
+	select * from dual a;
+	/
+	select * from dual b;
+	/
+
+*/
+
+
+
+	--Invalid SQL, but should only be one line.
+	v_statements:='select * from dual/';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Slash 1a', '1', v_split_statements.count);
+	assert_equals('Slash 1b', v_statements, v_split_statements(1));
+
+	--Valid SQL, not split.
+	v_statements:='select * from dual'||chr(10)||'/';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Slash 2a', '1', v_split_statements.count);
+	assert_equals('Slash 2b', v_statements, v_split_statements(1));
+/*
+	--Valid SQL, split in two.
+	v_statements:='select * from dual a'||chr(10)||' 	/	 '||'select * from dual b';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Slash 3a', '2', v_split_statements.count);
+	assert_equals('Slash 3b', 'select * from dual a'||chr(10)||' 	/	 ', v_split_statements(1));
+	assert_equals('Slash 3c', 'select * from dual b', v_split_statements(2));
+
+	--Valid SQL, split in three.
+	v_statements:='select * from dual a'||chr(10)||' 	/	 '||'select * from dual b';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Slash 4a', '2', v_split_statements.count);
+	assert_equals('Slash 4b', 'select * from dual a'||chr(10)||' 	/	 ', v_split_statements(1));
+	assert_equals('Slash 4c', 'select * from dual b', v_split_statements(2));
+*/
+
+
+
+/*
+	--Split into two.  Slash on line with just whitespace - spaces, tabs, newlines.
+	select * from dual a
+
+	  /  
+
+	select * from dual b
+	--Not split, newline is not on a line by itself
+	select * from dual a
+	/ --bad comment
+	select * from dual b
+	--Not split, newline is not on a line by itself
+	select * from dual a
+	/* bad comment *SLASH /
+	select * from dual b
+*/
+
+	null;
+end test_slash;
 
 
 --------------------------------------------------------------------------------
@@ -151,6 +221,29 @@ begin
 	assert_equals('plsql_declaration 7b', 'with function f return number is begin return 1; end; function g return number is begin return 2; end; function(a) as (select 1 a from dual) select f from dual;', v_split_statements(1));
 	assert_equals('plsql_declaration 7c', 'select 1 from dual;', v_split_statements(2));
 end test_plsql_declaration;
+
+
+--------------------------------------------------------------------------------
+procedure test_plsql_block is
+	v_statements nclob;
+	v_split_statements nclob_table := nclob_table();
+begin
+	v_statements:='declare v_test number; begin select begin begin into v_test from (select 1 begin from dual); end; select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('plsql_block: begin begin does not start a block 1a', 2, v_split_statements.count);
+	assert_equals('plsql_block: begin begin does not start a block 1b', 'declare v_test number; begin select begin begin into v_test from (select 1 begin from dual); end;', v_split_statements(1));
+	assert_equals('plsql_block: begin begin does not start a block 1c', ' select * from dual;', v_split_statements(2));
+
+	v_statements:='select begin begin into v_test from (select 1 begin from dual); select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('plsql_block: begin begin does not start a block 2a', 2, v_split_statements.count);
+	assert_equals('plsql_block: begin begin does not start a block 2b', 'select begin begin into v_test from (select 1 begin from dual);', v_split_statements(1));
+	assert_equals('plsql_block: begin begin does not start a block 2c', ' select * from dual;', v_split_statements(2));
+
+	v_statements:='declare v_test number; begin begin begin select begin begin into v_test from (select 1 begin from dual); end; end; end; select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('plsql_block: begin begin does not start a block 3a', 2, v_split_statements.count);
+	assert_equals('plsql_block: begin begin does not start a block 3b', 'declare v_test number; begin begin begin select begin begin into v_test from (select 1 begin from dual); end; end; end;', v_split_statements(1));
+	assert_equals('plsql_block: begin begin does not start a block 3c', ' select * from dual;', v_split_statements(2));
+end test_plsql_block;
+
 
 --------------------------------------------------------------------------------
 procedure dynamic_tests is
@@ -227,7 +320,9 @@ begin
 	--Run the chosen tests.
 	if bitand(p_tests, c_errors)            > 0 then test_errors;            end if;
 	if bitand(p_tests, c_simple)            > 0 then test_simple;            end if;
+	if bitand(p_tests, c_slash)             > 0 then test_slash;             end if;
 	if bitand(p_tests, c_plsql_declaration) > 0 then test_plsql_declaration; end if;
+	if bitand(p_tests, c_plsql_block)       > 0 then test_plsql_block;       end if;
 	if bitand(p_tests, c_dynamic_tests)     > 0 then dynamic_tests;          end if;
 
 	--Print summary of results.

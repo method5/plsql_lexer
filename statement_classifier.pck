@@ -11,6 +11,17 @@ procedure classify(
 	p_lex_sqlerrm    out varchar2
 );
 
+--Same as above, except it takes a pre-tokenized statement instead of a string.
+procedure classify(
+	p_abstract_tokens  in token_table,
+	p_category        out varchar2,
+	p_statement_type  out varchar2,
+	p_command_name    out varchar2,
+	p_command_type    out number,
+	p_lex_sqlcode     out number,
+	p_lex_sqlerrm     out varchar2
+);
+
 /*
 ## Purpose ##
 
@@ -159,7 +170,30 @@ procedure classify(
 		p_lex_sqlcode out number,
 		p_lex_sqlerrm out varchar2
 ) is
-	v_tokens_with_extra_stuff token_table := tokenizer.tokenize(p_statement);
+	v_abstract_tokens token_table := tokenizer.tokenize(p_statement);
+begin
+	classify(
+		v_abstract_tokens,
+		p_category,
+		p_statement_type,
+		p_command_name,
+		p_command_type,
+		p_lex_sqlcode,
+		p_lex_sqlerrm
+	);
+end classify;
+
+
+--------------------------------------------------------------------------------
+procedure classify(
+		p_abstract_tokens in token_table,
+		p_category out varchar2,
+		p_statement_type out varchar2,
+		p_command_name out varchar2,
+		p_command_type out number,
+		p_lex_sqlcode out number,
+		p_lex_sqlerrm out varchar2
+) is
 	v_tokens token_table := token_table();
 	type string_table is table of varchar2(4000) index by pls_integer; 
 	v_types string_table;
@@ -174,10 +208,10 @@ begin
 
 	--Find the first tokenizer error.
 	--Lexing errors are so serious that there will rarely be more than one anyway.
-	for i in 1 .. v_tokens_with_extra_stuff.count loop
-		if v_tokens_with_extra_stuff(i).sqlcode is not null then
-			p_lex_sqlcode := v_tokens_with_extra_stuff(i).sqlcode;
-			p_lex_sqlerrm := v_tokens_with_extra_stuff(i).sqlerrm;
+	for i in 1 .. p_abstract_tokens.count loop
+		if p_abstract_tokens(i).sqlcode is not null then
+			p_lex_sqlcode := p_abstract_tokens(i).sqlcode;
+			p_lex_sqlerrm := p_abstract_tokens(i).sqlerrm;
 			exit;
 		end if;
 	end loop;
@@ -219,12 +253,12 @@ begin
 	FLASHBACK [STANDBY]? DATABASE
 	SET [CONSTRAINT|CONSTRAINTS]* (AMBIGUOUS - HOW DO WE NAME THESE?)
 	*/
-	for i in 1 .. v_tokens_with_extra_stuff.count loop
-		if v_tokens_with_extra_stuff(i).type not in ('whitespace', 'comment')
+	for i in 1 .. p_abstract_tokens.count loop
+		if p_abstract_tokens(i).type not in ('whitespace', 'comment')
 			and not
 			(
-				v_tokens_with_extra_stuff(i).type = 'word'
-				and upper(v_tokens_with_extra_stuff(i).value) in
+				p_abstract_tokens(i).type = 'word'
+				and upper(p_abstract_tokens(i).value) in
 				(
 					--Removed COMPILE
 					'AND','BIGFILE','BITMAP','EDITIONABLE','EDITIONING','FORCE','FORCE','GLOBAL',
@@ -234,7 +268,7 @@ begin
 			)
 		then
 			v_tokens.extend;
-			v_tokens(v_tokens.count) := v_tokens_with_extra_stuff(i);
+			v_tokens(v_tokens.count) := p_abstract_tokens(i);
 		end if;
 	end loop;
 

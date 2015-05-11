@@ -18,6 +18,7 @@ See the individual packages for details on each procedure.
 - `split_statements` - Split a series of statements separated by ";" or "/".
 
 		function split(p_statements in nclob) return nclob_table;
+		TODO
 
 - `statement_classifier.classify_statement` - Classify a statement as DDL, PL/SQL, SELECT, ALTER, etc.
 

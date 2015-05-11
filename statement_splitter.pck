@@ -5,12 +5,13 @@ create or replace package statement_splitter is
 /*
 ## Purpose ##
 
-Split a string into separate SQL and PL/SQL statements terminiated by ";" or "/".
+Split a string of separate SQL and PL/SQL statements terminated by ";".
 
 Unlike SQL*Plus, even PL/SQL-like statements can be terminiated solely with a ";".
 This is helpful because it's difficult to use a "/" in strings in most IDEs.
 
-Like SQL*Plus, a "/" on a line by itself is also a terminator.  (TODO)
+Like SQL*Plus, a "/" on a line by itself is also a terminator.  This secondary
+terminator is configurable but it does not override the ";" terminator.
 
 
 ## Output ##
@@ -27,7 +28,7 @@ TODO
 
 */
 
-function split(p_statements in nclob) return nclob_table;
+function split(p_statements in nclob, p_secondary_terminator in varchar2 default '/') return nclob_table;
 
 end;
 /
@@ -235,6 +236,7 @@ begin
 			v_previous_concrete_token_3 token := token(null, null, null, null);
 			v_has_entered_block boolean := false;
 			v_block_counter number := 0;
+			v_prev_conc_tok_was_real_begin boolean := false;
 		begin
 			--Build new statement and count tokens.
 			loop
@@ -243,17 +245,31 @@ begin
 				p_new_statement := p_new_statement || p_tokens(p_token_index).value;
 
 				--Detect BEGIN
+				--
+				--Detecting BEGIN after 'as', 'is', ';', and '>>' is simple.
 				if
 				lower(p_tokens(p_token_index).value) = 'begin'
 				and
 				(
-					--TODO: Ignore some "begin begin" - such as select begin begin from (select 1 begin from dual);
-					lower(v_previous_concrete_token_1.value) in ('begin', 'as', 'is', ';', '>>')
+					(
+						lower(v_previous_concrete_token_1.value) in ('as', 'is', ';', '>>')
+						or
+						v_previous_concrete_token_1.type is null
+					)
 					or
-					v_previous_concrete_token_1.type is null
+					(
+						--Ignore some "begin begin", such as select begin begin from (select 1 begin from dual);
+						lower(v_previous_concrete_token_1.value) = 'begin'
+						and
+						v_prev_conc_tok_was_real_begin
+					)
 				) then
 					v_has_entered_block := true;
 					v_block_counter := v_block_counter + 1;
+					v_prev_conc_tok_was_real_begin := true;
+				--If token is concrete, reset the flag.
+				elsif p_tokens(p_token_index).type not in ('whitespace', 'comment', 'EOF') then
+					v_prev_conc_tok_was_real_begin := false;
 				end if;
 
 				--Detect END
@@ -320,7 +336,7 @@ begin
 	/*
 	Match BEGIN and END for a common PL/SQL block.
 		They are not reserved words so they must only be counted when they are in the right spot.
-	BEGIN must come after "as", "is", ";", or ">>", or the beginning of the string. 
+	BEGIN must come after "begin", "as", "is", ";", or ">>", or the beginning of the string. 
 		"as" could be a column name, but it cannot be referenced as a column name:
 		select as from (select 1 as from dual);
 			   *
@@ -337,6 +353,7 @@ begin
 			v_previous_concrete_token_3 token := token(null, null, null, null);
 			v_has_entered_block boolean := false;
 			v_block_counter number := 0;
+			v_prev_conc_tok_was_real_begin boolean := false;
 		begin
 			--Build new statement and count tokens.
 			loop
@@ -345,17 +362,31 @@ begin
 				p_new_statement := p_new_statement || p_tokens(p_token_index).value;
 
 				--Detect BEGIN
+				--
+				--Detecting BEGIN after 'as', 'is', ';', and '>>' is simple.
 				if
 				lower(p_tokens(p_token_index).value) = 'begin'
 				and
 				(
-					--TODO: Ignore some "begin begin", such as select begin begin from (select 1 begin from dual);
-					lower(v_previous_concrete_token_1.value) in ('begin', 'as', 'is', ';', '>>')
+					(
+						lower(v_previous_concrete_token_1.value) in ('as', 'is', ';', '>>')
+						or
+						v_previous_concrete_token_1.type is null
+					)
 					or
-					v_previous_concrete_token_1.type is null
+					(
+						--Ignore some "begin begin", such as select begin begin from (select 1 begin from dual);
+						lower(v_previous_concrete_token_1.value) = 'begin'
+						and
+						v_prev_conc_tok_was_real_begin
+					)
 				) then
 					v_has_entered_block := true;
 					v_block_counter := v_block_counter + 1;
+					v_prev_conc_tok_was_real_begin := true;
+				--If token is concrete, reset the flag.
+				elsif p_tokens(p_token_index).type not in ('whitespace', 'comment', 'EOF') then
+					v_prev_conc_tok_was_real_begin := false;
 				end if;
 
 				--Detect END
@@ -443,8 +474,8 @@ begin
 end add_statement_consume_tokens;
 
 --------------------------------------------------------------------------------
---Print tokens for debugging.
-function split(p_statements in nclob) return nclob_table is
+--Split a string of separate SQL and PL/SQL statements terminated by ";".
+function split(p_statements in nclob, p_secondary_terminator in varchar2 default '/') return nclob_table is
 	v_split_statements nclob_table := nclob_table();
 	v_tokens token_table;
 	v_command_name varchar2(4000);
@@ -465,7 +496,7 @@ begin
 			v_throwaway_string varchar2(32767);
 		begin
 			statement_classifier.classify(
-				p_statement => p_statements,
+				p_abstract_tokens => v_tokens,
 				p_category => v_throwaway_string,
 				p_statement_type => v_throwaway_string,
 				p_command_name => v_command_name,
