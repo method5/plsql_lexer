@@ -38,6 +38,8 @@ C_TERMINATOR_SEMI              constant number := 1;
 C_TERMINATOR_PLSQL_DECLARE_END constant number := 2;
 C_TERMINATOR_PLSQL_END         constant number := 3;
 
+type token_table_table is table of token_table;
+
 
 --------------------------------------------------------------------------------
 /*
@@ -473,18 +475,26 @@ begin
 
 end add_statement_consume_tokens;
 
+
 --------------------------------------------------------------------------------
---Split a string of separate SQL and PL/SQL statements terminated by ";".
-function split(p_statements in nclob, p_secondary_terminator in varchar2 default '/') return nclob_table is
+--Split a token stream into separate token streams by some secondary terminator,
+--usually "/".
+function split_tokens_by_secondary_term(p_tokens in token_table, p_secondary_terminator in varchar2)
+return token_table_table is
+begin
+	--TODO
+	return token_table_table(p_tokens);
+end split_tokens_by_secondary_term;
+
+
+--------------------------------------------------------------------------------
+--Split a token stream into statements by ";".
+function split_tokens_by_primary_term(p_tokens in out token_table) return nclob_table is
 	v_split_statements nclob_table := nclob_table();
-	v_tokens token_table;
 	v_command_name varchar2(4000);
 	v_temp_new_statement nclob;
 	v_temp_token_index number;
 begin
-	--Tokenize.
-	v_tokens := tokenizer.tokenize(p_statements);
-
 	--Split into statements.
 	loop
 		v_temp_new_statement := null;
@@ -496,7 +506,7 @@ begin
 			v_throwaway_string varchar2(32767);
 		begin
 			statement_classifier.classify(
-				p_abstract_tokens => v_tokens,
+				p_abstract_tokens => p_tokens,
 				p_category => v_throwaway_string,
 				p_statement_type => v_throwaway_string,
 				p_command_name => v_command_name,
@@ -540,14 +550,14 @@ begin
 		elsif
 		v_command_name in ('CREATE MATERIALIZED VIEW ', 'CREATE SCHEMA', 'CREATE TABLE', 'CREATE VIEW', 'DELETE', 'EXPLAIN', 'INSERT', 'SELECT', 'UPDATE', 'UPSERT')
 		and
-		has_plsql_declaration(v_tokens, 1)
+		has_plsql_declaration(p_tokens, 1)
 		then
-			add_statement_consume_tokens(v_split_statements, v_tokens, C_TERMINATOR_PLSQL_DECLARE_END, v_temp_new_statement, v_temp_token_index);
+			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_PLSQL_DECLARE_END, v_temp_new_statement, v_temp_token_index);
 
 
 		--#4: Match PL/SQL BEGIN and END.
 		elsif v_command_name in ('CREATE FUNCTION','CREATE PROCEDURE','CREATE TRIGGER','CREATE TYPE BODY', 'PL/SQL EXECUTE') then
-			add_statement_consume_tokens(v_split_statements, v_tokens, C_TERMINATOR_PLSQL_END, v_temp_new_statement, v_temp_token_index);
+			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_PLSQL_END, v_temp_new_statement, v_temp_token_index);
 
 		--#5: Stop at possibly unbalanced BEGIN/END;
 		/*
@@ -606,7 +616,7 @@ begin
 
 		--#7: Stop at first ";" for everything else.
 		else
-			add_statement_consume_tokens(v_split_statements, v_tokens, C_TERMINATOR_SEMI, v_temp_new_statement, v_temp_token_index);
+			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_SEMI, v_temp_new_statement, v_temp_token_index);
 		end if;
 
 		--TODO:
@@ -633,9 +643,33 @@ begin
 */
 
 		--Quit when there are no more tokens.
-		exit when v_tokens.count = 0;
+		exit when p_tokens.count = 0;
 	end loop;
 
+	return v_split_statements;
+end split_tokens_by_primary_term;
+
+
+--------------------------------------------------------------------------------
+--Split a string of separate SQL and PL/SQL statements terminated by ";" and
+--some secondary terminator, usually "/".
+function split(p_statements in nclob, p_secondary_terminator in varchar2 default '/') return nclob_table is
+	v_split_statements nclob_table := nclob_table();
+	v_tokens token_table;
+	v_split_tokens token_table_table;
+begin
+	--Tokenize.
+	v_tokens := tokenizer.tokenize(p_statements);
+
+	--First split by the secondary terminators, usually "/".
+	v_split_tokens := split_tokens_by_secondary_term(v_tokens, p_secondary_terminator);
+
+	--Split each set of tokens by the primary terminator, ";".
+	for i in 1 .. v_split_tokens.count loop
+		v_split_statements := split_tokens_by_primary_term(v_split_tokens(i));
+	end loop;
+
+	--Return the statements.
 	return v_split_statements;
 end split;
 
