@@ -477,13 +477,57 @@ end add_statement_consume_tokens;
 
 
 --------------------------------------------------------------------------------
---Split a token stream into separate token streams by some secondary terminator,
---usually "/".
+--Split tokens into separate token collections by a secondary terminator, usually "/".
+--This follows the SQL*Plus rules - the terminator must be on a line by itself,
+--although the line may contain whitespace before and after the terminator.
 function split_tokens_by_secondary_term(p_tokens in token_table, p_secondary_terminator in varchar2)
 return token_table_table is
+	v_token_table_table token_table_table := token_table_table();
+	v_tokens token_table := token_table();
 begin
-	--TODO
-	return token_table_table(p_tokens);
+	--Do nothing if secondary terminator is null.
+	if p_secondary_terminator is null then
+		return token_table_table(p_tokens);
+	end if;
+
+	--Look for the terminator, on a line with only whitespace
+	for i in 1 .. p_tokens.count loop
+		--Split if terminator is found.
+		--TODO: Check for other items on the line.
+		if p_tokens(i).type = '/' then
+			--Push token.
+			v_tokens.extend;
+			v_tokens(v_tokens.count) := p_tokens(i);
+
+			--Push another token, push token table, and quit if the next token is EOF.
+			if p_tokens.count = i + 1 and p_tokens(i+1).type = 'EOF' then
+				v_tokens.extend;
+				v_tokens(v_tokens.count) := p_tokens(i+1);
+				v_token_table_table.extend;
+				v_token_table_table(v_token_table_table.count) := v_tokens;
+				v_tokens := token_table();
+				exit;
+			--Push token table if next token is not EOF.
+			else
+				v_token_table_table.extend;
+				v_token_table_table(v_token_table_table.count) := v_tokens;
+				v_tokens := token_table();
+			end if;
+		--Push last token on stack, and add to table of tables.
+		elsif i = p_tokens.count then
+			v_tokens.extend;
+			v_tokens(v_tokens.count) := p_tokens(i);
+			v_token_table_table.extend;
+			v_token_table_table(v_token_table_table.count) := v_tokens;
+		--Push on stack if no terminator is found.
+		else
+			v_tokens.extend;
+			v_tokens(v_tokens.count) := p_tokens(i);
+		end if;
+	end loop;
+
+	--Return split token tables.
+	return v_token_table_table;
 end split_tokens_by_secondary_term;
 
 
@@ -666,7 +710,7 @@ begin
 
 	--Split each set of tokens by the primary terminator, ";".
 	for i in 1 .. v_split_tokens.count loop
-		v_split_statements := split_tokens_by_primary_term(v_split_tokens(i));
+		v_split_statements := v_split_statements multiset union split_tokens_by_primary_term(v_split_tokens(i));
 	end loop;
 
 	--Return the statements.

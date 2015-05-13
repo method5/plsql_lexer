@@ -144,13 +144,13 @@ begin
 	v_statements:='select * from dual'||chr(10)||'/';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Slash 2a', '1', v_split_statements.count);
 	assert_equals('Slash 2b', v_statements, v_split_statements(1));
-/*
+
 	--Valid SQL, split in two.
 	v_statements:='select * from dual a'||chr(10)||' 	/	 '||'select * from dual b';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Slash 3a', '2', v_split_statements.count);
 	assert_equals('Slash 3b', 'select * from dual a'||chr(10)||' 	/	 ', v_split_statements(1));
 	assert_equals('Slash 3c', 'select * from dual b', v_split_statements(2));
-
+/*
 	--Valid SQL, split in three.
 	v_statements:='select * from dual a'||chr(10)||' 	/	 '||'select * from dual b';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Slash 4a', '2', v_split_statements.count);
