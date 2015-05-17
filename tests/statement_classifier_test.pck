@@ -168,14 +168,19 @@ begin
 	assert_equals('String not terminated 3', -1756, v_output.lex_sqlcode);
 	assert_equals('String not terminated 4', 'quoted string not properly terminated', v_output.lex_sqlerrm);
 
-	--Cannot parse.
-	classify(q'[asdf]', v_output); assert_equals('Cannot classify 1', '|||', concat(v_output));
-	classify(q'[create tableS test1(a number);]', v_output); assert_equals('Cannot classify 2', '|||', concat(v_output));
-	classify(q'[]', v_output); assert_equals('Cannot classify 3', '|||', concat(v_output));
-	classify(q'[/*]', v_output); assert_equals('Cannot classify 4', '|||', concat(v_output));
-	classify(q'[alter what_is_this set x = y;]', v_output); assert_equals('Cannot classify 5', '|||', concat(v_output));
-	classify(q'[upsert my_table using other_table on (my_table.a = other_table.a) when matched then update set b = 1]', v_output); assert_equals('Cannot classify 6', '|||', concat(v_output));
+	--Invalid.
+	classify(q'[asdf]', v_output); assert_equals('Cannot classify 1', 'Invalid|Invalid|Invalid|-1', concat(v_output));
+	classify(q'[create tableS test1(a number);]', v_output); assert_equals('Cannot classify 2', 'Invalid|Invalid|Invalid|-1', concat(v_output));
+	classify(q'[seeelect * from dual]', v_output); assert_equals('Cannot classify 3', 'Invalid|Invalid|Invalid|-1', concat(v_output));
+	classify(q'[alter what_is_this set x = y;]', v_output); assert_equals('Cannot classify 4', 'Invalid|Invalid|Invalid|-1', concat(v_output));
+	classify(q'[upsert my_table using other_table on (my_table.a = other_table.a) when matched then update set b = 1]', v_output); assert_equals('Cannot classify 5', 'Invalid|Invalid|Invalid|-1', concat(v_output));
 
+	--Nothing.
+	classify(q'[]', v_output); assert_equals('Nothing to classify 1', 'Nothing|Nothing|Nothing|-2', concat(v_output));
+	classify(q'[ 	 ]', v_output); assert_equals('Nothing to classify 2', 'Nothing|Nothing|Nothing|-2', concat(v_output));
+	classify(q'[ /* asdf */ ]', v_output); assert_equals('Nothing to classify 3', 'Nothing|Nothing|Nothing|-2', concat(v_output));
+	classify(q'[ -- comment ]', v_output); assert_equals('Nothing to classify 4', 'Nothing|Nothing|Nothing|-2', concat(v_output));
+	classify(q'[ /* asdf ]', v_output); assert_equals('Nothing to classify 5', 'Nothing|Nothing|Nothing|-2', concat(v_output));
 end test_errors;
 
 

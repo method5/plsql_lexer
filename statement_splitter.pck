@@ -509,6 +509,9 @@ begin
 				exit;
 			--Push token table if next token is not EOF.
 			else
+				--Add EOF to the end since there wasn't one.
+				v_tokens.extend;
+				v_tokens(v_tokens.count) := token('EOF', null, null, null);
 				v_token_table_table.extend;
 				v_token_table_table(v_token_table_table.count) := v_tokens;
 				v_tokens := token_table();
@@ -663,29 +666,6 @@ begin
 			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_SEMI, v_temp_new_statement, v_temp_token_index);
 		end if;
 
-		--TODO:
-		--Stop whenever "/" on a line by itself with only comments or whitespace
-
-
-
-
-/*
-			--Commands that always require a "/":
-			v_command_name in ('CREATE ASSEMBLY','CREATE FUNCTION','CREATE JAVA','CREATE LIBRARY','CREATE PACKAGE',
-				'CREATE PACKAGE BODY','CREATE PROCEDURE','CREATE TRIGGER','CREATE TYPE','CREATE TYPE BODY')
-			or
-			--Commands that sometimes require a "/":
-			(
-				v_command_name in ('CREATE MATERIALIZED VIEW ', 'CREATE SCHEMA', 'DELETE', 'EXPLAIN', 'INSERT', 'SELECT', 'UPDATE', 'UPSERT')
-				and has_plsql_declaration(v_tokens)
-			) then
-			add_statement_consume_tokens(v_split_statements, v_tokens, '/');
-		--All other commands stop at first ";" or EOF:
-		else
-			add_statement_consume_tokens(v_split_statements, v_tokens, c_terminator_semi);
-		end if;
-*/
-
 		--Quit when there are no more tokens.
 		exit when p_tokens.count = 0;
 	end loop;
@@ -707,6 +687,21 @@ begin
 
 	--First split by the secondary terminators, usually "/".
 	v_split_tokens := split_tokens_by_secondary_term(v_tokens, p_secondary_terminator);
+
+	--TEST TODO
+	/*
+	declare
+		v_test nclob;
+	begin
+		for i in 1 .. v_split_tokens.count loop
+			v_test := null;
+			for j in 1 .. v_split_tokens(i).count loop
+				v_test := v_test||v_split_tokens(i)(j).value;
+			end loop;
+			dbms_output.put_line(i||': '||v_test);
+		end loop;
+	end;
+	*/
 
 	--Split each set of tokens by the primary terminator, ";".
 	for i in 1 .. v_split_tokens.count loop
