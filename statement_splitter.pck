@@ -10,8 +10,9 @@ Split a string of separate SQL and PL/SQL statements terminated by ";".
 Unlike SQL*Plus, even PL/SQL-like statements can be terminiated solely with a ";".
 This is helpful because it's difficult to use a "/" in strings in most IDEs.
 
-Like SQL*Plus, a "/" on a line by itself is also a terminator.  This secondary
-terminator is configurable but it does not override the ";" terminator.
+Like SQL*Plus, a "/" on a line by itself is also a terminator.  This optional
+delimiter is configurable, does not override the ";" terminator, and is removed
+from the split strings.
 
 
 ## Output ##
@@ -28,7 +29,7 @@ TODO
 
 */
 
-function split(p_statements in nclob, p_secondary_terminator in varchar2 default '/') return nclob_table;
+function split(p_statements in nclob, p_optional_delimiter in varchar2 default '/') return nclob_table;
 
 end;
 /
@@ -477,27 +478,50 @@ end add_statement_consume_tokens;
 
 
 --------------------------------------------------------------------------------
---Split tokens into separate token collections by a secondary terminator, usually "/".
---This follows the SQL*Plus rules - the terminator must be on a line by itself,
---although the line may contain whitespace before and after the terminator.
-function split_tokens_by_secondary_term(p_tokens in token_table, p_secondary_terminator in varchar2)
+--Split tokens into separate token collections by an optional delmiter, usually "/".
+--This follows the SQL*Plus rules - the delimiter must be on a line by itself,
+--although the line may contain whitespace before and after the delimiter.
+function split_tokens_by_optional_delim(p_tokens in token_table, p_optional_delimiter in varchar2)
 return token_table_table is
 	v_token_table_table token_table_table := token_table_table();
 	v_tokens token_table := token_table();
 begin
-	--Do nothing if secondary terminator is null.
-	if p_secondary_terminator is null then
+	--Do nothing if optional delimiter is null.
+	if p_optional_delimiter is null then
 		return token_table_table(p_tokens);
 	end if;
 
-	--Look for the terminator, on a line with only whitespace
+	--Look for the delimiter, on a line with only whitespace
 	for i in 1 .. p_tokens.count loop
-		--Split if terminator is found.
+		--Split if delimiter is found.
 		--TODO: Check for other items on the line.
-		if p_tokens(i).type = '/' then
-			--Push token.
-			v_tokens.extend;
-			v_tokens(v_tokens.count) := p_tokens(i);
+		if p_tokens(i).value = p_optional_delimiter
+			--Nothing or whitespace before the line.
+			and
+			(
+				i = 1
+				or
+				(
+					p_tokens(i-1).type = 'whitespace'
+					and
+					dbms_lob.instr(lob_loc => p_tokens(i-1).value, pattern => chr(10)) > 0
+				)
+			)
+			and
+			--Nothing or whitespace after the line.
+			(
+				i = p_tokens.count
+				or
+				p_tokens(i+1).type = 'EOF'
+				or
+				(
+					p_tokens(i+1).type = 'whitespace'
+					and
+					dbms_lob.instr(lob_loc => p_tokens(i+1).value, pattern => chr(10)) > 0
+				)
+			)
+		 then
+			--Do *not* push the delimiter.
 
 			--Push another token, push token table, and quit if the next token is EOF.
 			if p_tokens.count = i + 1 and p_tokens(i+1).type = 'EOF' then
@@ -522,7 +546,7 @@ begin
 			v_tokens(v_tokens.count) := p_tokens(i);
 			v_token_table_table.extend;
 			v_token_table_table(v_token_table_table.count) := v_tokens;
-		--Push on stack if no terminator is found.
+		--Push on stack if no delimiter is found.
 		else
 			v_tokens.extend;
 			v_tokens(v_tokens.count) := p_tokens(i);
@@ -531,7 +555,7 @@ begin
 
 	--Return split token tables.
 	return v_token_table_table;
-end split_tokens_by_secondary_term;
+end split_tokens_by_optional_delim;
 
 
 --------------------------------------------------------------------------------
@@ -677,7 +701,7 @@ end split_tokens_by_primary_term;
 --------------------------------------------------------------------------------
 --Split a string of separate SQL and PL/SQL statements terminated by ";" and
 --some secondary terminator, usually "/".
-function split(p_statements in nclob, p_secondary_terminator in varchar2 default '/') return nclob_table is
+function split(p_statements in nclob, p_optional_delimiter in varchar2 default '/') return nclob_table is
 	v_split_statements nclob_table := nclob_table();
 	v_tokens token_table;
 	v_split_tokens token_table_table;
@@ -686,7 +710,7 @@ begin
 	v_tokens := tokenizer.tokenize(p_statements);
 
 	--First split by the secondary terminators, usually "/".
-	v_split_tokens := split_tokens_by_secondary_term(v_tokens, p_secondary_terminator);
+	v_split_tokens := split_tokens_by_optional_delim(v_tokens, p_optional_delimiter);
 
 	--TEST TODO
 	/*

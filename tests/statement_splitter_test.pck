@@ -16,13 +16,13 @@ end;
 pragma serially_reusable;
 
 --Globals to select which test suites to run.
-c_errors            constant number := power(2, 1);
-c_simple            constant number := power(2, 2);
-c_slash             constant number := power(2, 3);
-c_plsql_declaration constant number := power(2, 4);
-c_plsql_block       constant number := power(2, 5);
+c_errors             constant number := power(2, 1);
+c_simple             constant number := power(2, 2);
+c_optional_delimiter constant number := power(2, 3);
+c_plsql_declaration  constant number := power(2, 4);
+c_plsql_block        constant number := power(2, 5);
 
-c_static_tests  constant number := c_errors+c_simple+c_slash+c_plsql_declaration+c_plsql_block;
+c_static_tests  constant number := c_errors+c_simple+c_optional_delimiter+c_plsql_declaration+c_plsql_block;
 
 c_dynamic_tests constant number := power(2, 30);
 
@@ -111,30 +111,11 @@ end test_simple;
 
 
 --------------------------------------------------------------------------------
-procedure test_slash is
+procedure test_optional_delimiter is
 	v_statements nclob;
 	v_split_statements nclob_table := nclob_table();
 	c_slash constant varchar2(1) := '/';
 begin
-/*
-	--TODO:
-	v_statements:='';v_split_statements:=statement_splitter.split(v_statements);
-	assert_equals('Slash 1a', '2', v_split_statements.count);
-	assert_equals('Slash 1b', '', v_split_statements(1));
-	assert_equals('Slash 1c', v_statements, v_split_statements(2));
-*/
-
-/*
-	Extra slashes are kept
-	select * from dual a;
-	/
-	select * from dual b;
-	/
-
-*/
-
-
-
 	--Invalid SQL, but should only be one line.
 	v_statements:='select * from dual/';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Slash 1a', '1', v_split_statements.count);
@@ -143,20 +124,34 @@ begin
 	--Valid SQL, not split.
 	v_statements:='select * from dual'||chr(10)||'/';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Slash 2a', '1', v_split_statements.count);
-	assert_equals('Slash 2b', v_statements, v_split_statements(1));
+	assert_equals('Slash 2b', 'select * from dual'||chr(10), v_split_statements(1));
 
 	--Valid SQL, split in two.
-	v_statements:='select * from dual a'||chr(10)||' 	/	 '||'select * from dual b';v_split_statements:=statement_splitter.split(v_statements);
+	v_statements:='select * from dual a'||chr(10)||' 	/	 '||chr(10)||'select * from dual b';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Slash 3a', '2', v_split_statements.count);
-	assert_equals('Slash 3b', 'select * from dual a'||chr(10)||' 	/	 ', v_split_statements(1));
-	assert_equals('Slash 3c', 'select * from dual b', v_split_statements(2));
-/*
+	assert_equals('Slash 3b', 'select * from dual a'||chr(10)||' 	', v_split_statements(1));
+	assert_equals('Slash 3c', '	 '||chr(10)||'select * from dual b', v_split_statements(2));
+
 	--Valid SQL, split in three.
-	v_statements:='select * from dual a'||chr(10)||' 	/	 '||'select * from dual b';v_split_statements:=statement_splitter.split(v_statements);
-	assert_equals('Slash 4a', '2', v_split_statements.count);
-	assert_equals('Slash 4b', 'select * from dual a'||chr(10)||' 	/	 ', v_split_statements(1));
-	assert_equals('Slash 4c', 'select * from dual b', v_split_statements(2));
-*/
+	v_statements:='select * from dual a'||chr(10)||' 	/	 '||chr(10)||'select * from dual b; select * from dual c';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Slash 4a', '3', v_split_statements.count);
+	assert_equals('Slash 4b', 'select * from dual a'||chr(10)||' 	', v_split_statements(1));
+	assert_equals('Slash 4c', '	 '||chr(10)||'select * from dual b;', v_split_statements(2));
+	assert_equals('Slash 4c', ' select * from dual c', v_split_statements(3));
+
+	--Valid SQL, split in two with a custom delimiter.
+	v_statements:='select * from dual a'||chr(10)||' 	#	 '||chr(10)||'select * from dual b';v_split_statements:=statement_splitter.split(v_statements, '#');
+	assert_equals('Slash 5a', '2', v_split_statements.count);
+	assert_equals('Slash 5b', 'select * from dual a'||chr(10)||' 	', v_split_statements(1));
+	assert_equals('Slash 5c', '	 '||chr(10)||'select * from dual b', v_split_statements(2));
+
+	--Valid SQL, split in two with a custom multi-character delimiter.
+	--TODO: This shows up as two different tokens - we must collapse them somehow.
+	v_statements:='select * from dual a'||chr(10)||' 	$$	 '||chr(10)||'select * from dual b';v_split_statements:=statement_splitter.split(v_statements, '$$');
+	assert_equals('Slash 6a', '2', v_split_statements.count);
+	assert_equals('Slash 6b', 'select * from dual a'||chr(10)||' 	', v_split_statements(1));
+--	assert_equals('Slash 6c', '	 '||chr(10)||'select * from dual b', v_split_statements(2));
+
 
 
 
@@ -176,9 +171,7 @@ begin
 	/* bad comment *SLASH /
 	select * from dual b
 */
-
-	null;
-end test_slash;
+end test_optional_delimiter;
 
 
 --------------------------------------------------------------------------------
@@ -318,12 +311,12 @@ begin
 	g_failed_count := 0;
 
 	--Run the chosen tests.
-	if bitand(p_tests, c_errors)            > 0 then test_errors;            end if;
-	if bitand(p_tests, c_simple)            > 0 then test_simple;            end if;
-	if bitand(p_tests, c_slash)             > 0 then test_slash;             end if;
-	if bitand(p_tests, c_plsql_declaration) > 0 then test_plsql_declaration; end if;
-	if bitand(p_tests, c_plsql_block)       > 0 then test_plsql_block;       end if;
-	if bitand(p_tests, c_dynamic_tests)     > 0 then dynamic_tests;          end if;
+	if bitand(p_tests, c_errors)             > 0 then test_errors;             end if;
+	if bitand(p_tests, c_simple)             > 0 then test_simple;             end if;
+	if bitand(p_tests, c_optional_delimiter) > 0 then test_optional_delimiter; end if;
+	if bitand(p_tests, c_plsql_declaration)  > 0 then test_plsql_declaration;  end if;
+	if bitand(p_tests, c_plsql_block)        > 0 then test_plsql_block;        end if;
+	if bitand(p_tests, c_dynamic_tests)      > 0 then dynamic_tests;           end if;
 
 	--Print summary of results.
 	dbms_output.put_line(null);
