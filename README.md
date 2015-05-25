@@ -54,6 +54,8 @@ See the individual packages for details on each procedure.
         
         create or replace type nclob_table is table of nclob;
         
+        create or replace type nvarchar2_table is table of nvarchar2(2 char);
+        
         create or replace type token is object
         (
             type     varchar2(4000),

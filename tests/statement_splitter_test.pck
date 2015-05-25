@@ -117,23 +117,23 @@ procedure test_optional_delimiter is
 	c_slash constant varchar2(1) := '/';
 begin
 	--Invalid SQL, but should only be one line.
-	v_statements:='select * from dual/';v_split_statements:=statement_splitter.split(v_statements);
+	v_statements:='select * from dual/';v_split_statements:=statement_splitter.split(v_statements, '/');
 	assert_equals('Slash 1a', '1', v_split_statements.count);
 	assert_equals('Slash 1b', v_statements, v_split_statements(1));
 
 	--Valid SQL, not split.
-	v_statements:='select * from dual'||chr(10)||'/';v_split_statements:=statement_splitter.split(v_statements);
+	v_statements:='select * from dual'||chr(10)||'/';v_split_statements:=statement_splitter.split(v_statements, '/');
 	assert_equals('Slash 2a', '1', v_split_statements.count);
 	assert_equals('Slash 2b', 'select * from dual'||chr(10), v_split_statements(1));
 
 	--Valid SQL, split in two.
-	v_statements:='select * from dual a'||chr(10)||' 	/	 '||chr(10)||'select * from dual b';v_split_statements:=statement_splitter.split(v_statements);
+	v_statements:='select * from dual a'||chr(10)||' 	/	 '||chr(10)||'select * from dual b';v_split_statements:=statement_splitter.split(v_statements, '/');
 	assert_equals('Slash 3a', '2', v_split_statements.count);
 	assert_equals('Slash 3b', 'select * from dual a'||chr(10)||' 	', v_split_statements(1));
 	assert_equals('Slash 3c', '	 '||chr(10)||'select * from dual b', v_split_statements(2));
 
 	--Valid SQL, split in three.
-	v_statements:='select * from dual a'||chr(10)||' 	/	 '||chr(10)||'select * from dual b; select * from dual c';v_split_statements:=statement_splitter.split(v_statements);
+	v_statements:='select * from dual a'||chr(10)||' 	/	 '||chr(10)||'select * from dual b; select * from dual c';v_split_statements:=statement_splitter.split(v_statements, '/');
 	assert_equals('Slash 4a', '3', v_split_statements.count);
 	assert_equals('Slash 4b', 'select * from dual a'||chr(10)||' 	', v_split_statements(1));
 	assert_equals('Slash 4c', '	 '||chr(10)||'select * from dual b;', v_split_statements(2));
@@ -152,6 +152,14 @@ begin
 	assert_equals('Slash 6b', 'select * from dual a'||chr(10)||' 	', v_split_statements(1));
 --	assert_equals('Slash 6c', '	 '||chr(10)||'select * from dual b', v_split_statements(2));
 
+
+	--SQL split in two with a custom delimiter, in the middle of a string.
+	--This is a "bug", but it's how SQL*Plus works.
+	v_statements:='select '''||chr(10)||' 	/	 '||chr(10)||''' from dual';v_split_statements:=statement_splitter.split(v_statements, '/');
+	assert_equals('Slash 7a', '2', v_split_statements.count);
+	--TODO
+	--assert_equals('Slash 7b', 'select * from dual a'||chr(10)||' 	', v_split_statements(1));
+	--assert_equals('Slash 7c', '	 '||chr(10)||'select * from dual b', v_split_statements(2));
 
 
 

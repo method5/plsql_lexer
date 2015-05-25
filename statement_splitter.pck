@@ -10,7 +10,8 @@ Split a string of separate SQL and PL/SQL statements terminated by ";".
 Unlike SQL*Plus, even PL/SQL-like statements can be terminiated solely with a ";".
 This is helpful because it's difficult to use a "/" in strings in most IDEs.
 
-Like SQL*Plus, a "/" on a line by itself is also a terminator.  This optional
+If you want to run in a more SQL*Plus-like mode, set p_optional_sqlplus_delimiter
+to "/".  Then a "/" on a line by itself is also a terminator.  This optional
 delimiter is configurable, does not override the ";" terminator, and is removed
 from the split strings.
 
@@ -29,7 +30,7 @@ TODO
 
 */
 
-function split(p_statements in nclob, p_optional_delimiter in varchar2 default '/') return nclob_table;
+function split(p_statements in nclob, p_optional_sqlplus_delimiter in nvarchar2 default null) return nclob_table;
 
 end;
 /
@@ -478,84 +479,91 @@ end add_statement_consume_tokens;
 
 
 --------------------------------------------------------------------------------
---Split tokens into separate token collections by an optional delmiter, usually "/".
+--Split a string into separate strings by an optional delmiter, usually "/".
 --This follows the SQL*Plus rules - the delimiter must be on a line by itself,
 --although the line may contain whitespace before and after the delimiter.
-function split_tokens_by_optional_delim(p_tokens in token_table, p_optional_delimiter in varchar2)
-return token_table_table is
-	v_token_table_table token_table_table := token_table_table();
-	v_tokens token_table := token_table();
+function split_string_by_optional_delim(p_statements in nclob, p_optional_sqlplus_delimiter in nvarchar2)
+return nclob_table is
+	v_chars nvarchar2_table := tokenizer.get_nvarchar2_table_from_nclob(p_statements);
+	v_delimiter_size number := lengthc(p_optional_sqlplus_delimiter);
+	v_char_index number := 0;
+	v_string nclob;
+	v_is_empty_line boolean := true;
+
+	v_strings nclob_table := nclob_table();
+
+	--Get N chars for comparing with multi-character delimiter.
+	function get_next_n_chars(p_n number) return nvarchar2 is
+		v_next_n_chars nvarchar2(32767);
+	begin
+		for i in v_char_index .. least(v_char_index + p_n - 1, v_chars.count) loop
+			v_next_n_chars := v_next_n_chars || v_chars(i);
+		end loop;
+
+		return v_next_n_chars;
+	end get_next_n_chars;
 begin
-	--Do nothing if optional delimiter is null.
-	if p_optional_delimiter is null then
-		return token_table_table(p_tokens);
+	--Return whole string if the delimiter is NULL.
+	if p_optional_sqlplus_delimiter is null then
+		v_strings.extend;
+		v_strings(v_strings.count) := p_statements;
+		return v_strings;
+	--Throw an error if the delimiter is whitespace.
+	elsif tokenizer.is_lexical_whitespace(p_optional_sqlplus_delimiter) then
+		raise_application_error(-20000, 'The optional delimiter cannot be set to whitespace.');
 	end if;
 
-	--Look for the delimiter, on a line with only whitespace
-	for i in 1 .. p_tokens.count loop
-		--Split if delimiter is found.
-		--TODO: Check for other items on the line.
-		if p_tokens(i).value = p_optional_delimiter
-			--Nothing or whitespace before the line.
-			and
-			(
-				i = 1
-				or
-				(
-					p_tokens(i-1).type = 'whitespace'
-					and
-					dbms_lob.instr(lob_loc => p_tokens(i-1).value, pattern => chr(10)) > 0
-				)
-			)
-			and
-			--Nothing or whitespace after the line.
-			(
-				i = p_tokens.count
-				or
-				p_tokens(i+1).type = 'EOF'
-				or
-				(
-					p_tokens(i+1).type = 'whitespace'
-					and
-					dbms_lob.instr(lob_loc => p_tokens(i+1).value, pattern => chr(10)) > 0
-				)
-			)
-		 then
-			--Do *not* push the delimiter.
+	--Loop through characters and build strings.
+	loop
+		v_char_index := v_char_index + 1;
 
-			--Push another token, push token table, and quit if the next token is EOF.
-			if p_tokens.count = i + 1 and p_tokens(i+1).type = 'EOF' then
-				v_tokens.extend;
-				v_tokens(v_tokens.count) := p_tokens(i+1);
-				v_token_table_table.extend;
-				v_token_table_table(v_token_table_table.count) := v_tokens;
-				v_tokens := token_table();
+		--Look for delimiter if it's on an empty line.
+		if v_is_empty_line then
+			--Push, increment counter for multi-char delimiters, and exit if last characters are delimiter.
+			if v_char_index = v_chars.count and get_next_n_chars(v_delimiter_size) = p_optional_sqlplus_delimiter then
+				v_strings.extend;
+				v_strings(v_strings.count) := v_string;
+				v_char_index := v_char_index + v_delimiter_size - 1;
 				exit;
-			--Push token table if next token is not EOF.
+			--Add char, push, and exit if it's the last character.
+			elsif v_char_index = v_chars.count then
+				v_string := v_string || v_chars(v_char_index);
+				v_strings.extend;
+				v_strings(v_strings.count) := v_string;
+				exit;
+			--Continue if it's still whitespace. 
+			elsif tokenizer.is_lexical_whitespace(v_chars(v_char_index)) then
+				v_string := v_string || v_chars(v_char_index);
+			--Split string if delimiter is found
+			elsif get_next_n_chars(v_delimiter_size) = p_optional_sqlplus_delimiter /*+ TODO */ /*and rest of line is only whitespace*/ then
+				--TODO: Exclude N characters.
+				v_strings.extend;
+				v_strings(v_strings.count) := v_string;
+				v_string := null;
+				v_char_index := v_char_index + v_delimiter_size - 1;
+			--It's no longer an empty line otherwise.
 			else
-				--Add EOF to the end since there wasn't one.
-				v_tokens.extend;
-				v_tokens(v_tokens.count) := token('EOF', null, null, null);
-				v_token_table_table.extend;
-				v_token_table_table(v_token_table_table.count) := v_tokens;
-				v_tokens := token_table();
+				v_string := v_string || v_chars(v_char_index);
+				v_is_empty_line := false;
 			end if;
-		--Push last token on stack, and add to table of tables.
-		elsif i = p_tokens.count then
-			v_tokens.extend;
-			v_tokens(v_tokens.count) := p_tokens(i);
-			v_token_table_table.extend;
-			v_token_table_table(v_token_table_table.count) := v_tokens;
-		--Push on stack if no delimiter is found.
+		--Look for newlines.
+		elsif v_chars(v_char_index) = chr(10) then
+			v_string := v_string || v_chars(v_char_index);
+			v_is_empty_line := true;
+		--Add the string after the last character.
+		elsif v_char_index >= v_chars.count then
+			v_string := v_string || v_chars(v_char_index);
+			v_strings.extend;
+			v_strings(v_strings.count) := v_string;
+			exit;
+		--Else just add the character.
 		else
-			v_tokens.extend;
-			v_tokens(v_tokens.count) := p_tokens(i);
+			v_string := v_string || v_chars(v_char_index);
 		end if;
 	end loop;
 
-	--Return split token tables.
-	return v_token_table_table;
-end split_tokens_by_optional_delim;
+	return v_strings;
+end split_string_by_optional_delim;
 
 
 --------------------------------------------------------------------------------
@@ -701,33 +709,24 @@ end split_tokens_by_primary_term;
 --------------------------------------------------------------------------------
 --Split a string of separate SQL and PL/SQL statements terminated by ";" and
 --some secondary terminator, usually "/".
-function split(p_statements in nclob, p_optional_delimiter in varchar2 default '/') return nclob_table is
+function split(p_statements in nclob, p_optional_sqlplus_delimiter in nvarchar2 default null) return nclob_table is
 	v_split_statements nclob_table := nclob_table();
 	v_tokens token_table;
-	v_split_tokens token_table_table;
+	v_split_tokens token_table_table := token_table_table();
+
+	v_test nvarchar2(4000);
 begin
-	--Tokenize.
-	v_tokens := tokenizer.tokenize(p_statements);
+	--Split the string by the optional delimiter, usually "/".
+	v_split_statements := split_string_by_optional_delim(p_statements, p_optional_sqlplus_delimiter);
 
-	--First split by the secondary terminators, usually "/".
-	v_split_tokens := split_tokens_by_optional_delim(v_tokens, p_optional_delimiter);
-
-	--TEST TODO
-	/*
-	declare
-		v_test nclob;
-	begin
-		for i in 1 .. v_split_tokens.count loop
-			v_test := null;
-			for j in 1 .. v_split_tokens(i).count loop
-				v_test := v_test||v_split_tokens(i)(j).value;
-			end loop;
-			dbms_output.put_line(i||': '||v_test);
-		end loop;
-	end;
-	*/
+	--Tokenize the strings.
+	for i in 1 .. v_split_statements.count loop
+		v_split_tokens.extend;
+		v_split_tokens(v_split_tokens.count) := tokenizer.tokenize(v_split_statements(i));
+	end loop;
 
 	--Split each set of tokens by the primary terminator, ";".
+	v_split_statements := nclob_table();
 	for i in 1 .. v_split_tokens.count loop
 		v_split_statements := v_split_statements multiset union split_tokens_by_primary_term(v_split_tokens(i));
 	end loop;
