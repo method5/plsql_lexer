@@ -150,16 +150,14 @@ begin
 	v_statements:='select * from dual a'||chr(10)||' 	$$	 '||chr(10)||'select * from dual b';v_split_statements:=statement_splitter.split(v_statements, '$$');
 	assert_equals('Slash 6a', '2', v_split_statements.count);
 	assert_equals('Slash 6b', 'select * from dual a'||chr(10)||' 	', v_split_statements(1));
---	assert_equals('Slash 6c', '	 '||chr(10)||'select * from dual b', v_split_statements(2));
-
+	assert_equals('Slash 6c', '	 '||chr(10)||'select * from dual b', v_split_statements(2));
 
 	--SQL split in two with a custom delimiter, in the middle of a string.
 	--This is a "bug", but it's how SQL*Plus works.
 	v_statements:='select '''||chr(10)||' 	/	 '||chr(10)||''' from dual';v_split_statements:=statement_splitter.split(v_statements, '/');
 	assert_equals('Slash 7a', '2', v_split_statements.count);
-	--TODO
-	--assert_equals('Slash 7b', 'select * from dual a'||chr(10)||' 	', v_split_statements(1));
-	--assert_equals('Slash 7c', '	 '||chr(10)||'select * from dual b', v_split_statements(2));
+	assert_equals('Slash 7b', 'select '''||chr(10)||' 	', v_split_statements(1));
+	assert_equals('Slash 7c', '	 '||chr(10)||''' from dual', v_split_statements(2));
 
 
 

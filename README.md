@@ -20,7 +20,7 @@ See the individual packages for details on each procedure.
 		function split(p_statements in nclob) return nclob_table;
 		TODO
 
-- `statement_classifier.classify_statement` - Classify a statement as DDL, PL/SQL, SELECT, ALTER, etc.
+- `statement_classifier.classify` - Classify a statement as DDL, PL/SQL, SELECT, ALTER, etc.
 
 		procedure classify(
 			p_statement       in nclob,
