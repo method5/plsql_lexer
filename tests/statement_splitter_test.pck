@@ -219,6 +219,18 @@ begin
 	assert_equals('plsql_declaration 7a', 2, v_split_statements.count);
 	assert_equals('plsql_declaration 7b', 'with function f return number is begin return 1; end; function g return number is begin return 2; end; function(a) as (select 1 a from dual) select f from dual;', v_split_statements(1));
 	assert_equals('plsql_declaration 7c', 'select 1 from dual;', v_split_statements(2));
+
+	--"select 1 as begin" should not count as a "BEGIN".
+	v_statements:='with function f return number is v_test number; begin select 1 as begin into v_test from dual; return 1; end; select f from dual;select 1 from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('plsql_declaration 8a', 2, v_split_statements.count);
+	assert_equals('plsql_declaration 8b', 'with function f return number is v_test number; begin select 1 as begin into v_test from dual; return 1; end; select f from dual;', v_split_statements(1));
+	assert_equals('plsql_declaration 8c', 'select 1 from dual;', v_split_statements(2));
+
+	--TODO: Test commas, FROM, into, bulk collect.
+
+
+	--TODO: SQL with PL/SQL with a SQL with PL/SQL.
+
 end test_plsql_declaration;
 
 

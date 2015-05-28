@@ -184,6 +184,28 @@ procedure add_statement_consume_tokens(
 	p_token_index in out number
 ) is
 	v_new_tokens token_table := token_table();
+
+	--Return the next concrete token, or NULL if there are no more.
+	function get_next_concrete_value_n(p_n in number) return nvarchar2 is
+		v_concrete_token_counter number := 0;
+	begin
+		--Loop through the tokens.
+		for i in p_token_index + 1 .. p_tokens.count loop
+			--Process if it's concrte.
+			if p_tokens(i).type not in ('whitespace', 'comment', 'EOF') then
+				--Increment concrete counter.
+				v_concrete_token_counter := v_concrete_token_counter + 1;
+
+				--Return the value if we've reached the Nth concrete token.
+				if v_concrete_token_counter = p_n then
+					return p_tokens(i).value;
+				end if;
+			end if;
+		end loop;
+
+		--Return NULL if nothing was found.
+		return null;
+	end;
 begin
 	--Look for a ';' anywhere.
 	if p_terminator = C_TERMINATOR_SEMI then
@@ -224,11 +246,14 @@ begin
 	Match BEGIN and END for a PLSQL_DECLARATION.
 		They are not reserved words so they must only be counted when they are in the right spot.
 	BEGIN must come after "begin", "as", "is", ";", or ">>", or the beginning of the string. 
-		"as" could be a column name, but it cannot be referenced as a column name:
-		select as from (select 1 as from dual);
-			   *
-		ERROR at line 1:
-		ORA-00936: missing expression
+		- "as" could be a column name, but it cannot be referenced as a column name:
+			select as from (select 1 as from dual);
+				   *
+			ERROR at line 1:
+			ORA-00936: missing expression
+		- Some forms of "begin begin" do not count, such as select begin begin from (select 1 begin from dual);
+		- Exclude "as begin" if it's used as a column alias.  Exclude where the next concrete
+		  token(s) are ",", "from", "into", or "bulk collect".
 	END must come after ";"
 		It cannot come after ">>", labels can't go there without compilation error.
 		end could be an object, but the object will be invalid so things won't compile
@@ -249,8 +274,6 @@ begin
 				p_new_statement := p_new_statement || p_tokens(p_token_index).value;
 
 				--Detect BEGIN
-				--
-				--Detecting BEGIN after 'as', 'is', ';', and '>>' is simple.
 				if
 				lower(p_tokens(p_token_index).value) = 'begin'
 				and
@@ -267,7 +290,23 @@ begin
 						and
 						v_prev_conc_tok_was_real_begin
 					)
-				) then
+				)
+				--Ignore "as begin" if it's used as a column alias.
+				and not
+				(
+					lower(v_previous_concrete_token_1.value) = 'as'
+					and
+					get_next_concrete_value_n(1) in (',', 'from', 'into')
+				)
+				and not
+				(
+					lower(v_previous_concrete_token_1.value) = 'as'
+					and
+					lower(get_next_concrete_value_n(1)) in ('bulk')
+					and
+					lower(get_next_concrete_value_n(2)) in ('collect')
+				)
+				then
 					v_has_entered_block := true;
 					v_block_counter := v_block_counter + 1;
 					v_prev_conc_tok_was_real_begin := true;
@@ -341,11 +380,14 @@ begin
 	Match BEGIN and END for a common PL/SQL block.
 		They are not reserved words so they must only be counted when they are in the right spot.
 	BEGIN must come after "begin", "as", "is", ";", or ">>", or the beginning of the string. 
-		"as" could be a column name, but it cannot be referenced as a column name:
-		select as from (select 1 as from dual);
-			   *
-		ERROR at line 1:
-		ORA-00936: missing expression
+		- "as" could be a column name, but it cannot be referenced as a column name:
+			select as from (select 1 as from dual);
+				   *
+			ERROR at line 1:
+			ORA-00936: missing expression
+		- Some forms of "begin begin" do not count, such as select begin begin from (select 1 begin from dual);
+		- Exclude "as begin" if it's used as a column alias.  Exclude where the next concrete
+		  token(s) are ",", "from", "into", or "bulk collect".
 	END must come after ";"
 		It cannot come after ">>", labels can't go there without compilation error.
 		end could be an object, but the object will be invalid so things won't compile
@@ -384,6 +426,21 @@ begin
 						and
 						v_prev_conc_tok_was_real_begin
 					)
+				)
+				--Ignore "as begin" if it's used as a column alias.
+				and not
+				(
+					lower(v_previous_concrete_token_1.value) = 'as'
+					and
+					get_next_concrete_value_n(1) in (',', 'from', 'into')
+				)
+				and not
+				(
+					lower(v_previous_concrete_token_1.value) = 'as'
+					and
+					lower(get_next_concrete_value_n(1)) in ('bulk')
+					and
+					lower(get_next_concrete_value_n(2)) in ('collect')
 				) then
 					v_has_entered_block := true;
 					v_block_counter := v_block_counter + 1;
@@ -711,10 +768,7 @@ end split_tokens_by_primary_term;
 --some secondary terminator, usually "/".
 function split(p_statements in nclob, p_optional_sqlplus_delimiter in nvarchar2 default null) return nclob_table is
 	v_split_statements nclob_table := nclob_table();
-	v_tokens token_table;
 	v_split_tokens token_table_table := token_table_table();
-
-	v_test nvarchar2(4000);
 begin
 	--Split the string by the optional delimiter, usually "/".
 	v_split_statements := split_string_by_optional_delim(p_statements, p_optional_sqlplus_delimiter);
