@@ -542,7 +542,7 @@ end add_statement_consume_tokens;
 function split_string_by_optional_delim(p_statements in nclob, p_optional_sqlplus_delimiter in nvarchar2)
 return nclob_table is
 	v_chars nvarchar2_table := tokenizer.get_nvarchar2_table_from_nclob(p_statements);
-	v_delimiter_size number := lengthc(p_optional_sqlplus_delimiter);
+	v_delimiter_size number := nvl(lengthc(p_optional_sqlplus_delimiter), 0);
 	v_char_index number := 0;
 	v_string nclob;
 	v_is_empty_line boolean := true;
@@ -603,16 +603,16 @@ begin
 				v_string := v_string || v_chars(v_char_index);
 				v_is_empty_line := false;
 			end if;
-		--Look for newlines.
-		elsif v_chars(v_char_index) = chr(10) then
-			v_string := v_string || v_chars(v_char_index);
-			v_is_empty_line := true;
 		--Add the string after the last character.
 		elsif v_char_index >= v_chars.count then
 			v_string := v_string || v_chars(v_char_index);
 			v_strings.extend;
 			v_strings(v_strings.count) := v_string;
 			exit;
+		--Look for newlines.
+		elsif v_chars(v_char_index) = chr(10) then
+			v_string := v_string || v_chars(v_char_index);
+			v_is_empty_line := true;
 		--Else just add the character.
 		else
 			v_string := v_string || v_chars(v_char_index);

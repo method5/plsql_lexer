@@ -105,6 +105,15 @@ begin
 	assert_equals('Simple split 2b', ' select * from dual b; ', v_split_statements(2));
 	assert_equals('Simple split 2c', 2, v_split_statements.count);
 
+	--Small or empty strings should not crash.
+	v_statements:='';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Simple split 3a', 1, v_split_statements.count);
+	assert_equals('Simple split 3b', null, v_split_statements(1));
+
+	v_statements:='a'||chr(10);v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Simple split 4a', 1, v_split_statements.count);
+	assert_equals('Simple split 4b', 'a'||chr(10), v_split_statements(1));
+
 	--TODO
 	null;
 end test_simple;
@@ -228,6 +237,67 @@ begin
 
 	--TODO: Test commas, FROM, into, bulk collect.
 
+	--CLUSTER_ID "as begin" exception
+	v_statements:='with function f return number is v_number number; begin select cluster_id(some_model using asdf as begin) into v_number from dual; return v_number; end; select f from dual;select * from dual b;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('plsql_declaration 9a', 2, v_split_statements.count);
+	assert_equals('plsql_declaration 9b', 'with function f return number is v_number number; begin select cluster_id(some_model using asdf as begin) into v_number from dual; return v_number; end; select f from dual;', v_split_statements(1));
+	--assert_equals('plsql_declaration 9c', 'select * from dual b;', v_split_statements(2));
+
+	--PIVOT_IN_CLAUSE "as begin" exception.
+	v_statements:=q'!
+with function f return number is
+	v_number number;
+begin
+	select 1
+	into v_number
+	from (select 1 deptno, 'A' job, 100 sal from dual)
+	pivot
+	(
+		sum(sal)
+		for deptno
+		in  (1,2 as begin)
+	);
+	return v_number;
+end;select f from dual;!';
+	v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('plsql_declaration 9a', 2, v_split_statements.count);
+--	assert_equals('plsql_declaration 9b', 'select f from dual;', v_split_statements(2));
+
+
+/*
+findstr /i /s "as" *.*
+Ignore cast and treat: "begin" can be a type in that context, but not a valid one.
+
+RULE: Exclude when next concrete token is "," or ")".  For CLUSTER_ID USING, model columns, PIVOT_IN_CLAUSE, XMLCOLATTVAL, XMLELEMENT, XMLFOREST, XMLTABLE_options
+RULE: Exclude when next concrete token is ",", ")", or "DEFAULT".  For XMLnamespaces_clause.
+RULE: Exclude when "in pivot (xml)" and previous1 = "as" and previous2 = ")" and next1 in (",", "for").  For PIVOT clause.
+
+RULE: Exclude when "in pivot (xml)" and previous1 = "as" and previous2 = ")" and next1 in (",", "for").  For PIVOT clause.
+
+	create or replace procedure test(a number) as begin for i in 1 .. 2 loop null; end loop; end;
+	/
+
+	select *
+	from (select 1 deptno, 'A' job, 100 sal from dual)
+	pivot
+	(
+		sum(sal) as begin1, sum(sal) as begin
+		for deptno
+		in  (1,2)
+	);
+
+
+RULE: Exclude when "has NESTED TABLE" and previous1 = "as" and previous2 = "store".  For nested_table_col_properties.
+	create type type1 is table of number;
+	create table test1
+	(
+		a type1
+	)
+	nested table a store as begin;
+
+	create or replace procedure store as begin null end;
+	/
+*/
 
 	--TODO: SQL with PL/SQL with a SQL with PL/SQL.
 
