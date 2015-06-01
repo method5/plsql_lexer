@@ -263,7 +263,6 @@ end;select f from dual;select * from dual b!';
 	assert_equals('plsql_declaration 10a', 2, v_split_statements.count);
 --	assert_equals('plsql_declaration 10b', 'select * from dual b', v_split_statements(2));
 
-
 	--XMLATTRIBUTES "as begin" exception.
 	v_statements:=q'!
 with function f return xmltype is
@@ -329,47 +328,51 @@ end; select f from dual;select * from dual b!';
 	assert_equals('plsql_declaration 15a', 2, v_split_statements.count);
 --	assert_equals('plsql_declaration 15b', 'select * from dual b', v_split_statements(2));
 
+	--XMLnamespaces_clause "as begin" exception.
+	v_statements:=q'!
+with function f return varchar2 is
+	v_test varchar2(1);
+begin
+	select name
+	into v_test
+	from (select xmltype('<emp><name>A</name></emp>') the_xml from dual) emp
+	cross join xmltable(xmlnamespaces('N' as begin), '/emp' passing the_xml columns name varchar2(1) path '/emp/name');
+	return v_test;
+end; select f from dual;select * from dual b!';
+	v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('plsql_declaration 16a', 2, v_split_statements.count);
+--	assert_equals('plsql_declaration 16b', 'select * from dual b', v_split_statements(2));
 
-
-
-
-
-/*
-findstr /i /s "as" *.*
-Ignore cast and treat: "begin" can be a type in that context, but not a valid one.
-
-RULE: Exclude when next concrete token is "," or ")".  For CLUSTER_ID USING, model columns, PIVOT_IN_CLAUSE, XMLATTRIBUTES, XMLCOLATTVAL, XMLELEMENT, XMLFOREST
-RULE: Exclude when next concrete token is "," or ")" or "COLUMNS".  "COLUMNS" *could* be the name of something but it is reserved and would therefore be invalid.  For XMLTABLE_options.
-RULE: Exclude when next concrete token is ",", ")", or "DEFAULT".  For XMLnamespaces_clause.
-RULE: Exclude when "in pivot (xml)" and previous1 = "as" and previous2 = ")" and next1 in (",", "for").  For PIVOT clause.
-
-	create or replace procedure test(a number) as begin for i in 1 .. 2 loop null; end loop; end;
-	/
-
-	select *
+	--PIVOT "as begin" exception.
+	v_statements:=q'!
+with function f return number is
+	v_number number;
+begin
+	select 1
+	into v_number
 	from (select 1 deptno, 'A' job, 100 sal from dual)
 	pivot
 	(
-		sum(sal) as begin1, sum(sal) as begin
+		sum(sal) as begin
 		for deptno
 		in  (1,2)
 	);
+	return v_number;
+end; select f from dual;select * from dual b!';
+	v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('plsql_declaration 17a', 2, v_split_statements.count);
+--	assert_equals('plsql_declaration 17b', 'select * from dual b', v_split_statements(2));
 
-
-RULE: Exclude when "has NESTED TABLE" and previous1 = "as" and previous2 = "store".  For nested_table_col_properties.
-	create type type1 is table of number;
-	create table test1
-	(
-		a type1
-	)
-	nested table a store as begin;
-
-	create or replace procedure store as begin null end;
-	/
-*/
+	--nested_table_col_properties "as begin" exception.
+	v_statements:=q'!
+create table test1 nested table a store as begin as
+with function f return varchar2 is v_string varchar2(1); begin return 'A'; end;
+select sys.dbms_debug_vc2coll('A') a from dual;select * from dual b!';
+	v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('plsql_declaration 18a', 2, v_split_statements.count);
+--	assert_equals('plsql_declaration 18b', 'select * from dual b', v_split_statements(2));
 
 	--TODO: SQL with PL/SQL with a SQL with PL/SQL.
-
 end test_plsql_declaration;
 
 

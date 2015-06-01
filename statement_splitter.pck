@@ -185,6 +185,7 @@ procedure add_statement_consume_tokens(
 ) is
 	v_new_tokens token_table := token_table();
 
+	---------------------------------------
 	--Return the next concrete token, or NULL if there are no more.
 	function get_next_concrete_value_n(p_n in number) return nvarchar2 is
 		v_concrete_token_counter number := 0;
@@ -205,7 +206,132 @@ procedure add_statement_consume_tokens(
 
 		--Return NULL if nothing was found.
 		return null;
-	end;
+	end get_next_concrete_value_n;
+
+	---------------------------------------
+	/*
+	BEGIN must come after "begin", "as", "is", ";", or ">>", or the beginning of the string. 
+		- "as" could be a column name, but it cannot be referenced as a column name:
+			select as from (select 1 as from dual);
+				   *
+			ERROR at line 1:
+			ORA-00936: missing expression
+		- Some forms of "begin begin" do not count, such as select begin begin from (select 1 begin from dual);
+		- Exclude "as begin" if it's used as an alias.
+			Exclude where next concrete token is ",", "from", "into", or "bulk collect".  For column aliases.
+			Exclude where next concrete token is "," or ")".  For CLUSTER_ID USING, model columns, PIVOT_IN_CLAUSE, XMLATTRIBUTES, XMLCOLATTVAL, XMLELEMENT, XMLFOREST
+TODO:
+			Exclude where next concrete token is "," or ")" or previous concrete token is a string.  For XMLnamespaces_clause.
+			RULE: Exclude when "in pivot (xml)" and previous1 = "as" and previous2 = ")" and next1 in (",", "for").  For PIVOT clause.
+				create or replace procedure test(a number) as begin for i in 1 .. 2 loop null; end loop; end;
+
+				select *
+				from (select 1 deptno, 'A' job, 100 sal from dual)
+				pivot
+				(
+					sum(sal) as begin1, sum(sal) as begin
+					for deptno
+					in  (1,2)
+				);
+			RULE: Exclude when command_name in ('ALTER TABLE', 'CREATE TABLE') and previous1 = "as" and previous2 = "store".  For nested_table_col_properties.
+				create type type1 is table of number;
+				create table test1
+				(
+					a type1
+				)
+				nested table a store as begin;
+
+				create or replace procedure store as begin null end;
+		- Note: These rules were determined by downloading and searching the BNF descriptions like this: findstr /i /s "as" *.*
+	*/
+	procedure detect_begin(
+		v_previous_concrete_token_1 in out token,
+		v_previous_concrete_token_2 in out token,
+		v_previous_concrete_token_3 in out token,
+		v_has_entered_block in out boolean,
+		v_block_counter in out number,
+		v_prev_conc_tok_was_real_begin in out boolean
+	) is
+	begin
+		if
+		lower(p_tokens(p_token_index).value) = 'begin'
+		and
+		(
+			(
+				lower(v_previous_concrete_token_1.value) in ('as', 'is', ';', '>>')
+				or
+				v_previous_concrete_token_1.type is null
+			)
+			or
+			(
+				--Ignore some "begin begin", such as select begin begin from (select 1 begin from dual);
+				lower(v_previous_concrete_token_1.value) = 'begin'
+				and
+				v_prev_conc_tok_was_real_begin
+			)
+		)
+		--Ignore "as begin" if it's used as a column alias.
+		and not
+		(
+			lower(v_previous_concrete_token_1.value) = 'as'
+			and
+			get_next_concrete_value_n(1) in (',', 'from', 'into', ')')
+		)
+		and not
+		(
+			lower(v_previous_concrete_token_1.value) = 'as'
+			and
+			lower(get_next_concrete_value_n(1)) in ('bulk')
+			and
+			lower(get_next_concrete_value_n(2)) in ('collect')
+		)
+		then
+			v_has_entered_block := true;
+			v_block_counter := v_block_counter + 1;
+			v_prev_conc_tok_was_real_begin := true;
+		--If token is concrete, reset the flag.
+		elsif p_tokens(p_token_index).type not in ('whitespace', 'comment', 'EOF') then
+			v_prev_conc_tok_was_real_begin := false;
+		end if;
+
+	end detect_begin;
+
+	---------------------------------------
+	/*
+	END must come after ";"
+		It cannot come after ">>", labels can't go there without compilation error.
+		end could be an object, but the object will be invalid so things won't compile
+	*/
+	procedure detect_end(
+		v_previous_concrete_token_1 in out token,
+		v_previous_concrete_token_2 in out token,
+		v_previous_concrete_token_3 in out token,
+		v_block_counter in out number
+	) is
+	begin
+		if
+		p_tokens(p_token_index).type = ';'
+		and
+		(
+			(
+				lower(v_previous_concrete_token_1.value) = 'end'
+				and
+				lower(v_previous_concrete_token_2.type) = ';'
+			)
+			or
+			--Optional block name.
+			(
+				lower(v_previous_concrete_token_1.type) = 'word'
+				and
+				lower(v_previous_concrete_token_2.value) = 'end'
+				and
+				lower(v_previous_concrete_token_3.type) = ';'
+			)
+		) then
+			v_block_counter := v_block_counter - 1;
+		end if;
+	end detect_end;
+
 begin
 	--Look for a ';' anywhere.
 	if p_terminator = C_TERMINATOR_SEMI then
@@ -242,22 +368,7 @@ begin
 	--elsif p_terminator = '/' then
 	--	null;
 
-	/*
-	Match BEGIN and END for a PLSQL_DECLARATION.
-		They are not reserved words so they must only be counted when they are in the right spot.
-	BEGIN must come after "begin", "as", "is", ";", or ">>", or the beginning of the string. 
-		- "as" could be a column name, but it cannot be referenced as a column name:
-			select as from (select 1 as from dual);
-				   *
-			ERROR at line 1:
-			ORA-00936: missing expression
-		- Some forms of "begin begin" do not count, such as select begin begin from (select 1 begin from dual);
-		- Exclude "as begin" if it's used as a column alias.  Exclude where the next concrete
-		  token(s) are ",", "from", "into", or "bulk collect".
-	END must come after ";"
-		It cannot come after ">>", labels can't go there without compilation error.
-		end could be an object, but the object will be invalid so things won't compile
-	*/
+	--Match BEGIN and END for a PLSQL_DECLARATION.  They are not reserved words so they must only be counted when they are in the right spot.
 	elsif p_terminator = C_TERMINATOR_PLSQL_DECLARE_END then
 		declare
 			v_previous_concrete_token_1 token := token(null, null, null, null);
@@ -273,70 +384,9 @@ begin
 				exit when p_token_index >= p_tokens.count;
 				p_new_statement := p_new_statement || p_tokens(p_token_index).value;
 
-				--Detect BEGIN
-				if
-				lower(p_tokens(p_token_index).value) = 'begin'
-				and
-				(
-					(
-						lower(v_previous_concrete_token_1.value) in ('as', 'is', ';', '>>')
-						or
-						v_previous_concrete_token_1.type is null
-					)
-					or
-					(
-						--Ignore some "begin begin", such as select begin begin from (select 1 begin from dual);
-						lower(v_previous_concrete_token_1.value) = 'begin'
-						and
-						v_prev_conc_tok_was_real_begin
-					)
-				)
-				--Ignore "as begin" if it's used as a column alias.
-				and not
-				(
-					lower(v_previous_concrete_token_1.value) = 'as'
-					and
-					get_next_concrete_value_n(1) in (',', 'from', 'into')
-				)
-				and not
-				(
-					lower(v_previous_concrete_token_1.value) = 'as'
-					and
-					lower(get_next_concrete_value_n(1)) in ('bulk')
-					and
-					lower(get_next_concrete_value_n(2)) in ('collect')
-				)
-				then
-					v_has_entered_block := true;
-					v_block_counter := v_block_counter + 1;
-					v_prev_conc_tok_was_real_begin := true;
-				--If token is concrete, reset the flag.
-				elsif p_tokens(p_token_index).type not in ('whitespace', 'comment', 'EOF') then
-					v_prev_conc_tok_was_real_begin := false;
-				end if;
-
-				--Detect END
-				if
-				p_tokens(p_token_index).type = ';'
-				and
-				(
-					(
-						lower(v_previous_concrete_token_1.value) = 'end'
-						and
-						lower(v_previous_concrete_token_2.type) = ';'
-					)
-					or
-					--Optional block name.
-					(
-						lower(v_previous_concrete_token_1.type) = 'word'
-						and
-						lower(v_previous_concrete_token_2.value) = 'end'
-						and
-						lower(v_previous_concrete_token_3.type) = ';'
-					)
-				) then
-					v_block_counter := v_block_counter - 1;
-				end if;
+				--Detect BEGIN and END.
+				detect_begin(v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_has_entered_block, v_block_counter, v_prev_conc_tok_was_real_begin);
+				detect_end(v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_block_counter);
 
 				--Detect end of statement.
 				if (v_has_entered_block and v_block_counter = 0) or p_tokens(p_token_index).type = 'EOF' then
@@ -376,22 +426,7 @@ begin
 			end loop;
 		end;
 
-	/*
-	Match BEGIN and END for a common PL/SQL block.
-		They are not reserved words so they must only be counted when they are in the right spot.
-	BEGIN must come after "begin", "as", "is", ";", or ">>", or the beginning of the string. 
-		- "as" could be a column name, but it cannot be referenced as a column name:
-			select as from (select 1 as from dual);
-				   *
-			ERROR at line 1:
-			ORA-00936: missing expression
-		- Some forms of "begin begin" do not count, such as select begin begin from (select 1 begin from dual);
-		- Exclude "as begin" if it's used as a column alias.  Exclude where the next concrete
-		  token(s) are ",", "from", "into", or "bulk collect".
-	END must come after ";"
-		It cannot come after ">>", labels can't go there without compilation error.
-		end could be an object, but the object will be invalid so things won't compile
-	*/
+	--Match BEGIN and END for a common PL/SQL block.  They are not reserved words so they must only be counted when they are in the right spot.
 	elsif p_terminator = C_TERMINATOR_PLSQL_END then
 		declare
 			v_previous_concrete_token_1 token := token(null, null, null, null);
@@ -407,71 +442,9 @@ begin
 				exit when p_token_index >= p_tokens.count;
 				p_new_statement := p_new_statement || p_tokens(p_token_index).value;
 
-				--Detect BEGIN
-				--
-				--Detecting BEGIN after 'as', 'is', ';', and '>>' is simple.
-				if
-				lower(p_tokens(p_token_index).value) = 'begin'
-				and
-				(
-					(
-						lower(v_previous_concrete_token_1.value) in ('as', 'is', ';', '>>')
-						or
-						v_previous_concrete_token_1.type is null
-					)
-					or
-					(
-						--Ignore some "begin begin", such as select begin begin from (select 1 begin from dual);
-						lower(v_previous_concrete_token_1.value) = 'begin'
-						and
-						v_prev_conc_tok_was_real_begin
-					)
-				)
-				--Ignore "as begin" if it's used as a column alias.
-				and not
-				(
-					lower(v_previous_concrete_token_1.value) = 'as'
-					and
-					get_next_concrete_value_n(1) in (',', 'from', 'into')
-				)
-				and not
-				(
-					lower(v_previous_concrete_token_1.value) = 'as'
-					and
-					lower(get_next_concrete_value_n(1)) in ('bulk')
-					and
-					lower(get_next_concrete_value_n(2)) in ('collect')
-				) then
-					v_has_entered_block := true;
-					v_block_counter := v_block_counter + 1;
-					v_prev_conc_tok_was_real_begin := true;
-				--If token is concrete, reset the flag.
-				elsif p_tokens(p_token_index).type not in ('whitespace', 'comment', 'EOF') then
-					v_prev_conc_tok_was_real_begin := false;
-				end if;
-
-				--Detect END
-				if
-				p_tokens(p_token_index).type = ';'
-				and
-				(
-					(
-						lower(v_previous_concrete_token_1.value) = 'end'
-						and
-						lower(v_previous_concrete_token_2.type) = ';'
-					)
-					or
-					--Optional block name.
-					(
-						lower(v_previous_concrete_token_1.type) = 'word'
-						and
-						lower(v_previous_concrete_token_2.value) = 'end'
-						and
-						lower(v_previous_concrete_token_3.type) = ';'
-					)
-				) then
-					v_block_counter := v_block_counter - 1;
-				end if;
+				--Detect BEGIN and END.
+				detect_begin(v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_has_entered_block, v_block_counter, v_prev_conc_tok_was_real_begin);
+				detect_end(v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_block_counter);
 
 				--Detect end of statement.
 				if (v_has_entered_block and v_block_counter = 0) or p_tokens(p_token_index).type = 'EOF' then
