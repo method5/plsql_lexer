@@ -258,20 +258,89 @@ begin
 		in  (1,2 as begin)
 	);
 	return v_number;
-end;select f from dual;!';
+end;select f from dual;select * from dual b!';
 	v_split_statements:=statement_splitter.split(v_statements);
-	assert_equals('plsql_declaration 9a', 2, v_split_statements.count);
---	assert_equals('plsql_declaration 9b', 'select f from dual;', v_split_statements(2));
+	assert_equals('plsql_declaration 10a', 2, v_split_statements.count);
+--	assert_equals('plsql_declaration 10b', 'select * from dual b', v_split_statements(2));
+
+
+	--XMLATTRIBUTES "as begin" exception.
+	v_statements:=q'!
+with function f return xmltype is
+	v_test xmltype;
+begin
+	select xmlelement("a", xmlattributes(1 as begin)) into v_test from dual;
+	return v_test;
+end; select f from dual;select * from dual b!';
+	v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('plsql_declaration 11a', 2, v_split_statements.count);
+--	assert_equals('plsql_declaration 11b', 'select * from dual b', v_split_statements(2));
+
+	--XMLCOLATTVAL "as begin" exception.
+	v_statements:=q'!
+with function f return xmltype is
+	v_test xmltype;
+begin
+	select xmlelement("a", xmlcolattval(1 as begin))
+	into v_test
+	from dual;
+	return v_test;
+end; select f from dual;select * from dual b!';
+	v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('plsql_declaration 12a', 2, v_split_statements.count);
+--	assert_equals('plsql_declaration 12b', 'select * from dual b', v_split_statements(2));
+
+	--XMLELEMENTS "as begin" exception.
+	v_statements:=q'!
+with function f return xmltype is
+	v_test xmltype;
+begin
+	select xmlelement("a", sys.odcivarchar2list('b') as begin) into v_test from dual;
+	return v_test;
+end; select f from dual;select * from dual b!';
+	v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('plsql_declaration 13a', 2, v_split_statements.count);
+--	assert_equals('plsql_declaration 13b', 'select * from dual b', v_split_statements(2));
+
+	--XMLFOREST "as begin" exception.
+	v_statements:=q'!
+with function f return xmltype is
+	v_test xmltype;
+begin
+	select xmlforest(1 as begin) into v_test from dual;
+	return v_test;
+end; select f from dual;select * from dual b!';
+	v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('plsql_declaration 14a', 2, v_split_statements.count);
+--	assert_equals('plsql_declaration 14b', 'select * from dual b', v_split_statements(2));
+
+	--XMLTABLE_options "as begin" exception.
+	v_statements:=q'!
+with function f return varchar2 is
+	v_test varchar2(1);
+begin
+	select name
+	into v_test
+	from (select xmltype('<emp><name>A</name></emp>') the_xml from dual) emp
+	cross join xmltable('/emp' passing emp.the_xml, emp.the_xml as begin columns name varchar2(100) path '/emp/name');
+	return v_test;
+end; select f from dual;select * from dual b!';
+	v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('plsql_declaration 15a', 2, v_split_statements.count);
+--	assert_equals('plsql_declaration 15b', 'select * from dual b', v_split_statements(2));
+
+
+
+
 
 
 /*
 findstr /i /s "as" *.*
 Ignore cast and treat: "begin" can be a type in that context, but not a valid one.
 
-RULE: Exclude when next concrete token is "," or ")".  For CLUSTER_ID USING, model columns, PIVOT_IN_CLAUSE, XMLCOLATTVAL, XMLELEMENT, XMLFOREST, XMLTABLE_options
+RULE: Exclude when next concrete token is "," or ")".  For CLUSTER_ID USING, model columns, PIVOT_IN_CLAUSE, XMLATTRIBUTES, XMLCOLATTVAL, XMLELEMENT, XMLFOREST
+RULE: Exclude when next concrete token is "," or ")" or "COLUMNS".  "COLUMNS" *could* be the name of something but it is reserved and would therefore be invalid.  For XMLTABLE_options.
 RULE: Exclude when next concrete token is ",", ")", or "DEFAULT".  For XMLnamespaces_clause.
-RULE: Exclude when "in pivot (xml)" and previous1 = "as" and previous2 = ")" and next1 in (",", "for").  For PIVOT clause.
-
 RULE: Exclude when "in pivot (xml)" and previous1 = "as" and previous2 = ")" and next1 in (",", "for").  For PIVOT clause.
 
 	create or replace procedure test(a number) as begin for i in 1 .. 2 loop null; end loop; end;
