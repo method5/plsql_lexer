@@ -220,6 +220,8 @@ procedure add_statement_consume_tokens(
 		- Exclude "as begin" if it's used as an alias.
 			Exclude where next concrete token is ",", "from", "into", or "bulk collect".  For column aliases.
 			Exclude where next concrete token is "," or ")".  For CLUSTER_ID USING, model columns, PIVOT_IN_CLAUSE, XMLATTRIBUTES, XMLCOLATTVAL, XMLELEMENT, XMLFOREST, XMLnamespaces_clause.
+			Exclude where next concrete token is "," or ")" or "columns".  For XMLTABLE_options.
+				ASTRONOMICALLY UNLIKELY LEXER BUG: It is possible to have an object named "COLUMNS", although it would be invalid.
 TODO:
 			RULE: Exclude when "in pivot (xml)" and previous1 = "as" and previous2 = ")" and next1 in (",", "for").  For PIVOT clause.
 				create or replace procedure test(a number) as begin for i in 1 .. 2 loop null; end loop; end;
@@ -278,7 +280,7 @@ TODO:
 		(
 			lower(v_previous_concrete_token_1.value) = 'as'
 			and
-			get_next_concrete_value_n(1) in (',', 'from', 'into', ')')
+			get_next_concrete_value_n(1) in (',', 'from', 'into', ')', 'columns')
 		)
 		and not
 		(

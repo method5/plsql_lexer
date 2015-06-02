@@ -241,7 +241,7 @@ begin
 	v_statements:='with function f return number is v_number number; begin select cluster_id(some_model using asdf as begin) into v_number from dual; return v_number; end; select f from dual;select * from dual b;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('plsql_declaration 9a', 2, v_split_statements.count);
 	assert_equals('plsql_declaration 9b', 'with function f return number is v_number number; begin select cluster_id(some_model using asdf as begin) into v_number from dual; return v_number; end; select f from dual;', v_split_statements(1));
-	--assert_equals('plsql_declaration 9c', 'select * from dual b;', v_split_statements(2));
+	assert_equals('plsql_declaration 9c', 'select * from dual b;', v_split_statements(2));
 
 	--PIVOT_IN_CLAUSE "as begin" exception.
 	v_statements:=q'!
@@ -261,7 +261,7 @@ begin
 end;select f from dual;select * from dual b!';
 	v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('plsql_declaration 10a', 2, v_split_statements.count);
---	assert_equals('plsql_declaration 10b', 'select * from dual b', v_split_statements(2));
+	assert_equals('plsql_declaration 10b', 'select * from dual b', v_split_statements(2));
 
 	--XMLATTRIBUTES "as begin" exception.
 	v_statements:=q'!
@@ -273,7 +273,7 @@ begin
 end; select f from dual;select * from dual b!';
 	v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('plsql_declaration 11a', 2, v_split_statements.count);
---	assert_equals('plsql_declaration 11b', 'select * from dual b', v_split_statements(2));
+	assert_equals('plsql_declaration 11b', 'select * from dual b', v_split_statements(2));
 
 	--XMLCOLATTVAL "as begin" exception.
 	v_statements:=q'!
@@ -287,7 +287,7 @@ begin
 end; select f from dual;select * from dual b!';
 	v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('plsql_declaration 12a', 2, v_split_statements.count);
---	assert_equals('plsql_declaration 12b', 'select * from dual b', v_split_statements(2));
+	assert_equals('plsql_declaration 12b', 'select * from dual b', v_split_statements(2));
 
 	--XMLELEMENTS "as begin" exception.
 	v_statements:=q'!
@@ -299,7 +299,7 @@ begin
 end; select f from dual;select * from dual b!';
 	v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('plsql_declaration 13a', 2, v_split_statements.count);
---	assert_equals('plsql_declaration 13b', 'select * from dual b', v_split_statements(2));
+	assert_equals('plsql_declaration 13b', 'select * from dual b', v_split_statements(2));
 
 	--XMLFOREST "as begin" exception.
 	v_statements:=q'!
@@ -311,7 +311,7 @@ begin
 end; select f from dual;select * from dual b!';
 	v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('plsql_declaration 14a', 2, v_split_statements.count);
---	assert_equals('plsql_declaration 14b', 'select * from dual b', v_split_statements(2));
+	assert_equals('plsql_declaration 14b', 'select * from dual b', v_split_statements(2));
 
 	--XMLTABLE_options "as begin" exception.
 	v_statements:=q'!
@@ -326,7 +326,7 @@ begin
 end; select f from dual;select * from dual b!';
 	v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('plsql_declaration 15a', 2, v_split_statements.count);
---	assert_equals('plsql_declaration 15b', 'select * from dual b', v_split_statements(2));
+	assert_equals('plsql_declaration 15b', 'select * from dual b', v_split_statements(2));
 
 	--XMLnamespaces_clause "as begin" exception.
 	v_statements:=q'!
