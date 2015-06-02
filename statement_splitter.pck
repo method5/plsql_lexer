@@ -219,9 +219,8 @@ procedure add_statement_consume_tokens(
 		- Some forms of "begin begin" do not count, such as select begin begin from (select 1 begin from dual);
 		- Exclude "as begin" if it's used as an alias.
 			Exclude where next concrete token is ",", "from", "into", or "bulk collect".  For column aliases.
-			Exclude where next concrete token is "," or ")".  For CLUSTER_ID USING, model columns, PIVOT_IN_CLAUSE, XMLATTRIBUTES, XMLCOLATTVAL, XMLELEMENT, XMLFOREST
+			Exclude where next concrete token is "," or ")".  For CLUSTER_ID USING, model columns, PIVOT_IN_CLAUSE, XMLATTRIBUTES, XMLCOLATTVAL, XMLELEMENT, XMLFOREST, XMLnamespaces_clause.
 TODO:
-			Exclude where next concrete token is "," or ")" or previous concrete token is a string.  For XMLnamespaces_clause.
 			RULE: Exclude when "in pivot (xml)" and previous1 = "as" and previous2 = ")" and next1 in (",", "for").  For PIVOT clause.
 				create or replace procedure test(a number) as begin for i in 1 .. 2 loop null; end loop; end;
 
@@ -242,6 +241,10 @@ TODO:
 				nested table a store as begin;
 
 				create or replace procedure store as begin null end;
+
+			Documentation bug: For XMLnamespaces_clause (in XMLELEMENT) there must be a comma between "string AS identifier"
+				and "DEFAULT string".  Although the documentation implies " 'A' as begin default 'B' " is valid it is NOT.
+				It must be " 'A' as begin, default 'B' ", which is handled by above rules.
 		- Note: These rules were determined by downloading and searching the BNF descriptions like this: findstr /i /s "as" *.*
 	*/
 	procedure detect_begin(

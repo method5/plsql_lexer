@@ -336,7 +336,7 @@ begin
 	select name
 	into v_test
 	from (select xmltype('<emp><name>A</name></emp>') the_xml from dual) emp
-	cross join xmltable(xmlnamespaces('N' as begin), '/emp' passing the_xml columns name varchar2(1) path '/emp/name');
+	cross join xmltable(xmlnamespaces('N' as begin, default ''), '/emp' passing the_xml columns name varchar2(1) path '/emp/name');
 	return v_test;
 end; select f from dual;select * from dual b!';
 	v_split_statements:=statement_splitter.split(v_statements);
