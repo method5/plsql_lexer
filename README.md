@@ -15,10 +15,12 @@ See the individual packages for details on each procedure.
 
 		function print_tokens(p_tokens token_table) return nclob;
 
-- `split_statements` - Split a series of statements separated by ";" or "/".
+- `statement_splitter.split_statements` - Split a series of statements separated by ";" .
 
-		function split(p_statements in nclob) return nclob_table;
-		TODO
+		function split(
+			p_statements                 in nclob,
+			p_optional_sqlplus_delimiter in nvarchar2 default null
+		) return nclob_table;
 
 - `statement_classifier.classify` - Classify a statement as DDL, PL/SQL, SELECT, ALTER, etc.
 
@@ -35,15 +37,18 @@ See the individual packages for details on each procedure.
 - `statement_feedback.get_feedback_message` - Get a message similar to SQL*Plus feedback messages.
 
 		procedure get_feedback_message(
-				p_statement in nclob,
-				p_rowcount in number,
-				p_success_message out varchar2,
+				p_statement                in nclob,
+				p_rowcount                 in number,
+				p_success_message         out varchar2,
 				p_compile_warning_message out varchar2
 		);
 
-- `remove_extra_terminators` - Remove extra terminators to run as dynamic SQL.
+- `statement_semicolon_remover.remove` - Remove extra semicolons to prepare statement to run as dyanmic SQL.
 
-		TODO
+		function remove(
+			p_abstract_tokens in token_table,
+			p_command_name    in varchar2
+		) return nclob;
 
 
 ## How to Install
