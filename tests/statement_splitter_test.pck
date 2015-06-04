@@ -341,7 +341,7 @@ begin
 end; select f from dual;select * from dual b!';
 	v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('plsql_declaration 16a', 2, v_split_statements.count);
---	assert_equals('plsql_declaration 16b', 'select * from dual b', v_split_statements(2));
+	assert_equals('plsql_declaration 16b', 'select * from dual b', v_split_statements(2));
 
 	--PIVOT "as begin" exception.
 	v_statements:=q'!
@@ -361,7 +361,27 @@ begin
 end; select f from dual;select * from dual b!';
 	v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('plsql_declaration 17a', 2, v_split_statements.count);
---	assert_equals('plsql_declaration 17b', 'select * from dual b', v_split_statements(2));
+	assert_equals('plsql_declaration 17b', 'select * from dual b', v_split_statements(2));
+
+	--PIVOT XML "as begin" exception.
+	v_statements:=q'!
+with function f return number is
+	v_number number;
+begin
+	select 1
+	into v_number
+	from (select 1 deptno, 'A' job, 100 sal from dual)
+	pivot xml
+	(
+		sum(sal) as begin1, sum(sal) as begin
+		for deptno
+		in  (any)
+	);
+	return v_number;
+end; select f from dual;select * from dual b!';
+	v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('plsql_declaration 18a', 2, v_split_statements.count);
+	assert_equals('plsql_declaration 18b', 'select * from dual b', v_split_statements(2));
 
 	--nested_table_col_properties "as begin" exception.
 	v_statements:=q'!
@@ -369,8 +389,8 @@ create table test1 nested table a store as begin as
 with function f return varchar2 is v_string varchar2(1); begin return 'A'; end;
 select sys.dbms_debug_vc2coll('A') a from dual;select * from dual b!';
 	v_split_statements:=statement_splitter.split(v_statements);
-	assert_equals('plsql_declaration 18a', 2, v_split_statements.count);
---	assert_equals('plsql_declaration 18b', 'select * from dual b', v_split_statements(2));
+	assert_equals('plsql_declaration 19a', 2, v_split_statements.count);
+--	assert_equals('plsql_declaration 19b', 'select * from dual b', v_split_statements(2));
 
 	--TODO: SQL with PL/SQL with a SQL with PL/SQL.
 end test_plsql_declaration;

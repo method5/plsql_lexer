@@ -255,6 +255,7 @@ TODO:
 		v_previous_concrete_token_3 in out token,
 		v_has_entered_block in out boolean,
 		v_block_counter in out number,
+		v_pivot_paren_counter in number,
 		v_prev_conc_tok_was_real_begin in out boolean
 	) is
 	begin
@@ -275,13 +276,14 @@ TODO:
 				v_prev_conc_tok_was_real_begin
 			)
 		)
-		--Ignore "as begin" if it's used as a column alias.
+		--Ignore "as begin" if it's used as an alias.
 		and not
 		(
 			lower(v_previous_concrete_token_1.value) = 'as'
 			and
 			get_next_concrete_value_n(1) in (',', 'from', 'into', ')', 'columns')
 		)
+		--Ignore "as begin" if it's used in bulk collect.
 		and not
 		(
 			lower(v_previous_concrete_token_1.value) = 'as'
@@ -289,6 +291,17 @@ TODO:
 			lower(get_next_concrete_value_n(1)) in ('bulk')
 			and
 			lower(get_next_concrete_value_n(2)) in ('collect')
+		)
+		--Ignore "as begin" if it's used in a PIVOT
+		and not
+		(
+			v_pivot_paren_counter > 0
+			and
+			lower(v_previous_concrete_token_1.value) = 'as'
+			and
+			lower(v_previous_concrete_token_2.value) = ')'
+			and
+			lower(get_next_concrete_value_n(1)) in (',', 'for')
 		)
 		then
 			v_has_entered_block := true;
@@ -337,6 +350,50 @@ TODO:
 		end if;
 	end detect_end;
 
+	---------------------------------------
+	--Count pivot parentheses.
+	procedure set_pivot_paren_counter(
+		v_pivot_paren_counter in out number,
+		v_previous_concrete_token_1 in token,
+		v_previous_concrete_token_2 in token,
+		v_previous_concrete_token_3 in token
+	) is
+	begin
+		--Initialize, if it's not already initialized and it's in a "pivot xml? (".
+		if
+		v_pivot_paren_counter = 0
+		and
+		(
+			(
+				v_previous_concrete_token_1.value = '('
+				and
+				lower(v_previous_concrete_token_2.value) = 'pivot'
+			)
+			or
+			(
+				v_previous_concrete_token_1.value = '('
+				and
+				lower(v_previous_concrete_token_2.value) = 'xml'
+				and
+				lower(v_previous_concrete_token_3.value) = 'pivot'
+			)
+		) then
+			v_pivot_paren_counter := 1;
+		--Increment, if it's in a PIVOT and a "(" is found.
+		elsif
+		v_pivot_paren_counter > 0
+		and
+		p_tokens(p_token_index).value = '(' then
+			v_pivot_paren_counter := v_pivot_paren_counter + 1;
+		--Decrement, if it's in a PIVOT and a ")" is found.
+		elsif
+		v_pivot_paren_counter > 0
+		and
+		p_tokens(p_token_index).value = ')' then
+			v_pivot_paren_counter := v_pivot_paren_counter - 1;
+		end if;
+	end set_pivot_paren_counter;
+
 begin
 	--Look for a ';' anywhere.
 	if p_terminator = C_TERMINATOR_SEMI then
@@ -368,11 +425,6 @@ begin
 			p_token_index := p_token_index + 1;
 		end loop;
 
-	--Look for a '/' on a line by itself, separated only by whitespace.
-	--TODO: Remove this?
-	--elsif p_terminator = '/' then
-	--	null;
-
 	--Match BEGIN and END for a PLSQL_DECLARATION.  They are not reserved words so they must only be counted when they are in the right spot.
 	elsif p_terminator = C_TERMINATOR_PLSQL_DECLARE_END then
 		declare
@@ -381,6 +433,7 @@ begin
 			v_previous_concrete_token_3 token := token(null, null, null, null);
 			v_has_entered_block boolean := false;
 			v_block_counter number := 0;
+			v_pivot_paren_counter number := 0;
 			v_prev_conc_tok_was_real_begin boolean := false;
 		begin
 			--Build new statement and count tokens.
@@ -389,8 +442,11 @@ begin
 				exit when p_token_index >= p_tokens.count;
 				p_new_statement := p_new_statement || p_tokens(p_token_index).value;
 
+				--Set the PIVOT parentheses counter.
+				set_pivot_paren_counter(v_pivot_paren_counter, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3);
+
 				--Detect BEGIN and END.
-				detect_begin(v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_has_entered_block, v_block_counter, v_prev_conc_tok_was_real_begin);
+				detect_begin(v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin);
 				detect_end(v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_block_counter);
 
 				--Detect end of statement.
@@ -439,6 +495,7 @@ begin
 			v_previous_concrete_token_3 token := token(null, null, null, null);
 			v_has_entered_block boolean := false;
 			v_block_counter number := 0;
+			v_pivot_paren_counter number := 0;
 			v_prev_conc_tok_was_real_begin boolean := false;
 		begin
 			--Build new statement and count tokens.
@@ -447,8 +504,11 @@ begin
 				exit when p_token_index >= p_tokens.count;
 				p_new_statement := p_new_statement || p_tokens(p_token_index).value;
 
+				--Set the PIVOT parentheses counter.
+				set_pivot_paren_counter(v_pivot_paren_counter, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3);
+
 				--Detect BEGIN and END.
-				detect_begin(v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_has_entered_block, v_block_counter, v_prev_conc_tok_was_real_begin);
+				detect_begin(v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin);
 				detect_end(v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_block_counter);
 
 				--Detect end of statement.
@@ -500,8 +560,6 @@ begin
 	--Add new statement to array
 	p_split_statements.extend;
 	p_split_statements(p_split_statements.count) := p_new_statement;
-
-	--TODO: Make sure every statement ends with an EOF?
 
 	--Create new tokens table excluding the tokens used for the new statement.
 	for i in p_token_index+1 .. p_tokens.count loop
