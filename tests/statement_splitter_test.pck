@@ -168,6 +168,11 @@ begin
 	assert_equals('Slash 7b', 'select '''||chr(10)||' 	', v_split_statements(1));
 	assert_equals('Slash 7c', '	 '||chr(10)||''' from dual', v_split_statements(2));
 
+	--SQL *not* split in two because the terminator has a non-whitespace item on the same line.
+	--This is a weird, but it's how SQL*Plus works.
+	v_statements:='select * from dual a'||chr(10)||' / --bad comment'||chr(10)||'select * from dual b';v_split_statements:=statement_splitter.split(v_statements, '/');
+	assert_equals('Slash 8a', '1', v_split_statements.count);
+	assert_equals('Slash 8b', v_statements, v_split_statements(1));
 
 
 /*
