@@ -390,7 +390,7 @@ with function f return varchar2 is v_string varchar2(1); begin return 'A'; end;
 select sys.dbms_debug_vc2coll('A') a from dual;select * from dual b!';
 	v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('plsql_declaration 19a', 2, v_split_statements.count);
---	assert_equals('plsql_declaration 19b', 'select * from dual b', v_split_statements(2));
+	assert_equals('plsql_declaration 19b', 'select * from dual b', v_split_statements(2));
 
 	--TODO: SQL with PL/SQL with a SQL with PL/SQL.
 end test_plsql_declaration;

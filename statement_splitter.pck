@@ -181,7 +181,8 @@ procedure add_statement_consume_tokens(
 	p_tokens in out nocopy token_table,
 	p_terminator number,
 	p_new_statement in out nclob,
-	p_token_index in out number
+	p_token_index in out number,
+	p_command_name in varchar2
 ) is
 	v_new_tokens token_table := token_table();
 
@@ -256,7 +257,8 @@ TODO:
 		v_has_entered_block in out boolean,
 		v_block_counter in out number,
 		v_pivot_paren_counter in number,
-		v_prev_conc_tok_was_real_begin in out boolean
+		v_prev_conc_tok_was_real_begin in out boolean,
+		v_has_nested_table in boolean
 	) is
 	begin
 		if
@@ -302,6 +304,15 @@ TODO:
 			lower(v_previous_concrete_token_2.value) = ')'
 			and
 			lower(get_next_concrete_value_n(1)) in (',', 'for')
+		)
+		--Ignore "as begin" if it's used in a nested table "... store as begin".
+		and not
+		(
+			v_has_nested_table
+			and
+			lower(v_previous_concrete_token_2.value) = 'store'
+			and
+			lower(v_previous_concrete_token_1.value) = 'as'
 		)
 		then
 			v_has_entered_block := true;
@@ -435,6 +446,7 @@ begin
 			v_block_counter number := 0;
 			v_pivot_paren_counter number := 0;
 			v_prev_conc_tok_was_real_begin boolean := false;
+			v_has_nested_table boolean := false;
 		begin
 			--Build new statement and count tokens.
 			loop
@@ -445,8 +457,18 @@ begin
 				--Set the PIVOT parentheses counter.
 				set_pivot_paren_counter(v_pivot_paren_counter, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3);
 
+				--Set v_has_nested_table.
+				if
+					p_command_name in ('CREATE TABLE', 'ALTER TABLE')
+					and
+					lower(v_previous_concrete_token_2.value) = 'nested' 
+					and lower(v_previous_concrete_token_1.value) = 'table'
+				then
+					v_has_nested_table := true;
+				end if;
+
 				--Detect BEGIN and END.
-				detect_begin(v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin);
+				detect_begin(v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table);
 				detect_end(v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_block_counter);
 
 				--Detect end of statement.
@@ -465,12 +487,12 @@ begin
 					--There could be more than one function.
 					elsif has_another_plsql_declaration(p_tokens, p_token_index + 1) then
 						p_token_index := p_token_index + 1;
-						add_statement_consume_tokens(p_split_statements, p_tokens, C_TERMINATOR_PLSQL_DECLARE_END, p_new_statement, p_token_index);
+						add_statement_consume_tokens(p_split_statements, p_tokens, C_TERMINATOR_PLSQL_DECLARE_END, p_new_statement, p_token_index, p_command_name);
 						return;
 					--Otherwise look for the next ';'.
 					else
 						p_token_index := p_token_index + 1;
-						add_statement_consume_tokens(p_split_statements, p_tokens, C_TERMINATOR_SEMI, p_new_statement, p_token_index);
+						add_statement_consume_tokens(p_split_statements, p_tokens, C_TERMINATOR_SEMI, p_new_statement, p_token_index, p_command_name);
 						return;
 					end if;
 				end if;
@@ -497,6 +519,7 @@ begin
 			v_block_counter number := 0;
 			v_pivot_paren_counter number := 0;
 			v_prev_conc_tok_was_real_begin boolean := false;
+			v_has_nested_table boolean := false;
 		begin
 			--Build new statement and count tokens.
 			loop
@@ -507,8 +530,18 @@ begin
 				--Set the PIVOT parentheses counter.
 				set_pivot_paren_counter(v_pivot_paren_counter, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3);
 
+				--Set v_has_nested_table.
+				if
+					p_command_name in ('CREATE TABLE', 'ALTER TABLE')
+					and
+					lower(v_previous_concrete_token_2.value) = 'nested' 
+					and lower(v_previous_concrete_token_1.value) = 'table'
+				then
+					v_has_nested_table := true;
+				end if;
+
 				--Detect BEGIN and END.
-				detect_begin(v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin);
+				detect_begin(v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table);
 				detect_end(v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_block_counter);
 
 				--Detect end of statement.
@@ -724,12 +757,12 @@ begin
 		and
 		has_plsql_declaration(p_tokens, 1)
 		then
-			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_PLSQL_DECLARE_END, v_temp_new_statement, v_temp_token_index);
+			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_PLSQL_DECLARE_END, v_temp_new_statement, v_temp_token_index, v_command_name);
 
 
 		--#4: Match PL/SQL BEGIN and END.
 		elsif v_command_name in ('CREATE FUNCTION','CREATE PROCEDURE','CREATE TRIGGER','CREATE TYPE BODY', 'PL/SQL EXECUTE') then
-			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_PLSQL_END, v_temp_new_statement, v_temp_token_index);
+			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_PLSQL_END, v_temp_new_statement, v_temp_token_index, v_command_name);
 
 		--#5: Stop at possibly unbalanced BEGIN/END;
 		/*
@@ -788,7 +821,7 @@ begin
 
 		--#7: Stop at first ";" for everything else.
 		else
-			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_SEMI, v_temp_new_statement, v_temp_token_index);
+			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_SEMI, v_temp_new_statement, v_temp_token_index, v_command_name);
 		end if;
 
 		--Quit when there are no more tokens.
