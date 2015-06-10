@@ -223,8 +223,7 @@ procedure add_statement_consume_tokens(
 			Exclude where next concrete token is "," or ")".  For CLUSTER_ID USING, model columns, PIVOT_IN_CLAUSE, XMLATTRIBUTES, XMLCOLATTVAL, XMLELEMENT, XMLFOREST, XMLnamespaces_clause.
 			Exclude where next concrete token is "," or ")" or "columns".  For XMLTABLE_options.
 				ASTRONOMICALLY UNLIKELY LEXER BUG: It is possible to have an object named "COLUMNS", although it would be invalid.
-TODO:
-			RULE: Exclude when "in pivot (xml)" and previous1 = "as" and previous2 = ")" and next1 in (",", "for").  For PIVOT clause.
+			Exclude when "in pivot (xml)" and previous1 = "as" and previous2 = ")" and next1 in (",", "for").  For PIVOT clause.
 				create or replace procedure test(a number) as begin for i in 1 .. 2 loop null; end loop; end;
 
 				select *
@@ -628,6 +627,24 @@ return nclob_table is
 
 		return v_next_n_chars;
 	end get_next_n_chars;
+
+	--Check if there are only whitespace characters before the next newline
+	function only_ws_before_next_newline return boolean is
+	begin
+		--Loop through the characters.
+		for i in v_char_index + v_delimiter_size .. v_chars.count loop
+			--TRUE if a newline is found.
+			if v_chars(i) = chr(10) then
+				return true;
+			--False if non-whitespace is found.
+			elsif not tokenizer.is_lexical_whitespace(v_chars(i)) then
+				return false;
+			end if;
+		end loop;
+
+		--True if neither a newline or a non-whitespace was found.
+		return true;
+	end only_ws_before_next_newline;
 begin
 	--Return whole string if the delimiter is NULL.
 	if p_optional_sqlplus_delimiter is null then
@@ -661,8 +678,7 @@ begin
 			elsif tokenizer.is_lexical_whitespace(v_chars(v_char_index)) then
 				v_string := v_string || v_chars(v_char_index);
 			--Split string if delimiter is found
-			elsif get_next_n_chars(v_delimiter_size) = p_optional_sqlplus_delimiter /*+ TODO */ /*and rest of line is only whitespace*/ then
-				--TODO: Exclude N characters.
+			elsif get_next_n_chars(v_delimiter_size) = p_optional_sqlplus_delimiter and only_ws_before_next_newline then
 				v_strings.extend;
 				v_strings(v_strings.count) := v_string;
 				v_string := null;
