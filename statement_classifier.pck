@@ -23,7 +23,8 @@ procedure classify(
 );
 
 /*
-## Purpose ##
+
+== Purpose ==
 
 Statement classifier is a PL/SQL package to determine the category, statement
 type, command name, and command type (id) for a single SQL or PL/SQL statement.
@@ -36,7 +37,7 @@ For example, a program may need to decide to:
 - Prevent the code from running if it is a PL/SQL statement.
 
 
-## Example ##
+== Example ==
 
 declare
 	v_category       varchar2(100);
@@ -69,7 +70,7 @@ Lex SQLCODE   :
 Lex SQLERRM   : 
 
 
-## Parameters ##
+== Parameters ==
 
 - p_statement (IN):  The input code.
   OR
@@ -83,8 +84,8 @@ Lex SQLERRM   :
 
     Here are the possible combinations of P_CATEGORY and P_STATEMENT_TYPE.
     These combinations are defined by the manual, except for "PL/SQL", "Invalid"
-	(a string that cannot be classified, probably because of a typo like
-	'seelct ...'.), and "Nothing" (a string with only whitespace or comments).
+    (a string that cannot be classified, probably because of a typo like
+    'seelct ...'.), and "Nothing" (a string with only whitespace or comments).
 
     DDL
       ADMINISTER KEY MANAGEMENT, ALTER (except ALTER SESSION and ALTER SYSTEM),
@@ -100,10 +101,10 @@ Lex SQLERRM   :
       ALTER SYSTEM
     PL/SQL
       BLOCK
-	Invalid
-		Invalid
-	Nothing
-		Nothing
+    Invalid
+        Invalid
+    Nothing
+        Nothing
 
 - p_command_name (OUT):  This is usually more specific than the statement type
     and is based on V$SQLCOMMAND.  For example, "CREATE PLUGGABLE DATABASE".
@@ -119,7 +120,7 @@ Lex SQLERRM   :
 - p_lex_sqlerrm (OUT):  The SQLERRM associated with the SQLCODE above.
 
 
-## References ##
+== References ==
 
 The category names and associations are based on the Oracle 12c "Types of SQL
 Statements" chapter of "Database SQL Language Reference", as well as the
@@ -136,7 +137,7 @@ syntax issues that prevent code from running.  For example, "select /* from dual
 would generate "ORA-01742: comment not terminated properly".
 
 
-## Tokenizer details ##
+== Tokenizer details ==
 
 Classifying statements does not require a full parser.  Many shortcuts are
 possible because only the first four (non-optional) keywords are usually
@@ -150,6 +151,7 @@ are SELECT can start with "WITH" or "(", and a PL/SQL BLOCK can start with "<<",
 "DECLARE", or "BEGIN".
 
 See TOKENIZER for more details on possible tokens.
+
 */
 
 end;

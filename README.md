@@ -79,9 +79,10 @@ See the individual packages for details on each procedure.
 
         alter session set current_schema=&SCHEMA_NAME;
         @tokenizer.pck
-        @statement_splitter.pck
         @statement_classifier.pck
+        @statement_splitter.pck
         @statement_feedback.pck
+        @statement_semicolon_remover.pck
 
 3. Install unit tests (optional):
 

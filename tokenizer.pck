@@ -4,7 +4,8 @@ C_VERSION constant varchar2(10) := '0.2.0';
 
 
 /*
-## Purpose ##
+
+== Purpose ==
 
 Tokenize a SQL or PL/SQL statement.
 
@@ -23,12 +24,12 @@ Tokens may be one of these types:
     inquiry_directive
         PL/SQL preprocessor (conditional compilation) feature that is like: $$name
     preprocessor_control_token
-		PL/SQL preprocessor (conditional compilation) feature that is like: $plsql_identifier
+        PL/SQL preprocessor (conditional compilation) feature that is like: $plsql_identifier
     ,}?
         3-character punctuation operators (Row Pattern Quantifier).
     ~= != ^= <> := => >= <= ** || << >> {- -} *? +? ?? ,} }? {,
         2-character punctuation operators.
-    @ $ % ^ * ( ) - + = [ ] { } | : ; < , > . / ?
+    $ @ % ^ * ( ) - + = [ ] { } | : ; < , > . / ?
         1-character punctuation operators.
     EOF
         End of File.
@@ -36,7 +37,7 @@ Tokens may be one of these types:
         Everything else.  For example "&", a SQL*Plus characters.
 
 
-## Output ##
+== Output ==
 
 The most important output is a Token type:
 	type     varchar2(4000),
@@ -51,13 +52,13 @@ The most important output is a Token type:
 - sqlerrm: The SQLERRM that goes with the SQLCODE above.
 
 
-## Requirements ##
+== Requirements ==
 
 - Only 11gR2 and above are supported.  But this will likely work well in lower versions.
 - EBCDIC character set is not supported.
 
 
-## Example ##
+== Example ==
 
 begin
 	dbms_output.put_line(tokenizer.print_tokens(tokenizer.tokenize(

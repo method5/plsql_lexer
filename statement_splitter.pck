@@ -3,7 +3,8 @@ create or replace package statement_splitter is
 
 
 /*
-## Purpose ##
+
+== Purpose ==
 
 Split a string of separate SQL and PL/SQL statements terminated by ";".
 
@@ -16,15 +17,15 @@ delimiter is configurable, does not override the ";" terminator, and is removed
 from the split strings.
 
 
-## Output ##
+== Output ==
 
 TODO
 
-## Requirements ##
+== Requirements ==
 
 TODO
 
-## Example ##
+== Example ==
 
 TODO
 

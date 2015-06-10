@@ -18,7 +18,8 @@ procedure get_feedback_message(
 
 
 /*
-## Purpose ##
+
+== Purpose ==
 
 Generate a feedback message for a successful SQL or PL/SQL statement, similar to SQL*Plus.
 
@@ -32,7 +33,7 @@ This can help when processing dynamic SQL and PL/SQL statements.  Here are some 
 - no rows selected
 
 
-## Example ##
+== Example ==
 
 --Test Statement_Feedback.
 declare
@@ -72,7 +73,7 @@ begin
 end;
 
 
-## Parameters ##
+== Parameters ==
 
 p_statement - The SQL or PL/SQL statement that was executed successfully.
               Most of the messages are obvious.  Only the SELECT message is
