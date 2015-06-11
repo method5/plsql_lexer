@@ -40,6 +40,7 @@ create or replace package body statement_splitter is
 C_TERMINATOR_SEMI              constant number := 1;
 C_TERMINATOR_PLSQL_DECLARE_END constant number := 2;
 C_TERMINATOR_PLSQL_END         constant number := 3;
+C_EOF                          constant number := 4;
 
 type token_table_table is table of token_table;
 
@@ -212,7 +213,7 @@ procedure add_statement_consume_tokens(
 
 	---------------------------------------
 	/*
-	BEGIN must come after "begin", "as", "is", ";", or ">>", or the beginning of the string. 
+	BEGIN must come after "begin", "as", "is", ";", or ">>", or the beginning of the string.
 		- "as" could be a column name, but it cannot be referenced as a column name:
 			select as from (select 1 as from dual);
 				   *
@@ -253,7 +254,6 @@ procedure add_statement_consume_tokens(
 	procedure detect_begin(
 		v_previous_concrete_token_1 in out token,
 		v_previous_concrete_token_2 in out token,
-		v_previous_concrete_token_3 in out token,
 		v_has_entered_block in out boolean,
 		v_block_counter in out number,
 		v_pivot_paren_counter in number,
@@ -406,8 +406,16 @@ procedure add_statement_consume_tokens(
 	end set_pivot_paren_counter;
 
 begin
+	--Consume everything
+	if p_terminator = C_EOF then
+		--Consume all tokens.
+		loop
+			exit when p_token_index > p_tokens.count;
+			p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+			p_token_index := p_token_index + 1;
+		end loop;
 	--Look for a ';' anywhere.
-	if p_terminator = C_TERMINATOR_SEMI then
+	elsif p_terminator = C_TERMINATOR_SEMI then
 		--Build new statement and count tokens.
 		loop
 			--Increment.
@@ -461,14 +469,14 @@ begin
 				if
 					p_command_name in ('CREATE TABLE', 'ALTER TABLE')
 					and
-					lower(v_previous_concrete_token_2.value) = 'nested' 
+					lower(v_previous_concrete_token_2.value) = 'nested'
 					and lower(v_previous_concrete_token_1.value) = 'table'
 				then
 					v_has_nested_table := true;
 				end if;
 
 				--Detect BEGIN and END.
-				detect_begin(v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table);
+				detect_begin(v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table);
 				detect_end(v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_block_counter);
 
 				--Detect end of statement.
@@ -534,14 +542,14 @@ begin
 				if
 					p_command_name in ('CREATE TABLE', 'ALTER TABLE')
 					and
-					lower(v_previous_concrete_token_2.value) = 'nested' 
+					lower(v_previous_concrete_token_2.value) = 'nested'
 					and lower(v_previous_concrete_token_1.value) = 'table'
 				then
 					v_has_nested_table := true;
 				end if;
 
 				--Detect BEGIN and END.
-				detect_begin(v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table);
+				detect_begin(v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table);
 				detect_end(v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_block_counter);
 
 				--Detect end of statement.
@@ -675,7 +683,7 @@ begin
 				v_strings.extend;
 				v_strings(v_strings.count) := v_string;
 				exit;
-			--Continue if it's still whitespace. 
+			--Continue if it's still whitespace.
 			elsif tokenizer.is_lexical_whitespace(v_chars(v_char_index)) then
 				v_string := v_string || v_chars(v_char_index);
 			--Split string if delimiter is found
@@ -740,14 +748,15 @@ begin
 
 		--Find a terminating token based on the classification.
 		--
-		--#1: Throw error if statement could not be classified:
-		if v_command_name is null then
-			raise_application_error(-20000, 'Cannot classify and split statement(s).  Check the syntax.');
+		--#1: Return everything with no splitting if the statement is Invalid or Nothing.
+		--    These are probably errors but the application must decide how to handle them.
+		if v_command_name in ('Invalid', 'Nothing') then
+			add_statement_consume_tokens(v_split_statements, p_tokens, C_EOF, v_temp_new_statement, v_temp_token_index, v_command_name);
 
 		--#2: Match "}" for Java code.
 		/*
 			'CREATE JAVA', if "{" is found before first ";"
-			Note: Single-line comments are different, "//".  Exclude any "", "", or "" after a 
+			Note: Single-line comments are different, "//".  Exclude any "", "", or "" after a
 				Create java_partial_tokenizer to lex Java statements (Based on: https://docs.oracle.com/javase/specs/jls/se7/html/jls-3.html), just need:
 					- multi-line comment
 					- single-line comment - Note Lines are terminated by the ASCII characters CR, or LF, or CR LF.
@@ -775,7 +784,6 @@ begin
 		has_plsql_declaration(p_tokens, 1)
 		then
 			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_PLSQL_DECLARE_END, v_temp_new_statement, v_temp_token_index, v_command_name);
-
 
 		--#4: Match PL/SQL BEGIN and END.
 		elsif v_command_name in ('CREATE FUNCTION','CREATE PROCEDURE','CREATE TRIGGER','CREATE TYPE BODY', 'PL/SQL EXECUTE') then
@@ -830,6 +838,7 @@ begin
 				if is_begin
 			end if;
 			*/
+
 		--#6: Stop at first END.
 		--(TODO: Can declaration have unbalanced begin and end for cursors?)
 		elsif v_command_name in ('CREATE PACKAGE') then

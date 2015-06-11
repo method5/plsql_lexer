@@ -81,6 +81,9 @@ end assert_equals;
 --------------------------------------------------------------------------------
 procedure test_errors is
 begin
+	--TODO:
+	--Return everything for Invalid or Nothing.
+
 	--TODO
 	null;
 end test_errors;
