@@ -21,8 +21,9 @@ c_simple             constant number := power(2, 2);
 c_optional_delimiter constant number := power(2, 3);
 c_plsql_declaration  constant number := power(2, 4);
 c_plsql_block        constant number := power(2, 5);
+c_type_body          constant number := power(2, 6);
 
-c_static_tests  constant number := c_errors+c_simple+c_optional_delimiter+c_plsql_declaration+c_plsql_block;
+c_static_tests  constant number := c_errors+c_simple+c_optional_delimiter+c_plsql_declaration+c_plsql_block+c_type_body;
 
 c_dynamic_tests constant number := power(2, 30);
 
@@ -423,7 +424,48 @@ begin
 	assert_equals('plsql_block: begin begin does not start a block 3a', 2, v_split_statements.count);
 	assert_equals('plsql_block: begin begin does not start a block 3b', 'declare v_test number; begin begin begin select begin begin into v_test from (select 1 begin from dual); end; end; end;', v_split_statements(1));
 	assert_equals('plsql_block: begin begin does not start a block 3c', ' select * from dual;', v_split_statements(2));
+
+	v_statements:='declare v_test number; begin select 1 as end into v_test from dual; end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('plsql_block: "as end" does not count 1a', 2, v_split_statements.count);
+	assert_equals('plsql_block: "as end" does not count 1b', 'declare v_test number; begin select 1 as end into v_test from dual; end;', v_split_statements(1));
+	assert_equals('plsql_block: "as end" does not count 1c', 'select * from dual;', v_split_statements(2));
+
+	v_statements:='declare v_test number; begin with end as (select 1 a from dual) select a into v_test from end; end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('plsql_block: "as end" does not count 2a', 2, v_split_statements.count);
+	assert_equals('plsql_block: "as end" does not count 2b', 'declare v_test number; begin with end as (select 1 a from dual) select a into v_test from end; end;', v_split_statements(1));
+	assert_equals('plsql_block: "as end" does not count 2c', 'select * from dual;', v_split_statements(2));
 end test_plsql_block;
+
+
+--------------------------------------------------------------------------------
+procedure test_type_body is
+	v_statements nclob;
+	v_split_statements nclob_table := nclob_table();
+begin
+	--All type body member types.
+	/* This is the type spec to make the next type body work.
+	create or replace type type1 is object
+	(
+		a number,
+		member procedure procedure1,
+		member function function1 return number,
+		order member function return_order(a type1) return number,
+		final instantiable constructor function type1 return self as result
+	);
+	*/
+/*
+	v_statements:='
+		create or replace type body type1 is
+			member procedure procedure1 is begin null; end;
+			member function function1 return number is begin return 1; end;
+			order member function return_order(a type1) return number is begin return 1; end;
+			final instantiable constructor function type1 return self as result is begin null; end;
+		end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Type Body 1a', 2, v_split_statements.count);
+	assert_equals('Type body 1b', ' select * from dual;', v_split_statements(2));
+*/
+	null;
+end test_type_body;
 
 
 --------------------------------------------------------------------------------
@@ -504,6 +546,7 @@ begin
 	if bitand(p_tests, c_optional_delimiter) > 0 then test_optional_delimiter; end if;
 	if bitand(p_tests, c_plsql_declaration)  > 0 then test_plsql_declaration;  end if;
 	if bitand(p_tests, c_plsql_block)        > 0 then test_plsql_block;        end if;
+	if bitand(p_tests, c_type_body)          > 0 then test_type_body;          end if;
 	if bitand(p_tests, c_dynamic_tests)      > 0 then dynamic_tests;           end if;
 
 	--Print summary of results.

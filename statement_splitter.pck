@@ -40,7 +40,8 @@ create or replace package body statement_splitter is
 C_TERMINATOR_SEMI              constant number := 1;
 C_TERMINATOR_PLSQL_DECLARE_END constant number := 2;
 C_TERMINATOR_PLSQL_END         constant number := 3;
-C_EOF                          constant number := 4;
+C_TERMINATOR_EOF               constant number := 4;
+C_TERMINATOR_TYPE_BODY_END     constant number := 5;
 
 type token_table_table is table of token_table;
 
@@ -118,9 +119,6 @@ begin
 end has_plsql_declaration;
 
 
-
-
-
 --------------------------------------------------------------------------------
 /*
 Purpose: Detect if there is another PLSQL_DECLARATION.  This is only valid if
@@ -178,188 +176,197 @@ end only_ws_comments_eof_remain;
 
 
 --------------------------------------------------------------------------------
+--Return the next concrete token, or NULL if there are no more.
+function get_next_concrete_value_n(p_tokens in out nocopy token_table, p_token_index in number, p_n in number) return nvarchar2 is
+	v_concrete_token_counter number := 0;
+begin
+	--Loop through the tokens.
+	for i in p_token_index + 1 .. p_tokens.count loop
+		--Process if it's concrte.
+		if p_tokens(i).type not in ('whitespace', 'comment', 'EOF') then
+			--Increment concrete counter.
+			v_concrete_token_counter := v_concrete_token_counter + 1;
+
+			--Return the value if we've reached the Nth concrete token.
+			if v_concrete_token_counter = p_n then
+				return p_tokens(i).value;
+			end if;
+		end if;
+	end loop;
+
+	--Return NULL if nothing was found.
+	return null;
+end get_next_concrete_value_n;
+
+
+--------------------------------------------------------------------------------
+/*
+BEGIN must come after "begin", "as", "is", ";", or ">>", or the beginning of the string.
+	- "as" could be a column name, but it cannot be referenced as a column name:
+		select as from (select 1 as from dual);
+			   *
+		ERROR at line 1:
+		ORA-00936: missing expression
+	- Some forms of "begin begin" do not count, such as select begin begin from (select 1 begin from dual);
+	- Exclude "as begin" if it's used as an alias.
+		Exclude where next concrete token is ",", "from", "into", or "bulk collect".  For column aliases.
+		Exclude where next concrete token is "," or ")".  For CLUSTER_ID USING, model columns, PIVOT_IN_CLAUSE, XMLATTRIBUTES, XMLCOLATTVAL, XMLELEMENT, XMLFOREST, XMLnamespaces_clause.
+		Exclude where next concrete token is "," or ")" or "columns".  For XMLTABLE_options.
+			ASTRONOMICALLY UNLIKELY LEXER BUG: It is possible to have an object named "COLUMNS", although it would be invalid.
+		Exclude when "in pivot (xml)" and previous1 = "as" and previous2 = ")" and next1 in (",", "for").  For PIVOT clause.
+			create or replace procedure test(a number) as begin for i in 1 .. 2 loop null; end loop; end;
+
+			select *
+			from (select 1 deptno, 'A' job, 100 sal from dual)
+			pivot
+			(
+				sum(sal) as begin1, sum(sal) as begin
+				for deptno
+				in  (1,2)
+			);
+		RULE: Exclude when command_name in ('ALTER TABLE', 'CREATE TABLE') and previous1 = "as" and previous2 = "store".  For nested_table_col_properties.
+			create type type1 is table of number;
+			create table test1
+			(
+				a type1
+			)
+			nested table a store as begin;
+
+			create or replace procedure store as begin null end;
+
+		Documentation bug: For XMLnamespaces_clause (in XMLELEMENT) there must be a comma between "string AS identifier"
+			and "DEFAULT string".  Although the documentation implies " 'A' as begin default 'B' " is valid it is NOT.
+			It must be " 'A' as begin, default 'B' ", which is handled by above rules.
+	- Note: These rules were determined by downloading and searching the BNF descriptions like this: findstr /i /s "as" *.*
+*/
+procedure detect_begin(
+	p_tokens in out token_table,
+	p_token_index in number,
+	v_previous_concrete_token_1 in out nocopy token,
+	v_previous_concrete_token_2 in out nocopy token,
+	v_has_entered_block in out boolean,
+	v_block_counter in out number,
+	v_pivot_paren_counter in number,
+	v_prev_conc_tok_was_real_begin in out boolean,
+	v_has_nested_table in boolean
+) is
+begin
+	if
+	lower(p_tokens(p_token_index).value) = 'begin'
+	and
+	(
+		(
+			lower(v_previous_concrete_token_1.value) in ('as', 'is', ';', '>>')
+			or
+			v_previous_concrete_token_1.type is null
+		)
+		or
+		(
+			--Ignore some "begin begin", such as select begin begin from (select 1 begin from dual);
+			lower(v_previous_concrete_token_1.value) = 'begin'
+			and
+			v_prev_conc_tok_was_real_begin
+		)
+	)
+	--Ignore "as begin" if it's used as an alias.
+	and not
+	(
+		lower(v_previous_concrete_token_1.value) = 'as'
+		and
+		get_next_concrete_value_n(p_tokens, p_token_index, 1) in (',', 'from', 'into', ')', 'columns')
+	)
+	--Ignore "as begin" if it's used in bulk collect.
+	and not
+	(
+		lower(v_previous_concrete_token_1.value) = 'as'
+		and
+		lower(get_next_concrete_value_n(p_tokens, p_token_index, 1)) in ('bulk')
+		and
+		lower(get_next_concrete_value_n(p_tokens, p_token_index, 2)) in ('collect')
+	)
+	--Ignore "as begin" if it's used in a PIVOT
+	and not
+	(
+		v_pivot_paren_counter > 0
+		and
+		lower(v_previous_concrete_token_1.value) = 'as'
+		and
+		lower(v_previous_concrete_token_2.value) = ')'
+		and
+		lower(get_next_concrete_value_n(p_tokens, p_token_index, 1)) in (',', 'for')
+	)
+	--Ignore "as begin" if it's used in a nested table "... store as begin".
+	and not
+	(
+		v_has_nested_table
+		and
+		lower(v_previous_concrete_token_2.value) = 'store'
+		and
+		lower(v_previous_concrete_token_1.value) = 'as'
+	)
+	then
+		v_has_entered_block := true;
+		v_block_counter := v_block_counter + 1;
+		v_prev_conc_tok_was_real_begin := true;
+	--If token is concrete, reset the flag.
+	elsif p_tokens(p_token_index).type not in ('whitespace', 'comment', 'EOF') then
+		v_prev_conc_tok_was_real_begin := false;
+	end if;
+
+end detect_begin;
+
+
+--------------------------------------------------------------------------------
+/*
+END must come after ";"
+	It cannot come after ">>", labels can't go there without compilation error.
+	end could be an object, but the object will be invalid so things won't compile
+TODO: Add trigger timing points.  For example: "END AFTER EACH ROW;"
+TODO: Add special case for an empty package body or empty type body.
+*/
+procedure detect_end(
+	p_tokens in out nocopy token_table,
+	p_token_index in number,
+	v_previous_concrete_token_1 in out nocopy token,
+	v_previous_concrete_token_2 in out nocopy token,
+	v_previous_concrete_token_3 in out nocopy token,
+	v_block_counter in out number
+) is
+begin
+	if
+	p_tokens(p_token_index).type = ';'
+	and
+	(
+		(
+			lower(v_previous_concrete_token_1.value) = 'end'
+			and
+			lower(v_previous_concrete_token_2.type) = ';'
+		)
+		or
+		--Optional block name.
+		(
+			lower(v_previous_concrete_token_1.type) = 'word'
+			and
+			lower(v_previous_concrete_token_2.value) = 'end'
+			and
+			lower(v_previous_concrete_token_3.type) = ';'
+		)
+	) then
+		v_block_counter := v_block_counter - 1;
+	end if;
+end detect_end;
+
+
+--------------------------------------------------------------------------------
 procedure add_statement_consume_tokens(
 	p_split_statements in out nocopy nclob_table,
 	p_tokens in out nocopy token_table,
 	p_terminator number,
-	p_new_statement in out nclob,
+	p_new_statement in out nocopy nclob,
 	p_token_index in out number,
 	p_command_name in varchar2
 ) is
 	v_new_tokens token_table := token_table();
-
-	---------------------------------------
-	--Return the next concrete token, or NULL if there are no more.
-	function get_next_concrete_value_n(p_n in number) return nvarchar2 is
-		v_concrete_token_counter number := 0;
-	begin
-		--Loop through the tokens.
-		for i in p_token_index + 1 .. p_tokens.count loop
-			--Process if it's concrte.
-			if p_tokens(i).type not in ('whitespace', 'comment', 'EOF') then
-				--Increment concrete counter.
-				v_concrete_token_counter := v_concrete_token_counter + 1;
-
-				--Return the value if we've reached the Nth concrete token.
-				if v_concrete_token_counter = p_n then
-					return p_tokens(i).value;
-				end if;
-			end if;
-		end loop;
-
-		--Return NULL if nothing was found.
-		return null;
-	end get_next_concrete_value_n;
-
-	---------------------------------------
-	/*
-	BEGIN must come after "begin", "as", "is", ";", or ">>", or the beginning of the string.
-		- "as" could be a column name, but it cannot be referenced as a column name:
-			select as from (select 1 as from dual);
-				   *
-			ERROR at line 1:
-			ORA-00936: missing expression
-		- Some forms of "begin begin" do not count, such as select begin begin from (select 1 begin from dual);
-		- Exclude "as begin" if it's used as an alias.
-			Exclude where next concrete token is ",", "from", "into", or "bulk collect".  For column aliases.
-			Exclude where next concrete token is "," or ")".  For CLUSTER_ID USING, model columns, PIVOT_IN_CLAUSE, XMLATTRIBUTES, XMLCOLATTVAL, XMLELEMENT, XMLFOREST, XMLnamespaces_clause.
-			Exclude where next concrete token is "," or ")" or "columns".  For XMLTABLE_options.
-				ASTRONOMICALLY UNLIKELY LEXER BUG: It is possible to have an object named "COLUMNS", although it would be invalid.
-			Exclude when "in pivot (xml)" and previous1 = "as" and previous2 = ")" and next1 in (",", "for").  For PIVOT clause.
-				create or replace procedure test(a number) as begin for i in 1 .. 2 loop null; end loop; end;
-
-				select *
-				from (select 1 deptno, 'A' job, 100 sal from dual)
-				pivot
-				(
-					sum(sal) as begin1, sum(sal) as begin
-					for deptno
-					in  (1,2)
-				);
-			RULE: Exclude when command_name in ('ALTER TABLE', 'CREATE TABLE') and previous1 = "as" and previous2 = "store".  For nested_table_col_properties.
-				create type type1 is table of number;
-				create table test1
-				(
-					a type1
-				)
-				nested table a store as begin;
-
-				create or replace procedure store as begin null end;
-
-			Documentation bug: For XMLnamespaces_clause (in XMLELEMENT) there must be a comma between "string AS identifier"
-				and "DEFAULT string".  Although the documentation implies " 'A' as begin default 'B' " is valid it is NOT.
-				It must be " 'A' as begin, default 'B' ", which is handled by above rules.
-		- Note: These rules were determined by downloading and searching the BNF descriptions like this: findstr /i /s "as" *.*
-	*/
-	procedure detect_begin(
-		v_previous_concrete_token_1 in out token,
-		v_previous_concrete_token_2 in out token,
-		v_has_entered_block in out boolean,
-		v_block_counter in out number,
-		v_pivot_paren_counter in number,
-		v_prev_conc_tok_was_real_begin in out boolean,
-		v_has_nested_table in boolean
-	) is
-	begin
-		if
-		lower(p_tokens(p_token_index).value) = 'begin'
-		and
-		(
-			(
-				lower(v_previous_concrete_token_1.value) in ('as', 'is', ';', '>>')
-				or
-				v_previous_concrete_token_1.type is null
-			)
-			or
-			(
-				--Ignore some "begin begin", such as select begin begin from (select 1 begin from dual);
-				lower(v_previous_concrete_token_1.value) = 'begin'
-				and
-				v_prev_conc_tok_was_real_begin
-			)
-		)
-		--Ignore "as begin" if it's used as an alias.
-		and not
-		(
-			lower(v_previous_concrete_token_1.value) = 'as'
-			and
-			get_next_concrete_value_n(1) in (',', 'from', 'into', ')', 'columns')
-		)
-		--Ignore "as begin" if it's used in bulk collect.
-		and not
-		(
-			lower(v_previous_concrete_token_1.value) = 'as'
-			and
-			lower(get_next_concrete_value_n(1)) in ('bulk')
-			and
-			lower(get_next_concrete_value_n(2)) in ('collect')
-		)
-		--Ignore "as begin" if it's used in a PIVOT
-		and not
-		(
-			v_pivot_paren_counter > 0
-			and
-			lower(v_previous_concrete_token_1.value) = 'as'
-			and
-			lower(v_previous_concrete_token_2.value) = ')'
-			and
-			lower(get_next_concrete_value_n(1)) in (',', 'for')
-		)
-		--Ignore "as begin" if it's used in a nested table "... store as begin".
-		and not
-		(
-			v_has_nested_table
-			and
-			lower(v_previous_concrete_token_2.value) = 'store'
-			and
-			lower(v_previous_concrete_token_1.value) = 'as'
-		)
-		then
-			v_has_entered_block := true;
-			v_block_counter := v_block_counter + 1;
-			v_prev_conc_tok_was_real_begin := true;
-		--If token is concrete, reset the flag.
-		elsif p_tokens(p_token_index).type not in ('whitespace', 'comment', 'EOF') then
-			v_prev_conc_tok_was_real_begin := false;
-		end if;
-
-	end detect_begin;
-
-	---------------------------------------
-	/*
-	END must come after ";"
-		It cannot come after ">>", labels can't go there without compilation error.
-		end could be an object, but the object will be invalid so things won't compile
-	*/
-	procedure detect_end(
-		v_previous_concrete_token_1 in out token,
-		v_previous_concrete_token_2 in out token,
-		v_previous_concrete_token_3 in out token,
-		v_block_counter in out number
-	) is
-	begin
-		if
-		p_tokens(p_token_index).type = ';'
-		and
-		(
-			(
-				lower(v_previous_concrete_token_1.value) = 'end'
-				and
-				lower(v_previous_concrete_token_2.type) = ';'
-			)
-			or
-			--Optional block name.
-			(
-				lower(v_previous_concrete_token_1.type) = 'word'
-				and
-				lower(v_previous_concrete_token_2.value) = 'end'
-				and
-				lower(v_previous_concrete_token_3.type) = ';'
-			)
-		) then
-			v_block_counter := v_block_counter - 1;
-		end if;
-	end detect_end;
 
 	---------------------------------------
 	--Count pivot parentheses.
@@ -407,7 +414,7 @@ procedure add_statement_consume_tokens(
 
 begin
 	--Consume everything
-	if p_terminator = C_EOF then
+	if p_terminator = C_TERMINATOR_EOF then
 		--Consume all tokens.
 		loop
 			exit when p_token_index > p_tokens.count;
@@ -476,8 +483,8 @@ begin
 				end if;
 
 				--Detect BEGIN and END.
-				detect_begin(v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table);
-				detect_end(v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_block_counter);
+				detect_begin(p_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table);
+				detect_end(p_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_block_counter);
 
 				--Detect end of statement.
 				if (v_has_entered_block and v_block_counter = 0) or p_tokens(p_token_index).type = 'EOF' then
@@ -549,8 +556,8 @@ begin
 				end if;
 
 				--Detect BEGIN and END.
-				detect_begin(v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table);
-				detect_end(v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_block_counter);
+				detect_begin(p_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table);
+				detect_end(p_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_block_counter);
 
 				--Detect end of statement.
 				if (v_has_entered_block and v_block_counter = 0) or p_tokens(p_token_index).type = 'EOF' then
@@ -719,7 +726,7 @@ end split_string_by_optional_delim;
 
 --------------------------------------------------------------------------------
 --Split a token stream into statements by ";".
-function split_tokens_by_primary_term(p_tokens in out token_table) return nclob_table is
+function split_tokens_by_primary_term(p_tokens in out nocopy token_table) return nclob_table is
 	v_split_statements nclob_table := nclob_table();
 	v_command_name varchar2(4000);
 	v_temp_new_statement nclob;
@@ -751,7 +758,7 @@ begin
 		--#1: Return everything with no splitting if the statement is Invalid or Nothing.
 		--    These are probably errors but the application must decide how to handle them.
 		if v_command_name in ('Invalid', 'Nothing') then
-			add_statement_consume_tokens(v_split_statements, p_tokens, C_EOF, v_temp_new_statement, v_temp_token_index, v_command_name);
+			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_EOF, v_temp_new_statement, v_temp_token_index, v_command_name);
 
 		--#2: Match "}" for Java code.
 		/*
@@ -786,40 +793,67 @@ begin
 			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_PLSQL_DECLARE_END, v_temp_new_statement, v_temp_token_index, v_command_name);
 
 		--#4: Match PL/SQL BEGIN and END.
-		elsif v_command_name in ('CREATE FUNCTION','CREATE PROCEDURE','CREATE TRIGGER','CREATE TYPE BODY', 'PL/SQL EXECUTE') then
+		elsif v_command_name in ('CREATE FUNCTION','CREATE PROCEDURE','CREATE TRIGGER','PL/SQL EXECUTE') then
 			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_PLSQL_END, v_temp_new_statement, v_temp_token_index, v_command_name);
 
 		--#5: Stop at possibly unbalanced BEGIN/END;
+		--Ignore cursor/function/procedure blocks - match BEGIN and END within them.
+		--Then exit whenever end_count >= begin_count
 		/*
-		4a
+		4a - extra END
 		create or replace package test_package is
 		end;
 
-		4b
+		4b - matched BEGIN and END
 		create or replace package body test_package is
 		begin
 			null;
 		end;
 
-		4c
+		4c - matched BEGIN and END and extra END
 		create or replace package body test_package is
 			procedure test1 is begin null; end;
 		end;
 
-		4d
+		4d - matched BEGIN and END
 		create or replace package body test_package is
 			procedure test1 is begin null; end;
 		begin
 			null;
 		end;
 
-		4e
+		4e - matched BEGIN and END
 		create or replace package body test_package is
 			cursor my_cursor is with function test_function return number is begin return 1; end; select test_function from dual;
 			procedure test1 is begin null; end;
 		begin
 			null;
 		end;
+
+
+
+create table test1(a number);
+
+create or replace procedure test_procedure is begin null; end;
+
+--Note that this statement CANNOT end with a semicolon.
+create or replace trigger test1_trigger1 before delete on test1
+for each row
+call test_procedure
+
+
+create or replace trigger test1_trigger2
+for update of a on test1
+compound trigger
+	test_variable number;
+	procedure nested_procedure is begin null; end nested_procedure;
+
+	after each row is begin null; end after each row;
+
+	after statement is begin null; end after statement;
+end test1_trigger2;
+
+
 		*/
 		elsif v_command_name in ('CREATE PACKAGE BODY') then
 			--TODO
@@ -839,9 +873,8 @@ begin
 			end if;
 			*/
 
-		--#6: Stop at first END.
-		--(TODO: Can declaration have unbalanced begin and end for cursors?)
-		elsif v_command_name in ('CREATE PACKAGE') then
+		--#6: Stop when there is one "extra" END.
+		elsif v_command_name in ('CREATE PACKAGE', 'CREATE TYPE BODY') then
 			--TODO
 			null;
 
