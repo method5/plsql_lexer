@@ -22,8 +22,9 @@ c_optional_delimiter constant number := power(2, 3);
 c_plsql_declaration  constant number := power(2, 4);
 c_plsql_block        constant number := power(2, 5);
 c_type_body          constant number := power(2, 6);
+c_trigger            constant number := power(2, 7);
 
-c_static_tests  constant number := c_errors+c_simple+c_optional_delimiter+c_plsql_declaration+c_plsql_block+c_type_body;
+c_static_tests  constant number := c_errors+c_simple+c_optional_delimiter+c_plsql_declaration+c_plsql_block+c_type_body+c_trigger;
 
 c_dynamic_tests constant number := power(2, 30);
 
@@ -469,6 +470,51 @@ end test_type_body;
 
 
 --------------------------------------------------------------------------------
+procedure test_trigger is
+	v_statements nclob;
+	v_split_statements nclob_table := nclob_table();
+begin
+	--Regular triggers have a matched begin/end.
+	v_statements:='
+		create or replace trigger test2_trigger1
+		instead of insert on test2_vw
+		begin null; end test2_trigger1;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Trigger 1a', 2, v_split_statements.count);
+--	assert_equals('Trigger 1b', ' select * from dual;', v_split_statements(2));
+
+	--Compound triggers require an extra END.
+	v_statements:='
+		create or replace trigger test1_trigger2
+		for update of a on test1
+		compound trigger
+			test_variable number;
+			procedure nested_procedure is begin null; end nested_procedure;
+			before statement is begin null; end before statement;
+			before each row is begin null; end before each row;
+			after statement is begin null; end after statement;
+			after each row is begin null; end after each row;
+			--This is invalid even though the manual implies it is allowed.
+			--instead of each row is begin null; end instead of each row;
+		end test1_trigger2;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Trigger 2a', 2, v_split_statements.count);
+	assert_equals('Trigger 2b', ' select * from dual;', v_split_statements(2));
+
+	--A CALL trigger needs a regular terminator.
+	--(This behavior is slightly different than SQL*Plus and the manual.
+	--Officially, the CALL version of a trigger cannot end with a semicolon.)
+	v_statements:='
+		create or replace trigger test1_trigger1
+		before delete on test1
+		for each row
+		call test_procedure;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Trigger 3a', 2, v_split_statements.count);
+--	assert_equals('Trigger 3b', ' select * from dual;', v_split_statements(2));
+
+
+end test_trigger;
+
+
+--------------------------------------------------------------------------------
 procedure dynamic_tests is
 	type clob_table is table of clob;
 	type string_table is table of varchar2(100);
@@ -547,6 +593,7 @@ begin
 	if bitand(p_tests, c_plsql_declaration)  > 0 then test_plsql_declaration;  end if;
 	if bitand(p_tests, c_plsql_block)        > 0 then test_plsql_block;        end if;
 	if bitand(p_tests, c_type_body)          > 0 then test_type_body;          end if;
+	if bitand(p_tests, c_trigger)            > 0 then test_trigger;            end if;
 	if bitand(p_tests, c_dynamic_tests)      > 0 then dynamic_tests;           end if;
 
 	--Print summary of results.

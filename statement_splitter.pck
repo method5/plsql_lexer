@@ -39,11 +39,43 @@ create or replace package body statement_splitter is
 
 C_TERMINATOR_SEMI              constant number := 1;
 C_TERMINATOR_PLSQL_DECLARE_END constant number := 2;
-C_TERMINATOR_PLSQL_END         constant number := 3;
-C_TERMINATOR_EOF               constant number := 4;
-C_TERMINATOR_TYPE_BODY_END     constant number := 5;
+C_TERMINATOR_PLSQL_MATCHED_END constant number := 3;
+C_TERMINATOR_PLSQL_EXTRA_END   constant number := 4;
+C_TERMINATOR_EOF               constant number := 5;
+C_TERMINATOR_TYPE_BODY_END     constant number := 6;
+
+C_REGULAR_TRIGGER              constant number := 1;
+C_COMPOUND_TRIGGER             constant number := 1;
+C_CALL_TRIGGER                 constant number := 1;
+
 
 type token_table_table is table of token_table;
+
+
+
+--------------------------------------------------------------------------------
+/*
+Purpose: Return the trigger type for the token collection.
+
+For lexing and parsing here are 3 important different types of triggers:
+regular triggers, compound triggers, and CALL triggers.
+
+Trigger type is determined by which keywords are found first:
+	1. Regular - DECLARE, <<, or BEGIN (e.g. something that begins a PL/SQL body.)
+	2. Compound - COMPOUND TRIGGER
+	3. Call - CALL
+
+The tricky part with 1 and 3 is that DECLARE, BEGIN, or CALL can be used as
+names for other objects.  Based on the trigger syntax diagrams, the "real"
+keywords are found when these conditions are true:
+	1. It is not found after ('TRIGGER', '.', 'OF', ',', 'ON', 'AS', 'FOLLOWS', 'PRECEDES', 'TABLE')
+	2. It is not inside 'when ( condition )'
+*/
+function get_trigger_type(p_tokens in out nocopy token_table) return number is
+begin
+	--TODO
+	return C_CALL_TRIGGER;
+end get_trigger_type;
 
 
 --------------------------------------------------------------------------------
@@ -209,6 +241,7 @@ BEGIN must come after "begin", "as", "is", ";", or ">>", or the beginning of the
 		ORA-00936: missing expression
 	- Some forms of "begin begin" do not count, such as select begin begin from (select 1 begin from dual);
 	- Exclude "as begin" if it's used as an alias.
+		TODO: Exclude "referencing old as begin new as begin2 parent as begin3" for CREATE TRIGGER
 		Exclude where next concrete token is ",", "from", "into", or "bulk collect".  For column aliases.
 		Exclude where next concrete token is "," or ")".  For CLUSTER_ID USING, model columns, PIVOT_IN_CLAUSE, XMLATTRIBUTES, XMLCOLATTVAL, XMLELEMENT, XMLFOREST, XMLnamespaces_clause.
 		Exclude where next concrete token is "," or ")" or "columns".  For XMLTABLE_options.
@@ -525,7 +558,7 @@ begin
 		end;
 
 	--Match BEGIN and END for a common PL/SQL block.  They are not reserved words so they must only be counted when they are in the right spot.
-	elsif p_terminator = C_TERMINATOR_PLSQL_END then
+	elsif p_terminator = C_TERMINATOR_PLSQL_MATCHED_END then
 		declare
 			v_previous_concrete_token_1 token := token(null, null, null, null);
 			v_previous_concrete_token_2 token := token(null, null, null, null);
@@ -731,6 +764,7 @@ function split_tokens_by_primary_term(p_tokens in out nocopy token_table) return
 	v_command_name varchar2(4000);
 	v_temp_new_statement nclob;
 	v_temp_token_index number;
+	v_trigger_type number;
 begin
 	--Split into statements.
 	loop
@@ -793,8 +827,8 @@ begin
 			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_PLSQL_DECLARE_END, v_temp_new_statement, v_temp_token_index, v_command_name);
 
 		--#4: Match PL/SQL BEGIN and END.
-		elsif v_command_name in ('CREATE FUNCTION','CREATE PROCEDURE','CREATE TRIGGER','PL/SQL EXECUTE') then
-			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_PLSQL_END, v_temp_new_statement, v_temp_token_index, v_command_name);
+		elsif v_command_name in ('CREATE FUNCTION','CREATE PROCEDURE','PL/SQL EXECUTE') then
+			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_PLSQL_MATCHED_END, v_temp_new_statement, v_temp_token_index, v_command_name);
 
 		--#5: Stop at possibly unbalanced BEGIN/END;
 		--Ignore cursor/function/procedure blocks - match BEGIN and END within them.
@@ -829,32 +863,8 @@ begin
 		begin
 			null;
 		end;
-
-
-
-create table test1(a number);
-
-create or replace procedure test_procedure is begin null; end;
-
---Note that this statement CANNOT end with a semicolon.
-create or replace trigger test1_trigger1 before delete on test1
-for each row
-call test_procedure
-
-
-create or replace trigger test1_trigger2
-for update of a on test1
-compound trigger
-	test_variable number;
-	procedure nested_procedure is begin null; end nested_procedure;
-
-	after each row is begin null; end after each row;
-
-	after statement is begin null; end after statement;
-end test1_trigger2;
-
-
 		*/
+
 		elsif v_command_name in ('CREATE PACKAGE BODY') then
 			--TODO
 			null;
@@ -877,8 +887,19 @@ end test1_trigger2;
 		elsif v_command_name in ('CREATE PACKAGE', 'CREATE TYPE BODY') then
 			--TODO
 			null;
+		--#7: Triggers may terminate with a matching END, an extra END, or a semicolon.
+		elsif v_command_name in ('CREATE TRIGGER') then
+			v_trigger_type := get_trigger_type(p_tokens);
 
-		--#7: Stop at first ";" for everything else.
+			if v_trigger_type = C_REGULAR_TRIGGER then
+				add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_PLSQL_MATCHED_END, v_temp_new_statement, v_temp_token_index, v_command_name);
+			elsif v_trigger_type = C_COMPOUND_TRIGGER then
+				add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_PLSQL_EXTRA_END, v_temp_new_statement, v_temp_token_index, v_command_name);
+			elsif v_trigger_type = C_CALL_TRIGGER then
+				add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_SEMI, v_temp_new_statement, v_temp_token_index, v_command_name);
+			end if;
+
+		--#8: Stop at first ";" for everything else.
 		else
 			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_SEMI, v_temp_new_statement, v_temp_token_index, v_command_name);
 		end if;
