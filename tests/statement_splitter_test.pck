@@ -511,6 +511,40 @@ begin
 --	assert_equals('Trigger 3b', ' select * from dual;', v_split_statements(2));
 
 
+/*
+--Regular triggers with "CALL" in different position.
+--
+--Name of trigger.
+create trigger call before update on table1 for each row begin null; end;
+--Name of schema and trigger.
+create trigger call.call before update on table1 for each row begin null; end;
+--dml_event_clause - first column, schema name and table name
+create trigger call.call before update of call on call.call for each row begin null; end;
+--dml_event_clause - additional column, schema name, and tble name.
+create trigger call.call before update of a, call on call.call for each row begin null; end;
+--referencing_clause 1 - old
+create or replace trigger trigger1 after update on table1 referencing old as call begin null; end;
+--referencing_clause 2 - new
+create or replace trigger trigger1 after update on table1 referencing new as call begin null; end;
+--referencing_clause 3 - parent
+create or replace trigger trigger1 instead of update on nested table v_type1_nt of view1 referencing parent as call old as asdf new as qwer begin null; end;
+--referencing_clause 4 - combined 1
+create or replace trigger trigger1 instead of update on nested table v_type1_nt of view1 referencing parent as call old as asdf new as qwer begin null; end;
+--referencing_clause 5 - combined 2
+create or replace trigger trigger1 instead of update on nested table v_type1_nt of view1 referencing old as asdf parent as call new as qwer begin null; end;
+--trigger_ordering_clause 1 - follows 1
+create or replace trigger trigger2 before update on table1 for each row follows call begin null; end;
+--trigger_ordering_clause 1 - follows 2
+create or replace trigger trigger2 before update on table1 for each row follows call.call begin null; end;
+--trigger_ordering_clause 1 - follows 3
+create or replace trigger trigger2 before update on table1 for each row follows call.call, call begin null; end;
+--trigger_ordering_clause 1 - follows 4.  Yes, this is valid syntax!
+create or replace trigger trigger2 before update on table1 for each row follows call.call, call, call, call call test_procedure
+--trigger_ordering_clause 2 - precedes
+create or replace trigger trigger2 before update on table1 for each row precedes call begin null; end;
+--todo: when (condition), system_trigger [on schema.schema]
+*/
+
 end test_trigger;
 
 

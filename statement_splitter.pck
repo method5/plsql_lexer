@@ -887,6 +887,7 @@ begin
 		elsif v_command_name in ('CREATE PACKAGE', 'CREATE TYPE BODY') then
 			--TODO
 			null;
+
 		--#7: Triggers may terminate with a matching END, an extra END, or a semicolon.
 		elsif v_command_name in ('CREATE TRIGGER') then
 			v_trigger_type := get_trigger_type(p_tokens);
