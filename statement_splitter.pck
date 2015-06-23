@@ -353,7 +353,7 @@ procedure detect_begin(
 	v_pivot_paren_counter in number,
 	v_prev_conc_tok_was_real_begin in out boolean,
 	v_has_nested_table in boolean,
-	p_trigger_body_start_index in number
+	p_trigger_body_start_index in out number
 ) is
 begin
 	if
@@ -416,10 +416,7 @@ begin
 		or
 		--Trigger rules.
 		(
-			--Count any BEGIN if it's the first one in a trigger and it occurs after the
-			--starting index.
-			v_block_counter = 0
-			and
+			--Count BEGIN if it's after the starting index.
 			p_token_index >= p_trigger_body_start_index
 		)
 	)
@@ -427,6 +424,8 @@ begin
 		v_has_entered_block := true;
 		v_block_counter := v_block_counter + 1;
 		v_prev_conc_tok_was_real_begin := true;
+		--Reset this, only the first BEGIN is treated differently.
+		p_trigger_body_start_index := null;
 	--If token is concrete, reset the flag.
 	elsif p_tokens(p_token_index).type not in ('whitespace', 'comment', 'EOF') then
 		v_prev_conc_tok_was_real_begin := false;
@@ -477,7 +476,7 @@ begin
 		--One of: before statement, before each row, after statement, after each row, instead of each row
 		(
 			(
-				lower(v_previous_concrete_token_4.value) = 'end'
+				lower(v_previous_concrete_token_3.value) = 'end'
 				and
 				lower(v_previous_concrete_token_2.value) = 'before'
 				and
@@ -638,6 +637,7 @@ begin
 			v_pivot_paren_counter number := 0;
 			v_prev_conc_tok_was_real_begin boolean := false;
 			v_has_nested_table boolean := false;
+			v_trigger_body_start_index number := p_trigger_body_start_index;
 		begin
 			--Build new statement and count tokens.
 			loop
@@ -659,7 +659,7 @@ begin
 				end if;
 
 				--Detect BEGIN and END.
-				detect_begin(p_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table, p_trigger_body_start_index);
+				detect_begin(p_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table, v_trigger_body_start_index);
 				detect_end(p_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5, v_block_counter);
 
 				--Detect end of statement.
@@ -715,6 +715,7 @@ begin
 			v_pivot_paren_counter number := 0;
 			v_prev_conc_tok_was_real_begin boolean := false;
 			v_has_nested_table boolean := false;
+			v_trigger_body_start_index number := p_trigger_body_start_index;
 		begin
 			--Build new statement and count tokens.
 			loop
@@ -736,7 +737,7 @@ begin
 				end if;
 
 				--Detect BEGIN and END.
-				detect_begin(p_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table, p_trigger_body_start_index);
+				detect_begin(p_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table, v_trigger_body_start_index);
 				detect_end(p_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5, v_block_counter);
 
 				--Detect end of statement.
@@ -770,8 +771,74 @@ begin
 		end;
 	--Match BEGIN and END for a PL/SQL statement that has an extra END.
 	elsif p_terminator = C_TERMINATOR_PLSQL_EXTRA_END then
-		--TODO
-		null;
+		--This is almost identical to C_TERMINATOR_PLSQL_MATCHED_END.
+		--The only difference is this code expects an extra block.
+		--TODO: Refactor for DRY.
+		declare
+			v_previous_concrete_token_1 token := token(null, null, null, null);
+			v_previous_concrete_token_2 token := token(null, null, null, null);
+			v_previous_concrete_token_3 token := token(null, null, null, null);
+			v_previous_concrete_token_4 token := token(null, null, null, null);
+			v_previous_concrete_token_5 token := token(null, null, null, null);
+			v_has_entered_block boolean := false;
+			v_block_counter number := 1;  --Start at 1, an extra END is required.
+			v_pivot_paren_counter number := 0;
+			v_prev_conc_tok_was_real_begin boolean := false;
+			v_has_nested_table boolean := false;
+			v_trigger_body_start_index number := p_trigger_body_start_index;
+		begin
+			--Build new statement and count tokens.
+			loop
+				--Increment
+				exit when p_token_index >= p_tokens.count;
+				p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+
+				--Set the PIVOT parentheses counter.
+				set_pivot_paren_counter(v_pivot_paren_counter, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3);
+
+				--Set v_has_nested_table.
+				if
+					p_command_name in ('CREATE TABLE', 'ALTER TABLE')
+					and
+					lower(v_previous_concrete_token_2.value) = 'nested'
+					and lower(v_previous_concrete_token_1.value) = 'table'
+				then
+					v_has_nested_table := true;
+				end if;
+
+				--Detect BEGIN and END.
+				detect_begin(p_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table, v_trigger_body_start_index);
+				detect_end(p_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5, v_block_counter);
+
+				--Detect end of statement.
+				if (v_has_entered_block and v_block_counter = 0) or p_tokens(p_token_index).type = 'EOF' then
+					--Consume all tokens if only whitespace, comments, and EOF remain.
+					if only_ws_comments_eof_remain(p_tokens, p_token_index+1) then
+						--Consume all tokens.
+						loop
+							p_token_index := p_token_index + 1;
+							p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+							exit when p_token_index = p_tokens.count;
+						end loop;
+					--Else stop here.
+					else
+						exit;
+					end if;
+				end if;
+
+				--Shift tokens if it is not a whitespace or comment.
+				if p_tokens(p_token_index).type not in ('whitespace', 'comment') then
+					v_previous_concrete_token_5 := v_previous_concrete_token_4;
+					v_previous_concrete_token_4 := v_previous_concrete_token_3;
+					v_previous_concrete_token_3 := v_previous_concrete_token_2;
+					v_previous_concrete_token_2 := v_previous_concrete_token_1;
+					v_previous_concrete_token_1 := p_tokens(p_token_index);
+				end if;
+
+				--Increment
+				p_token_index := p_token_index + 1;
+			end loop;
+		end;
 	end if;
 
 	--Remove the first character if it's a newline.

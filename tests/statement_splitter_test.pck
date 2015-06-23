@@ -480,7 +480,7 @@ begin
 		instead of insert on test2_vw
 		begin null; end test2_trigger1;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Trigger 1a', 2, v_split_statements.count);
---	assert_equals('Trigger 1b', ' select * from dual;', v_split_statements(2));
+	assert_equals('Trigger 1b', 'select * from dual;', v_split_statements(2));
 
 	--Compound triggers require an extra END.
 	v_statements:='
@@ -497,7 +497,7 @@ begin
 			--instead of each row is begin null; end instead of each row;
 		end test1_trigger2;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Trigger 2a', 2, v_split_statements.count);
-	assert_equals('Trigger 2b', ' select * from dual;', v_split_statements(2));
+	assert_equals('Trigger 2b', 'select * from dual;', v_split_statements(2));
 
 	--A CALL trigger needs a regular terminator.
 	--(This behavior is slightly different than SQL*Plus and the manual.
@@ -508,7 +508,7 @@ begin
 		for each row
 		call test_procedure;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Trigger 3a', 2, v_split_statements.count);
---	assert_equals('Trigger 3b', ' select * from dual;', v_split_statements(2));
+	assert_equals('Trigger 3b', 'select * from dual;', v_split_statements(2));
 
 
 	---------------------------------------
@@ -518,87 +518,87 @@ begin
 	--Name of trigger.
 	v_statements:='create trigger call before update on table1 for each row begin null; end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Trigger 4a', 2, v_split_statements.count);
---	assert_equals('Trigger 4b', ' select * from dual;', v_split_statements(2));
+	assert_equals('Trigger 4b', 'select * from dual;', v_split_statements(2));
 
 	--Name of schema and trigger.
 	v_statements:='create trigger call.call before update on table1 for each row begin null; end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Trigger 5a', 2, v_split_statements.count);
---	assert_equals('Trigger 5b', ' select * from dual;', v_split_statements(2));
+	assert_equals('Trigger 5b', 'select * from dual;', v_split_statements(2));
 
 	--Name of schema and trigger.
 	v_statements:='create trigger call.call before update on table1 for each row begin null; end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Trigger 6a', 2, v_split_statements.count);
---	assert_equals('Trigger 6b', ' select * from dual;', v_split_statements(2));
+	assert_equals('Trigger 6b', 'select * from dual;', v_split_statements(2));
 
 	--dml_event_clause - first column, schema name and table name
 	v_statements:='create trigger call.call before update of call on call.call for each row begin null; end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Trigger 7a', 2, v_split_statements.count);
---	assert_equals('Trigger 7b', ' select * from dual;', v_split_statements(2));
+	assert_equals('Trigger 7b', 'select * from dual;', v_split_statements(2));
 
 	--dml_event_clause - additional column, schema name, and tble name.
 	v_statements:='create trigger call.call before update of a, call on call.call for each row begin null; end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Trigger 8a', 2, v_split_statements.count);
---	assert_equals('Trigger 8b', ' select * from dual;', v_split_statements(2));
+	assert_equals('Trigger 8b', 'select * from dual;', v_split_statements(2));
 
 	--referencing_clause 1 - old
 	v_statements:='create or replace trigger trigger1 after update on table1 referencing old as call begin null; end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Trigger 9a', 2, v_split_statements.count);
---	assert_equals('Trigger 9b', ' select * from dual;', v_split_statements(2));
+	assert_equals('Trigger 9b', 'select * from dual;', v_split_statements(2));
 
 	--referencing_clause 2 - new
 	v_statements:='create or replace trigger trigger1 after update on table1 referencing new as call begin null; end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Trigger 10a', 2, v_split_statements.count);
---	assert_equals('Trigger 10b', ' select * from dual;', v_split_statements(2));
+	assert_equals('Trigger 10b', 'select * from dual;', v_split_statements(2));
 
 	--referencing_clause 3 - parent
 	v_statements:='create or replace trigger trigger1 instead of update on nested table v_type1_nt of view1 referencing parent as call old as asdf new as qwer begin null; end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Trigger 11a', 2, v_split_statements.count);
---	assert_equals('Trigger 11b', ' select * from dual;', v_split_statements(2));
+	assert_equals('Trigger 11b', 'select * from dual;', v_split_statements(2));
 
 	--referencing_clause 4 - combined 1
 	v_statements:='create or replace trigger trigger1 instead of update on nested table v_type1_nt of view1 referencing parent as call old as asdf new as qwer begin null; end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Trigger 12a', 2, v_split_statements.count);
---	assert_equals('Trigger 12b', ' select * from dual;', v_split_statements(2));
+	assert_equals('Trigger 12b', 'select * from dual;', v_split_statements(2));
 
 	--referencing_clause 5 - combined 2
 	v_statements:='create or replace trigger trigger1 instead of update on nested table v_type1_nt of view1 referencing old as asdf parent as call new as qwer begin null; end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Trigger 13a', 2, v_split_statements.count);
---	assert_equals('Trigger 13b', ' select * from dual;', v_split_statements(2));
+	assert_equals('Trigger 13b', 'select * from dual;', v_split_statements(2));
 
 	--trigger_ordering_clause 1 - follows 1
 	v_statements:='create or replace trigger trigger2 before update on table1 for each row follows call begin null; end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Trigger 14a', 2, v_split_statements.count);
---	assert_equals('Trigger 14b', ' select * from dual;', v_split_statements(2));
+	assert_equals('Trigger 14b', 'select * from dual;', v_split_statements(2));
 
 	--trigger_ordering_clause 1 - follows 2
 	v_statements:='create or replace trigger trigger2 before update on table1 for each row follows call.call begin null; end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Trigger 15a', 2, v_split_statements.count);
---	assert_equals('Trigger 15b', ' select * from dual;', v_split_statements(2));
+	assert_equals('Trigger 15b', 'select * from dual;', v_split_statements(2));
 
 	--trigger_ordering_clause 1 - follows 3
 	v_statements:='create or replace trigger trigger2 before update on table1 for each row follows call.call, call begin null; end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Trigger 16a', 2, v_split_statements.count);
---	assert_equals('Trigger 16b', ' select * from dual;', v_split_statements(2));
+	assert_equals('Trigger 16b', 'select * from dual;', v_split_statements(2));
 
 	--trigger_ordering_clause 1 - follows 4.  Yes, this is valid syntax!  (Except that the semicolon after the first statement would not work in SQL*Plus.)
 	v_statements:='create or replace trigger trigger2 before update on table1 for each row follows call.call, call, call, call call test_procedure;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Trigger 17a', 2, v_split_statements.count);
---	assert_equals('Trigger 17b', ' select * from dual;', v_split_statements(2));
+	assert_equals('Trigger 17b', 'select * from dual;', v_split_statements(2));
 
 	--trigger_ordering_clause 2 - precedes
 	v_statements:='create or replace trigger trigger2 before update on table1 for each row precedes call begin null; end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Trigger 18a', 2, v_split_statements.count);
---	assert_equals('Trigger 18b', ' select * from dual;', v_split_statements(2));
+	assert_equals('Trigger 18b', 'select * from dual;', v_split_statements(2));
 
 	--WHEN (condition)
 	v_statements:='create or replace trigger trigger2 before update on table1 for each row when (((old.call > new.call)) or (old.call > 1)) begin null; end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Trigger 19a', 2, v_split_statements.count);
---	assert_equals('Trigger 19b', ' select * from dual;', v_split_statements(2));
+	assert_equals('Trigger 19b', 'select * from dual;', v_split_statements(2));
 
 	--system_trigger [on schema.schema]
 	v_statements:='create or replace trigger trigger_schema before comment or create on call.schema begin null; end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Trigger 20a', 2, v_split_statements.count);
---	assert_equals('Trigger 20b', ' select * from dual;', v_split_statements(2));
+	assert_equals('Trigger 20b', 'select * from dual;', v_split_statements(2));
 end test_trigger;
 
 
