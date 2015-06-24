@@ -565,6 +565,16 @@ begin
 	assert_equals('Trigger 13a', 2, v_split_statements.count);
 	assert_equals('Trigger 13b', 'select * from dual;', v_split_statements(2));
 
+	--referencing_clause 6 - "as begin" does not count as a real BEGIN.
+	v_statements:='create or replace trigger trigger1 after update on table1 referencing old as begin begin null; end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Trigger 13.5a', 2, v_split_statements.count);
+	assert_equals('Trigger 13.5b', 'select * from dual;', v_split_statements(2));
+
+	--referencing_clause 7 - "as end" does not count as a real END.
+	v_statements:='create or replace trigger trigger1 after update on table1 referencing old as end begin null; end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Trigger 13.7a', 2, v_split_statements.count);
+	assert_equals('Trigger 13.7b', 'select * from dual;', v_split_statements(2));
+
 	--trigger_ordering_clause 1 - follows 1
 	v_statements:='create or replace trigger trigger2 before update on table1 for each row follows call begin null; end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Trigger 14a', 2, v_split_statements.count);

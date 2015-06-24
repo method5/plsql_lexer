@@ -312,7 +312,6 @@ BEGIN must come after "begin", "as", "is", ";", or ">>", or the beginning of the
 		ORA-00936: missing expression
 	- Some forms of "begin begin" do not count, such as select begin begin from (select 1 begin from dual);
 	- Exclude "as begin" if it's used as an alias.
-		TODO: Exclude "referencing old as begin new as begin2 parent as begin3" for CREATE TRIGGER
 		Exclude where next concrete token is ",", "from", "into", or "bulk collect".  For column aliases.
 		Exclude where next concrete token is "," or ")".  For CLUSTER_ID USING, model columns, PIVOT_IN_CLAUSE, XMLATTRIBUTES, XMLCOLATTVAL, XMLELEMENT, XMLFOREST, XMLnamespaces_clause.
 		Exclude where next concrete token is "," or ")" or "columns".  For XMLTABLE_options.
@@ -346,6 +345,7 @@ BEGIN must come after "begin", "as", "is", ";", or ">>", or the beginning of the
 procedure detect_begin(
 	p_tokens in out token_table,
 	p_token_index in number,
+	p_command_name in varchar2,
 	v_previous_concrete_token_1 in out nocopy token,
 	v_previous_concrete_token_2 in out nocopy token,
 	v_has_entered_block in out boolean,
@@ -362,6 +362,12 @@ begin
 	(
 		--Normal rules.
 		(
+			(
+				p_command_name <> 'CREATE TRIGGER'
+				or
+				p_trigger_body_start_index is null
+			)
+			and
 			(
 				(
 					lower(v_previous_concrete_token_1.value) in ('as', 'is', ';', '>>')
@@ -417,6 +423,8 @@ begin
 		--Trigger rules.
 		(
 			--Count BEGIN if it's after the starting index.
+			p_command_name = 'CREATE TRIGGER'
+			and
 			p_token_index >= p_trigger_body_start_index
 		)
 	)
@@ -659,7 +667,7 @@ begin
 				end if;
 
 				--Detect BEGIN and END.
-				detect_begin(p_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table, v_trigger_body_start_index);
+				detect_begin(p_tokens, p_token_index, p_command_name, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table, v_trigger_body_start_index);
 				detect_end(p_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5, v_block_counter);
 
 				--Detect end of statement.
@@ -737,7 +745,7 @@ begin
 				end if;
 
 				--Detect BEGIN and END.
-				detect_begin(p_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table, v_trigger_body_start_index);
+				detect_begin(p_tokens, p_token_index, p_command_name, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table, v_trigger_body_start_index);
 				detect_end(p_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5, v_block_counter);
 
 				--Detect end of statement.
@@ -807,7 +815,7 @@ begin
 				end if;
 
 				--Detect BEGIN and END.
-				detect_begin(p_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table, v_trigger_body_start_index);
+				detect_begin(p_tokens, p_token_index, p_command_name, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table, v_trigger_body_start_index);
 				detect_end(p_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5, v_block_counter);
 
 				--Detect end of statement.
