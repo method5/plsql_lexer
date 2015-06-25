@@ -23,8 +23,9 @@ c_plsql_declaration  constant number := power(2, 4);
 c_plsql_block        constant number := power(2, 5);
 c_type_body          constant number := power(2, 6);
 c_trigger            constant number := power(2, 7);
+c_proc_and_func      constant number := power(2, 8);
 
-c_static_tests  constant number := c_errors+c_simple+c_optional_delimiter+c_plsql_declaration+c_plsql_block+c_type_body+c_trigger;
+c_static_tests  constant number := c_errors+c_simple+c_optional_delimiter+c_plsql_declaration+c_plsql_block+c_type_body+c_trigger+c_proc_and_func;
 
 c_dynamic_tests constant number := power(2, 30);
 
@@ -613,6 +614,37 @@ end test_trigger;
 
 
 --------------------------------------------------------------------------------
+procedure test_proc_and_func is
+	v_statements nclob;
+	v_split_statements nclob_table := nclob_table();
+begin
+	--Regular procedure.
+	v_statements:='create procedure test_procedure is begin null; end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Trigger 1a', 2, v_split_statements.count);
+	assert_equals('Trigger 1b', 'create procedure test_procedure is begin null; end;', v_split_statements(1));
+	assert_equals('Trigger 1c', 'select * from dual;', v_split_statements(2));
+
+	--External procedure.
+	v_statements:='create procedure test_procedure as external language c name "c_test" library test_lib;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Trigger 1a', 2, v_split_statements.count);
+	assert_equals('Trigger 1b', 'create procedure test_procedure as external language c name "c_test" library test_lib;', v_split_statements(1));
+	assert_equals('Trigger 1c', 'select * from dual;', v_split_statements(2));
+
+	--Regular function.
+	v_statements:='create function test_function return number is begin return 1; end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Trigger 1a', 2, v_split_statements.count);
+	assert_equals('Trigger 1b', 'create function test_function return number is begin return 1; end;', v_split_statements(1));
+	assert_equals('Trigger 1c', 'select * from dual;', v_split_statements(2));
+
+	--External function.
+	v_statements:='create function test_function return number as external language c name "c_test" library test_lib;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Trigger 1a', 2, v_split_statements.count);
+	assert_equals('Trigger 1b', 'create function test_function return number as external language c name "c_test" library test_lib;', v_split_statements(1));
+	assert_equals('Trigger 1c', 'select * from dual;', v_split_statements(2));
+end test_proc_and_func;
+
+
+--------------------------------------------------------------------------------
 procedure dynamic_tests is
 	type clob_table is table of clob;
 	type string_table is table of varchar2(100);
@@ -692,6 +724,8 @@ begin
 	if bitand(p_tests, c_plsql_block)        > 0 then test_plsql_block;        end if;
 	if bitand(p_tests, c_type_body)          > 0 then test_type_body;          end if;
 	if bitand(p_tests, c_trigger)            > 0 then test_trigger;            end if;
+	if bitand(p_tests, c_proc_and_func)      > 0 then test_proc_and_func;      end if;
+
 	if bitand(p_tests, c_dynamic_tests)      > 0 then dynamic_tests;           end if;
 
 	--Print summary of results.

@@ -265,7 +265,58 @@ end has_another_plsql_declaration;
 
 
 --------------------------------------------------------------------------------
-function only_ws_comments_eof_remain(p_tokens in out nocopy token_table, p_token_index in number)  return boolean is
+--Purpose: Determine if a "CREATE PROCEDURE" or "CREATE FUNCTION" is EXTERNAL.
+--	That is, does the syntax use either "call_spec" or "EXTERNAL".
+--
+--This is true if (is|as) (external|langauge java|language c|language dotnet)
+--is found before the first semicolon.  I'm not sure if "language dotnet" is valid.
+--It appears in some error messages  and in the Oracle Database Lite SQL Reference.
+--It shouldn't hurt to include it.
+--
+--Assumption: This is only called for "CREATE PROCEDURE" or "CREATE FUNCTION".
+--
+--Example: create procedure test_procedure as external language c name "c_test" library somelib;
+function is_external_method(p_tokens in token_table, p_temp_token_index in number) return boolean is
+	v_previous_concrete_token_1 token := token(null, null, null, null);
+	v_previous_concrete_token_2 token := token(null, null, null, null);
+begin
+	for i in p_temp_token_index .. p_tokens.count loop
+		--Look for semicolon or a sequence of tokens that implies it's external.
+		if p_tokens(i).type = ';' then
+			return false;
+		elsif
+		(
+			(
+				lower(v_previous_concrete_token_1.value) in ('is', 'as')
+				and
+				lower(p_tokens(i).value) = 'external'
+			)
+			or
+			(
+				lower(v_previous_concrete_token_2.value) in ('is', 'as')
+				and
+				lower(v_previous_concrete_token_1.value) in ('language')
+				and
+				lower(p_tokens(i).value) in ('java', 'c', 'dotnet')
+			)
+		) then
+			return true;
+		end if;
+
+		--Shift tokens if it is not a whitespace or comment.
+		if p_tokens(i).type not in ('whitespace', 'comment') then
+			v_previous_concrete_token_2 := v_previous_concrete_token_1;
+			v_previous_concrete_token_1 := p_tokens(i);
+		end if;
+	end loop;
+
+	--Default to not an external method.
+	return false;
+end is_external_method;
+
+
+--------------------------------------------------------------------------------
+function only_ws_comments_eof_remain(p_tokens in token_table, p_token_index in number)  return boolean is
 begin
 	for i in p_token_index .. p_tokens.count loop
 		if p_tokens(i).type not in ('whitespace', 'comment', 'EOF') then
@@ -1049,14 +1100,26 @@ begin
 
 		--#3: Match PLSQL_DECLARATION BEGIN and END.
 		elsif
-		v_command_name in ('CREATE MATERIALIZED VIEW ', 'CREATE SCHEMA', 'CREATE TABLE', 'CREATE VIEW', 'DELETE', 'EXPLAIN', 'INSERT', 'SELECT', 'UPDATE', 'UPSERT')
-		and
-		has_plsql_declaration(p_tokens, 1)
+		(
+			v_command_name in ('CREATE MATERIALIZED VIEW ', 'CREATE SCHEMA', 'CREATE TABLE', 'CREATE VIEW', 'DELETE', 'EXPLAIN', 'INSERT', 'SELECT', 'UPDATE', 'UPSERT')
+			and
+			has_plsql_declaration(p_tokens, v_temp_token_index)
+		)
 		then
 			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_PLSQL_DECLARE_END, v_temp_new_statement, v_temp_token_index, v_command_name, null);
 
 		--#4: Match PL/SQL BEGIN and END.
-		elsif v_command_name in ('CREATE FUNCTION','CREATE PROCEDURE','PL/SQL EXECUTE') then
+		elsif
+		(
+			v_command_name in ('PL/SQL EXECUTE')
+			or
+			(
+				v_command_name in ('CREATE FUNCTION','CREATE PROCEDURE')
+				and
+				not is_external_method(p_tokens, v_temp_token_index)
+			)
+		)
+		 then
 			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_PLSQL_MATCHED_END, v_temp_new_statement, v_temp_token_index, v_command_name, null);
 
 		--#5: Stop at possibly unbalanced BEGIN/END;
