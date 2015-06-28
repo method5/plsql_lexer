@@ -24,8 +24,10 @@ c_plsql_block        constant number := power(2, 5);
 c_type_body          constant number := power(2, 6);
 c_trigger            constant number := power(2, 7);
 c_proc_and_func      constant number := power(2, 8);
+c_package_body       constant number := power(2, 9);
 
-c_static_tests  constant number := c_errors+c_simple+c_optional_delimiter+c_plsql_declaration+c_plsql_block+c_type_body+c_trigger+c_proc_and_func;
+c_static_tests  constant number := c_errors+c_simple+c_optional_delimiter
+	+c_plsql_declaration+c_plsql_block+c_type_body+c_trigger+c_proc_and_func+c_package_body;
 
 c_dynamic_tests constant number := power(2, 30);
 
@@ -444,6 +446,7 @@ procedure test_type_body is
 	v_statements nclob;
 	v_split_statements nclob_table := nclob_table();
 begin
+	--TODO:
 	--All type body member types.
 	/* This is the type spec to make the next type body work.
 	create or replace type type1 is object
@@ -645,6 +648,66 @@ end test_proc_and_func;
 
 
 --------------------------------------------------------------------------------
+procedure test_package_body is
+	v_statements nclob;
+	v_split_statements nclob_table := nclob_table();
+begin
+	--#1: Extra END in an emtpy package body.
+	v_statements:='
+		create or replace package test_package is
+		end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Package Body 1a', 2, v_split_statements.count);
+--	assert_equals('Packabe Body 1b', 'select * from dual;', v_split_statements(2));
+
+	--#2: One matched BEGIN and END when there is only an initialization block.
+	v_statements:='
+		create or replace package body test_package is
+		begin
+			null;
+		end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Package Body 2a', 2, v_split_statements.count);
+--	assert_equals('Packabe Body 2b', 'select * from dual;', v_split_statements(2));
+
+	--#3: Matched BEGIN and END and extra END.
+	v_statements:='
+		create or replace package body test_package is
+			procedure test1 is begin null; end;
+		end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Package Body 3a', 2, v_split_statements.count);
+--	assert_equals('Packabe Body 3b', 'select * from dual;', v_split_statements(2));
+
+	--#4: Two sets of matched BEGINs and ENDs - from methods.
+	v_statements:='
+		create or replace package body test_package is
+			procedure test1 is begin null; end;
+		begin
+			null;
+		end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Package Body 4a', 2, v_split_statements.count);
+--	assert_equals('Packabe Body 4b', 'select * from dual;', v_split_statements(2));
+
+	--#5: Two sets of matched BEGINs and ENDs - from CURSORS and methods.
+	v_statements:='
+		create or replace package body test_package is
+			cursor my_cursor is with function test_function return number is begin return 1; end; select test_function from dual;
+			procedure test1 is begin null; end;
+		begin
+			null;
+		end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Package Body 5a', 2, v_split_statements.count);
+--	assert_equals('Packabe Body 5b', 'select * from dual;', v_split_statements(2));
+
+	/*
+	--
+	v_statements:='
+		select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Package Body a', 2, v_split_statements.count);
+	assert_equals('Packabe Body b', 'select * from dual;', v_split_statements(2));
+	*/
+end test_package_body;
+
+
+--------------------------------------------------------------------------------
 procedure dynamic_tests is
 	type clob_table is table of clob;
 	type string_table is table of varchar2(100);
@@ -725,6 +788,7 @@ begin
 	if bitand(p_tests, c_type_body)          > 0 then test_type_body;          end if;
 	if bitand(p_tests, c_trigger)            > 0 then test_trigger;            end if;
 	if bitand(p_tests, c_proc_and_func)      > 0 then test_proc_and_func;      end if;
+	if bitand(p_tests, c_package_body)       > 0 then test_package_body;       end if;
 
 	if bitand(p_tests, c_dynamic_tests)      > 0 then dynamic_tests;           end if;
 

@@ -42,6 +42,7 @@ C_TERMINATOR_PLSQL_DECLARE_END constant number := 2;
 C_TERMINATOR_PLSQL_MATCHED_END constant number := 3;
 C_TERMINATOR_PLSQL_EXTRA_END   constant number := 4;
 C_TERMINATOR_EOF               constant number := 5;
+C_TERMINATOR_PACKAGE_BODY      constant number := 6;
 
 C_REGULAR_TRIGGER              constant number := 1;
 C_COMPOUND_TRIGGER             constant number := 2;
@@ -611,35 +612,41 @@ procedure add_statement_consume_tokens(
 	begin
 		--Initialize, if it's not already initialized and it's in a "pivot xml? (".
 		if
-		v_pivot_paren_counter = 0
-		and
 		(
+			v_pivot_paren_counter = 0
+			and
 			(
-				v_previous_concrete_token_1.value = '('
-				and
-				lower(v_previous_concrete_token_2.value) = 'pivot'
-			)
-			or
-			(
-				v_previous_concrete_token_1.value = '('
-				and
-				lower(v_previous_concrete_token_2.value) = 'xml'
-				and
-				lower(v_previous_concrete_token_3.value) = 'pivot'
+				(
+					v_previous_concrete_token_1.value = '('
+					and
+					lower(v_previous_concrete_token_2.value) = 'pivot'
+				)
+				or
+				(
+					v_previous_concrete_token_1.value = '('
+					and
+					lower(v_previous_concrete_token_2.value) = 'xml'
+					and
+					lower(v_previous_concrete_token_3.value) = 'pivot'
+				)
 			)
 		) then
 			v_pivot_paren_counter := 1;
 		--Increment, if it's in a PIVOT and a "(" is found.
 		elsif
-		v_pivot_paren_counter > 0
-		and
-		p_tokens(p_token_index).value = '(' then
+		(
+			v_pivot_paren_counter > 0
+			and
+			p_tokens(p_token_index).value = '('
+		) then
 			v_pivot_paren_counter := v_pivot_paren_counter + 1;
 		--Decrement, if it's in a PIVOT and a ")" is found.
 		elsif
-		v_pivot_paren_counter > 0
-		and
-		p_tokens(p_token_index).value = ')' then
+		(
+			v_pivot_paren_counter > 0
+			and
+			p_tokens(p_token_index).value = ')'
+		) then
 			v_pivot_paren_counter := v_pivot_paren_counter - 1;
 		end if;
 	end set_pivot_paren_counter;
@@ -898,6 +905,32 @@ begin
 				p_token_index := p_token_index + 1;
 			end loop;
 		end;
+
+	--Match BEGIN and END for a PL/SQL statement that *may* have an extra END.
+	elsif p_terminator = C_TERMINATOR_PACKAGE_BODY then
+		--See the unit tests for a good set of examples of the 5 different types of package bodies.
+		--TODO
+		null;
+		/*
+		for i in 1 .. p_tokens.count loop
+			if func|proc then
+				goto last end;
+			elsif cursor then
+				if has_plsql then
+					goto end;
+					goto ;
+				else
+					goto ;
+				end if
+			elsif begin then
+				goto end;
+				return;
+			else --item/type
+				goto ;
+			end if;
+		end loop;
+		return;
+		*/
 	end if;
 
 	--Remove the first character if it's a newline.
@@ -1122,62 +1155,16 @@ begin
 		 then
 			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_PLSQL_MATCHED_END, v_temp_new_statement, v_temp_token_index, v_command_name, null);
 
-		--#5: Stop at possibly unbalanced BEGIN/END;
-		--Ignore cursor/function/procedure blocks - match BEGIN and END within them.
-		--Then exit whenever end_count >= begin_count
-		/*
-		4a - extra END
-		create or replace package test_package is
-		end;
-
-		4b - matched BEGIN and END
-		create or replace package body test_package is
-		begin
-			null;
-		end;
-
-		4c - matched BEGIN and END and extra END
-		create or replace package body test_package is
-			procedure test1 is begin null; end;
-		end;
-
-		4d - matched BEGIN and END
-		create or replace package body test_package is
-			procedure test1 is begin null; end;
-		begin
-			null;
-		end;
-
-		4e - matched BEGIN and END
-		create or replace package body test_package is
-			cursor my_cursor is with function test_function return number is begin return 1; end; select test_function from dual;
-			procedure test1 is begin null; end;
-		begin
-			null;
-		end;
-		*/
-
+		--#5: Match possibly unbalanced BEGIN and END.  Package bodies sometimes have an
+		--extra END and sometimes they have multiple balanced BEGIN/ENDs.
+		--
+		--Ignore BEGIN/END pairs inside CURSOR/FUNCTION/PROCEDURE, and then exit
+		--whenever end_count >= begin_count
 		elsif v_command_name in ('CREATE PACKAGE BODY') then
-			--TODO
-			null;
-			/*
-			if CREATE PACKAGE BODY then
-				--Nested BEGIN/ENDs in the declare section.
-				if is_plsql_declaration or is_procedure_declaration or is_function_declaration then
-					loop through begin ends
-				--Nested BEGIN/ENDs in initialize section.
-				elsif is_begin
-					loop through begin ends
-				--End of package.
-				elsif is_end
-					end of package
-				if is_begin
-			end if;
-			*/
+			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_PACKAGE_BODY, v_temp_new_statement, v_temp_token_index, v_command_name, null);
 
 		--#6: Stop when there is one "extra" END.
 		elsif v_command_name in ('CREATE PACKAGE', 'CREATE TYPE BODY') then
-			--TODO: Is this correct?
 			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_PLSQL_EXTRA_END, v_temp_new_statement, v_temp_token_index, v_command_name, null);
 
 		--#7: Triggers may terminate with a matching END, an extra END, or a semicolon.
