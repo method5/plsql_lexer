@@ -654,10 +654,16 @@ procedure test_package_body is
 begin
 	--#1: Extra END in an emtpy package body.
 	v_statements:='
-		create or replace package test_package is
+		create or replace package body test_package is
 		end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Package Body 1a', 2, v_split_statements.count);
---	assert_equals('Packabe Body 1b', 'select * from dual;', v_split_statements(2));
+	assert_equals('Packabe Body 1b', 'select * from dual;', v_split_statements(2));
+
+	v_statements:='
+		create or replace package body test_package is
+		end test_package;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Package Body 1.5a', 2, v_split_statements.count);
+	assert_equals('Packabe Body 1.5b', 'select * from dual;', v_split_statements(2));
 
 	--#2: One matched BEGIN and END when there is only an initialization block.
 	v_statements:='

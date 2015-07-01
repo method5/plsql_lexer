@@ -601,6 +601,33 @@ procedure add_statement_consume_tokens(
 ) is
 	v_new_tokens token_table := token_table();
 
+	v_previous_concrete_token_1 token := token(null, null, null, null);
+	v_previous_concrete_token_2 token := token(null, null, null, null);
+	v_previous_concrete_token_3 token := token(null, null, null, null);
+	v_previous_concrete_token_4 token := token(null, null, null, null);
+	v_previous_concrete_token_5 token := token(null, null, null, null);
+
+
+	---------------------------------------
+	--Shift tokens if the new token is not whitespace.
+	procedure shift_tokens_if_not_ws(
+		p_new_token in token,
+		p_previous_concrete_token_1 in out nocopy token,
+		p_previous_concrete_token_2 in out nocopy token,
+		p_previous_concrete_token_3 in out nocopy token,
+		p_previous_concrete_token_4 in out nocopy token,
+		p_previous_concrete_token_5 in out nocopy token
+	) is
+	begin
+		if p_new_token.type not in ('whitespace', 'comment') then
+			p_previous_concrete_token_5 := p_previous_concrete_token_4;
+			p_previous_concrete_token_4 := p_previous_concrete_token_3;
+			p_previous_concrete_token_3 := p_previous_concrete_token_2;
+			p_previous_concrete_token_2 := p_previous_concrete_token_1;
+			p_previous_concrete_token_1 := p_new_token;
+		end if;
+	end shift_tokens_if_not_ws;
+
 	---------------------------------------
 	--Count pivot parentheses.
 	procedure set_pivot_paren_counter(
@@ -693,11 +720,6 @@ begin
 	--Match BEGIN and END for a PLSQL_DECLARATION.
 	elsif p_terminator = C_TERMINATOR_PLSQL_DECLARE_END then
 		declare
-			v_previous_concrete_token_1 token := token(null, null, null, null);
-			v_previous_concrete_token_2 token := token(null, null, null, null);
-			v_previous_concrete_token_3 token := token(null, null, null, null);
-			v_previous_concrete_token_4 token := token(null, null, null, null);
-			v_previous_concrete_token_5 token := token(null, null, null, null);
 			v_has_entered_block boolean := false;
 			v_block_counter number := 0;
 			v_pivot_paren_counter number := 0;
@@ -754,14 +776,9 @@ begin
 					end if;
 				end if;
 
-				--Shift tokens if it is not a whitespace or comment.
-				if p_tokens(p_token_index).type not in ('whitespace', 'comment') then
-					v_previous_concrete_token_5 := v_previous_concrete_token_4;
-					v_previous_concrete_token_4 := v_previous_concrete_token_3;
-					v_previous_concrete_token_3 := v_previous_concrete_token_2;
-					v_previous_concrete_token_2 := v_previous_concrete_token_1;
-					v_previous_concrete_token_1 := p_tokens(p_token_index);
-				end if;
+				--Shift tokens.
+				shift_tokens_if_not_ws(p_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2,
+					v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
 
 				--Increment
 				p_token_index := p_token_index + 1;
@@ -771,11 +788,6 @@ begin
 	--Match BEGIN and END for a common PL/SQL block.
 	elsif p_terminator = C_TERMINATOR_PLSQL_MATCHED_END then
 		declare
-			v_previous_concrete_token_1 token := token(null, null, null, null);
-			v_previous_concrete_token_2 token := token(null, null, null, null);
-			v_previous_concrete_token_3 token := token(null, null, null, null);
-			v_previous_concrete_token_4 token := token(null, null, null, null);
-			v_previous_concrete_token_5 token := token(null, null, null, null);
 			v_has_entered_block boolean := false;
 			v_block_counter number := 0;
 			v_pivot_paren_counter number := 0;
@@ -822,14 +834,9 @@ begin
 					end if;
 				end if;
 
-				--Shift tokens if it is not a whitespace or comment.
-				if p_tokens(p_token_index).type not in ('whitespace', 'comment') then
-					v_previous_concrete_token_5 := v_previous_concrete_token_4;
-					v_previous_concrete_token_4 := v_previous_concrete_token_3;
-					v_previous_concrete_token_3 := v_previous_concrete_token_2;
-					v_previous_concrete_token_2 := v_previous_concrete_token_1;
-					v_previous_concrete_token_1 := p_tokens(p_token_index);
-				end if;
+				--Shift tokens.
+				shift_tokens_if_not_ws(p_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2,
+					v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
 
 				--Increment
 				p_token_index := p_token_index + 1;
@@ -841,11 +848,6 @@ begin
 		--The only difference is this code expects an extra block.
 		--TODO: Refactor for DRY.
 		declare
-			v_previous_concrete_token_1 token := token(null, null, null, null);
-			v_previous_concrete_token_2 token := token(null, null, null, null);
-			v_previous_concrete_token_3 token := token(null, null, null, null);
-			v_previous_concrete_token_4 token := token(null, null, null, null);
-			v_previous_concrete_token_5 token := token(null, null, null, null);
 			v_has_entered_block boolean := false;
 			v_block_counter number := 1;  --Start at 1, an extra END is required.
 			v_pivot_paren_counter number := 0;
@@ -892,14 +894,9 @@ begin
 					end if;
 				end if;
 
-				--Shift tokens if it is not a whitespace or comment.
-				if p_tokens(p_token_index).type not in ('whitespace', 'comment') then
-					v_previous_concrete_token_5 := v_previous_concrete_token_4;
-					v_previous_concrete_token_4 := v_previous_concrete_token_3;
-					v_previous_concrete_token_3 := v_previous_concrete_token_2;
-					v_previous_concrete_token_2 := v_previous_concrete_token_1;
-					v_previous_concrete_token_1 := p_tokens(p_token_index);
-				end if;
+				--Shift tokens.
+				shift_tokens_if_not_ws(p_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2,
+					v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
 
 				--Increment
 				p_token_index := p_token_index + 1;
@@ -909,29 +906,143 @@ begin
 	--Match BEGIN and END for a PL/SQL statement that *may* have an extra END.
 	elsif p_terminator = C_TERMINATOR_PACKAGE_BODY then
 		--See the unit tests for a good set of examples of the 5 different types of package bodies.
-		--TODO
-		null;
-		/*
-		for i in 1 .. p_tokens.count loop
-			if func|proc then
-				goto last end;
-			elsif cursor then
-				if has_plsql then
-					goto end;
-					goto ;
-				else
-					goto ;
-				end if
-			elsif begin then
-				goto end;
-				return;
-			else --item/type
-				goto ;
-			end if;
-		end loop;
-		return;
-		*/
+
+		--This is similar to C_TERMINATOR_PLSQL_MATCHED_END.
+		--TODO: Refactor for DRY.
+		declare
+			v_has_entered_block boolean := false;
+			v_block_counter number := 1;  --Start at 1, an extra END is required.
+			v_pivot_paren_counter number := 0;
+			v_prev_conc_tok_was_real_begin boolean := false;
+
+			v_is_past_first_is_or_as boolean := false;
+
+			--Not needed, only used because it's required by detect_begin.
+			v_has_nested_table boolean := false;
+			v_trigger_body_start_index number := p_trigger_body_start_index;
+		begin
+			--Build new statement and count tokens.
+			loop
+				--Increment
+				exit when p_token_index >= p_tokens.count;
+				p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+
+				--Detect the first IS or AS, and possibly an empty package.
+				if not v_is_past_first_is_or_as and lower(p_tokens(p_token_index).value) in ('is', 'as') then
+					v_is_past_first_is_or_as := true;
+
+					--Return when empty package.
+					--Special case where the next concrete token is END.
+					declare
+						v_next_concrete_value1 nvarchar2(32767);
+						v_next_concrete_value2 nvarchar2(32767);
+						v_next_concrete_value3 nvarchar2(32767);
+					begin
+						v_next_concrete_value1 := get_next_concrete_value_n(p_tokens, p_token_index, 1);
+						v_next_concrete_value2 := get_next_concrete_value_n(p_tokens, p_token_index, 2);
+						v_next_concrete_value3 := get_next_concrete_value_n(p_tokens, p_token_index, 3);
+
+						--Regular "END;".
+						if
+						(
+							lower(v_next_concrete_value1) = 'end'
+							and
+							lower(v_next_concrete_value2) = ';'
+						) then
+							--TODO: Variable number of tokens.
+							p_token_index := p_token_index + 1;
+							p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+							p_token_index := p_token_index + 1;
+							p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+							p_token_index := p_token_index + 1;
+							p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+							exit;
+
+						--"END" with name.
+						elsif
+						(
+							lower(v_next_concrete_value1) = 'end'
+							and
+							lower(v_next_concrete_value3) = ';'
+						) then
+							--TODO: Variable number of tokens.
+							p_token_index := p_token_index + 1;
+							p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+							p_token_index := p_token_index + 1;
+							p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+							p_token_index := p_token_index + 1;
+							p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+							p_token_index := p_token_index + 1;
+							p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+							p_token_index := p_token_index + 1;
+							p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+							exit;
+						end if;
+					end;
+				end if;
+
+				--Start looking for procedure|function|cursor|begin|end after the first IS|AS was found
+				if v_is_past_first_is_or_as then
+
+					--Loop until matching END; and continue.
+					--For procedure, function, or cursor with plsql_declaration.
+					if
+					(
+						lower(p_tokens(p_token_index).value) in ('procedure', 'function')
+						or
+						(
+							lower(p_tokens(p_token_index).value) in ('cursor')
+							and
+							has_plsql_declaration(p_tokens, p_token_index)
+						)
+					)
+					then
+						null;
+					--Loop until matching END; and return.
+					--For BEGIN and <<.  (Putting a label between procedures is illegal but parsable.)
+					elsif lower(p_tokens(p_token_index).value) in ('begin', '<<') then
+						null;
+
+					--Loop until next semicolon.
+					--For types, items, pragmas, and cursors without plsql_declarations.
+					else
+						null;
+					end if;
+
+					--TODO
+
+					--Detect BEGIN and END.
+					detect_begin(p_tokens, p_token_index, p_command_name, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table, v_trigger_body_start_index);
+					detect_end(p_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5, v_block_counter);
+
+					--Detect end of statement.
+					if (v_has_entered_block and v_block_counter = 0) or p_tokens(p_token_index).type = 'EOF' then
+						--Consume all tokens if only whitespace, comments, and EOF remain.
+						if only_ws_comments_eof_remain(p_tokens, p_token_index+1) then
+							--Consume all tokens.
+							loop
+								p_token_index := p_token_index + 1;
+								p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+								exit when p_token_index = p_tokens.count;
+							end loop;
+						--Else stop here.
+						else
+							exit;
+						end if;
+					end if;
+				end if;
+
+				--Shift tokens.
+				shift_tokens_if_not_ws(p_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2,
+					v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
+
+				--Increment
+				p_token_index := p_token_index + 1;
+			end loop;
+		end;
+
 	end if;
+
 
 	--Remove the first character if it's a newline.
 	if substr(p_new_statement, 1, 1) = chr(10) and dbms_lob.getLength(p_new_statement) > 1 then
