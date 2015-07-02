@@ -942,40 +942,28 @@ begin
 						v_next_concrete_value2 := get_next_concrete_value_n(p_tokens, p_token_index, 2);
 						v_next_concrete_value3 := get_next_concrete_value_n(p_tokens, p_token_index, 3);
 
-						--Regular "END;".
+						--Consume tokens and exit if an END is found.
 						if
 						(
-							lower(v_next_concrete_value1) = 'end'
-							and
-							lower(v_next_concrete_value2) = ';'
+							--Regular "END;".
+							(
+								lower(v_next_concrete_value1) = 'end'
+								and
+								lower(v_next_concrete_value2) = ';'
+							)
+							or
+							(
+								lower(v_next_concrete_value1) = 'end'
+								and
+								lower(v_next_concrete_value3) = ';'
+							)
 						) then
-							--TODO: Variable number of tokens.
-							p_token_index := p_token_index + 1;
-							p_new_statement := p_new_statement || p_tokens(p_token_index).value;
-							p_token_index := p_token_index + 1;
-							p_new_statement := p_new_statement || p_tokens(p_token_index).value;
-							p_token_index := p_token_index + 1;
-							p_new_statement := p_new_statement || p_tokens(p_token_index).value;
-							exit;
-
-						--"END" with name.
-						elsif
-						(
-							lower(v_next_concrete_value1) = 'end'
-							and
-							lower(v_next_concrete_value3) = ';'
-						) then
-							--TODO: Variable number of tokens.
-							p_token_index := p_token_index + 1;
-							p_new_statement := p_new_statement || p_tokens(p_token_index).value;
-							p_token_index := p_token_index + 1;
-							p_new_statement := p_new_statement || p_tokens(p_token_index).value;
-							p_token_index := p_token_index + 1;
-							p_new_statement := p_new_statement || p_tokens(p_token_index).value;
-							p_token_index := p_token_index + 1;
-							p_new_statement := p_new_statement || p_tokens(p_token_index).value;
-							p_token_index := p_token_index + 1;
-							p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+							--Consume all tokens until the final ";".
+							loop
+								p_token_index := p_token_index + 1;
+								p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+								exit when p_tokens(p_token_index).type = ';';
+							end loop;
 							exit;
 						end if;
 					end;
