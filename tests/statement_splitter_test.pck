@@ -623,27 +623,37 @@ procedure test_proc_and_func is
 begin
 	--Regular procedure.
 	v_statements:='create procedure test_procedure is begin null; end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
-	assert_equals('Trigger 1a', 2, v_split_statements.count);
-	assert_equals('Trigger 1b', 'create procedure test_procedure is begin null; end;', v_split_statements(1));
-	assert_equals('Trigger 1c', 'select * from dual;', v_split_statements(2));
+	assert_equals('Procedure and Function 1a', 2, v_split_statements.count);
+	assert_equals('Procedure and Function 1b', 'create procedure test_procedure is begin null; end;', v_split_statements(1));
+	assert_equals('Procedure and Function 1c', 'select * from dual;', v_split_statements(2));
 
 	--External procedure.
 	v_statements:='create procedure test_procedure as external language c name "c_test" library test_lib;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
-	assert_equals('Trigger 1a', 2, v_split_statements.count);
-	assert_equals('Trigger 1b', 'create procedure test_procedure as external language c name "c_test" library test_lib;', v_split_statements(1));
-	assert_equals('Trigger 1c', 'select * from dual;', v_split_statements(2));
+	assert_equals('Procedure and Function 2a', 2, v_split_statements.count);
+	assert_equals('Procedure and Function 2b', 'create procedure test_procedure as external language c name "c_test" library test_lib;', v_split_statements(1));
+	assert_equals('Procedure and Function 2c', 'select * from dual;', v_split_statements(2));
 
 	--Regular function.
 	v_statements:='create function test_function return number is begin return 1; end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
-	assert_equals('Trigger 1a', 2, v_split_statements.count);
-	assert_equals('Trigger 1b', 'create function test_function return number is begin return 1; end;', v_split_statements(1));
-	assert_equals('Trigger 1c', 'select * from dual;', v_split_statements(2));
+	assert_equals('Procedure and Function 3a', 2, v_split_statements.count);
+	assert_equals('Procedure and Function 3b', 'create function test_function return number is begin return 1; end;', v_split_statements(1));
+	assert_equals('Procedure and Function 3c', 'select * from dual;', v_split_statements(2));
 
 	--External function.
 	v_statements:='create function test_function return number as external language c name "c_test" library test_lib;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
-	assert_equals('Trigger 1a', 2, v_split_statements.count);
-	assert_equals('Trigger 1b', 'create function test_function return number as external language c name "c_test" library test_lib;', v_split_statements(1));
-	assert_equals('Trigger 1c', 'select * from dual;', v_split_statements(2));
+	assert_equals('Procedure and Function 4a', 2, v_split_statements.count);
+	assert_equals('Procedure and Function 4b', 'create function test_function return number as external language c name "c_test" library test_lib;', v_split_statements(1));
+	assert_equals('Procedure and Function 4c', 'select * from dual;', v_split_statements(2));
+
+	--External function with CALL syntax.
+	--This would be a valid example with this Java:
+	--  create or replace and compile java source named "RandomUUID" as
+	--  public class RandomUUID { public static String create() { return java.util.UUID.randomUUID().toString(); } }
+	--External function.
+	v_statements:=q'<create or replace function randomuuid return varchar2 as language java name 'RandomUUID.create() return java.lang.String';select * from dual;>';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Procedure and Function 5a', 2, v_split_statements.count);
+	assert_equals('Procedure and Function 5b', q'<create or replace function randomuuid return varchar2 as language java name 'RandomUUID.create() return java.lang.String';>', v_split_statements(1));
+	assert_equals('Procedure and Function 5c', 'select * from dual;', v_split_statements(2));
 end test_proc_and_func;
 
 
@@ -672,7 +682,7 @@ begin
 			null;
 		end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Package Body 2a', 2, v_split_statements.count);
---	assert_equals('Packabe Body 2b', 'select * from dual;', v_split_statements(2));
+	assert_equals('Packabe Body 2b', 'select * from dual;', v_split_statements(2));
 
 	--#3: Matched BEGIN and END and extra END.
 	v_statements:='
@@ -680,7 +690,7 @@ begin
 			procedure test1 is begin null; end;
 		end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Package Body 3a', 2, v_split_statements.count);
---	assert_equals('Packabe Body 3b', 'select * from dual;', v_split_statements(2));
+	assert_equals('Packabe Body 3b', 'select * from dual;', v_split_statements(2));
 
 	--#4: Two sets of matched BEGINs and ENDs - from methods.
 	v_statements:='
@@ -690,7 +700,18 @@ begin
 			null;
 		end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Package Body 4a', 2, v_split_statements.count);
---	assert_equals('Packabe Body 4b', 'select * from dual;', v_split_statements(2));
+	assert_equals('Packabe Body 4b', 'select * from dual;', v_split_statements(2));
+
+	--#4.5: Two sets of matched BEGINs and ENDs - from methods.
+	v_statements:='
+		create or replace package body test_package is
+			procedure test1 is begin null; end;
+			procedure test2 is begin null; end;
+		begin
+			null;
+		end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Package Body 4.5a', 2, v_split_statements.count);
+	assert_equals('Packabe Body 4.5b', 'select * from dual;', v_split_statements(2));
 
 	--#5: Two sets of matched BEGINs and ENDs - from CURSORS and methods.
 	v_statements:='
@@ -701,15 +722,28 @@ begin
 			null;
 		end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Package Body 5a', 2, v_split_statements.count);
---	assert_equals('Packabe Body 5b', 'select * from dual;', v_split_statements(2));
+	assert_equals('Packabe Body 5b', 'select * from dual;', v_split_statements(2));
 
-	/*
-	--
-	v_statements:='
-		select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
-	assert_equals('Package Body a', 2, v_split_statements.count);
-	assert_equals('Packabe Body b', 'select * from dual;', v_split_statements(2));
-	*/
+	--#6: Items only.
+	v_statements:=q'<
+		create or replace package body test_package is
+			variable1 number;
+			variable2 number := 5;
+			type type1 is table of varchar2(4000);
+			string_nt type1 := type1('asdf', 'qwer');
+		end;select * from dual;>';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Package Body 6a', 2, v_split_statements.count);
+	assert_equals('Packabe Body 6b', 'select * from dual;', v_split_statements(2));
+
+	--#7: External functions.
+	v_statements:=q'<
+		create or replace package body test_package is
+			function randomuuid1 return varchar2 as language java name 'RandomUUID.create() return java.lang.String';
+			function randomuuid2 return varchar2 as language java name 'RandomUUID.create() return java.lang.String';
+		end;select * from dual;>';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Package Body 7a', 2, v_split_statements.count);
+	assert_equals('Packabe Body 7b', 'select * from dual;', v_split_statements(2));
+
 end test_package_body;
 
 

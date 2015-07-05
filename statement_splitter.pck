@@ -931,6 +931,12 @@ begin
 				if not v_is_past_first_is_or_as and lower(p_tokens(p_token_index).value) in ('is', 'as') then
 					v_is_past_first_is_or_as := true;
 
+					--Consume first "is" or "as" and shift tokens.
+					p_token_index := p_token_index + 1;
+					p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+					shift_tokens_if_not_ws(p_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
+
+
 					--Return when empty package.
 					--Special case where the next concrete token is END.
 					declare
@@ -972,57 +978,144 @@ begin
 				--Start looking for procedure|function|cursor|begin|end after the first IS|AS was found
 				if v_is_past_first_is_or_as then
 
-					--Loop until matching END; and continue.
-					--For procedure, function, or cursor with plsql_declaration.
+					--Loop until matching END; then continue.
+					--For non-external procedures or functions, or cursor with plsql_declaration.
 					if
 					(
-						lower(p_tokens(p_token_index).value) in ('procedure', 'function')
+						(
+							lower(p_tokens(p_token_index).value) in ('procedure', 'function')
+							and
+							not is_external_method(p_tokens, p_token_index)
+						)
 						or
 						(
+							--TODO: What about multiple functions/procedures?
+							--What about a second CTE named "function as (select 1 a from dual)"?
 							lower(p_tokens(p_token_index).value) in ('cursor')
 							and
 							has_plsql_declaration(p_tokens, p_token_index)
 						)
 					)
 					then
-						null;
-					--Loop until matching END; and return.
-					--For BEGIN and <<.  (Putting a label between procedures is illegal but parsable.)
-					elsif lower(p_tokens(p_token_index).value) in ('begin', '<<') then
+						--Consume until matching END.
+						declare
+							v_has_entered_sub_block boolean := false;
+							v_sub_block_counter number := 0;
+							v_prev_conc_tok_real_begin_sub boolean := false;
+						begin
+							loop
+								--Consume.
+								p_token_index := p_token_index + 1;
+								p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+
+								--Detect begin and end.
+								detect_begin(p_tokens, p_token_index, p_command_name, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_sub_block, v_sub_block_counter, v_pivot_paren_counter, v_prev_conc_tok_real_begin_sub, v_has_nested_table, v_trigger_body_start_index);
+								detect_end(p_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5, v_sub_block_counter);
+
+								--Stop looking when block is over or out of tokens.
+								exit when
+								(
+									p_token_index = p_tokens.count
+									or
+									(
+										v_has_entered_sub_block
+										and
+										v_sub_block_counter = 0
+									)
+								);
+
+								--Shift.
+								shift_tokens_if_not_ws(p_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
+							end loop;
+						end;
+
+					--Ignore non-concrete tokens.
+					elsif p_tokens(p_token_index).type in ('whitespace', 'comment', 'EOF') then
 						null;
 
-					--Loop until next semicolon.
-					--For types, items, pragmas, and cursors without plsql_declarations.
+					--Ignore labels.
+					--Putting a label between procedures is illegal but parsable.
+					elsif p_tokens(p_token_index).type = '<<' then
+							--Consume all tokens until the final ";".
+							loop
+								--TODO: Shift?
+								p_token_index := p_token_index + 1;
+								p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+								exit when p_tokens(p_token_index).type = '>>';
+							end loop;
+
+					--Loop until matching END; and return.
+					--For BEGIN.
+					elsif lower(p_tokens(p_token_index).value) = 'begin' then
+						--Consume until matching END.
+						declare
+							v_has_entered_sub_block boolean := true;
+							v_sub_block_counter number := 1;
+							v_prev_conc_tok_real_begin_sub boolean := true;
+						begin
+							loop
+								--Consume.
+								p_token_index := p_token_index + 1;
+								p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+
+								--Detect begin and end.
+								detect_begin(p_tokens, p_token_index, p_command_name, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_sub_block, v_sub_block_counter, v_pivot_paren_counter, v_prev_conc_tok_real_begin_sub, v_has_nested_table, v_trigger_body_start_index);
+								detect_end(p_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5, v_sub_block_counter);
+
+								--Stop looking when block is over or out of tokens.
+								exit when
+								(
+									p_token_index = p_tokens.count
+									or
+									(
+										v_has_entered_sub_block
+										and
+										v_sub_block_counter = 0
+									)
+								);
+
+								--Shift.
+								shift_tokens_if_not_ws(p_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
+							end loop;
+						end;
+						exit;
+
+					--Process END and return.
+					elsif lower(p_tokens(p_token_index).value) in ('end') then
+						loop
+							p_token_index := p_token_index + 1;
+							p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+							exit when p_token_index = p_tokens.count or p_tokens(p_token_index).type = ';';
+						end loop;
+						exit;
+
+					--Loop until next semicolon and continue.
+					--For external functions and procedures, types, items, pragmas, end, and cursors without plsql_declarations.
 					else
-						null;
+						loop
+							p_token_index := p_token_index + 1;
+							p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+							exit when p_token_index = p_tokens.count or p_tokens(p_token_index).type = ';';
+						end loop;
 					end if;
 
 					--TODO
-
-					--Detect BEGIN and END.
-					detect_begin(p_tokens, p_token_index, p_command_name, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table, v_trigger_body_start_index);
-					detect_end(p_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5, v_block_counter);
-
-					--Detect end of statement.
-					if (v_has_entered_block and v_block_counter = 0) or p_tokens(p_token_index).type = 'EOF' then
-						--Consume all tokens if only whitespace, comments, and EOF remain.
-						if only_ws_comments_eof_remain(p_tokens, p_token_index+1) then
-							--Consume all tokens.
-							loop
-								p_token_index := p_token_index + 1;
-								p_new_statement := p_new_statement || p_tokens(p_token_index).value;
-								exit when p_token_index = p_tokens.count;
-							end loop;
-						--Else stop here.
-						else
-							exit;
-						end if;
+					/*
+					--Consume all tokens if only whitespace, comments, and EOF remain.
+					if only_ws_comments_eof_remain(p_tokens, p_token_index+1) then
+						--Consume all tokens.
+						loop
+							p_token_index := p_token_index + 1;
+							p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+							exit when p_token_index = p_tokens.count;
+						end loop;
 					end if;
+					*/
+
 				end if;
 
 				--Shift tokens.
-				shift_tokens_if_not_ws(p_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2,
-					v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
+				shift_tokens_if_not_ws(p_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
 
 				--Increment
 				p_token_index := p_token_index + 1;
