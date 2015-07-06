@@ -123,7 +123,7 @@ begin
 		) then
 			null;
 		--Regular token found.
-		elsif lower(p_tokens(i).value) in ('declare', '<<', 'begin') then
+		elsif p_tokens(i).type = 'word' and lower(p_tokens(i).value) in ('declare', '<<', 'begin') then
 			p_trigger_type := C_REGULAR_TRIGGER;
 			p_trigger_body_start_index := i;
 			return;
@@ -409,6 +409,8 @@ procedure detect_begin(
 ) is
 begin
 	if
+	p_tokens(p_token_index).type = 'word'
+	and
 	lower(p_tokens(p_token_index).value) = 'begin'
 	and
 	(
@@ -1038,9 +1040,9 @@ begin
 					elsif p_tokens(p_token_index).type = '<<' then
 							--Consume all tokens until the final ";".
 							loop
-								--TODO: Shift?
 								p_token_index := p_token_index + 1;
 								p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+								shift_tokens_if_not_ws(p_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
 								exit when p_tokens(p_token_index).type = '>>';
 							end loop;
 
