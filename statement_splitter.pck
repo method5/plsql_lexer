@@ -938,7 +938,6 @@ begin
 					p_new_statement := p_new_statement || p_tokens(p_token_index).value;
 					shift_tokens_if_not_ws(p_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
 
-
 					--Return when empty package.
 					--Special case where the next concrete token is END.
 					declare
@@ -985,7 +984,13 @@ begin
 					if
 					(
 						(
-							lower(p_tokens(p_token_index).value) in ('procedure', 'function')
+							(
+								lower(p_tokens(p_token_index).value) in ('procedure', 'function')
+								and
+								--Cursor with multiple CTEs could have one named "function as (select ...",
+								--which is not a real function.
+								lower(get_next_concrete_value_n(p_tokens, p_token_index, 1)) <> 'as'
+							)
 							and
 							not is_external_method(p_tokens, p_token_index)
 						)

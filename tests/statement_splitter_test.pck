@@ -131,7 +131,6 @@ end test_simple;
 procedure test_optional_delimiter is
 	v_statements nclob;
 	v_split_statements nclob_table := nclob_table();
-	c_slash constant varchar2(1) := '/';
 begin
 	--Invalid SQL, but should only be one line.
 	v_statements:='select * from dual/';v_split_statements:=statement_splitter.split(v_statements, '/');
@@ -723,6 +722,19 @@ begin
 		end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
 	assert_equals('Package Body 5a', 2, v_split_statements.count);
 	assert_equals('Packabe Body 5b', 'select * from dual;', v_split_statements(2));
+
+	--#5.5: Sets of matched BEGINs and ENDs - from CURSORS with multiple plsql_declarations
+	-- and a SQL WITH named "function".  The SQL statements are valid, although it's an
+	-- invalid (but parsable) package body.
+	v_statements:='
+		create or replace package body test_package is
+			cursor my_cursor is with function test_function1 return number is begin return 1; end; function test_function2 return number is begin return 2; end; select test_function1() from dual;
+			cursor my_cursor is with function test_function1 return number is begin return 1; end; function as (select 1 a from dual) select a from function;
+		begin
+			null;
+		end;select * from dual;';v_split_statements:=statement_splitter.split(v_statements);
+	assert_equals('Package Body 5.5a', 2, v_split_statements.count);
+	assert_equals('Packabe Body 5.5b', 'select * from dual;', v_split_statements(2));
 
 	--#6: Items only.
 	v_statements:=q'<
