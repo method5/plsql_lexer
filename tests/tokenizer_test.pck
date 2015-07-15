@@ -28,8 +28,10 @@ c_test_2_character_punctuation constant number := power(2, 10);
 c_test_1_character_punctuation constant number := power(2, 11);
 c_test_unexpected              constant number := power(2, 12);
 c_test_utf8                    constant number := power(2, 13);
-c_row_pattern_matching         constant number := power(2, 14);
+c_test_row_pattern_matching    constant number := power(2, 14);
 c_test_other                   constant number := power(2, 15);
+
+c_test_convert_to_text         constant number := power(2, 16);
 
 c_dynamic_tests             constant number := power(2, 30);
 
@@ -37,8 +39,8 @@ c_dynamic_tests             constant number := power(2, 30);
 c_all_static_tests          constant number := c_test_whitespace+c_test_comment+
 	c_test_text+c_test_numeric+c_test_word+c_test_inquiry_directive+
 	c_test_preproc_control_token+c_test_3_character_punctuation+c_test_2_character_punctuation+
-	c_test_1_character_punctuation+c_test_unexpected+c_test_utf8+c_row_pattern_matching+
-	c_test_other;
+	c_test_1_character_punctuation+c_test_unexpected+c_test_utf8+c_test_row_pattern_matching+
+	c_test_other+c_test_convert_to_text;
 
 --Run the unit tests and display the results in dbms output.
 procedure run(p_tests number default c_all_static_tests);
@@ -698,6 +700,13 @@ end dynamic_tests;
 
 
 --------------------------------------------------------------------------------
+procedure test_convert_to_text is
+begin
+	assert_equals('Convert To Text 1' ,'select * from dual', tokenizer.convert_tokens_to_text(tokenizer.tokenize('select * from dual')));
+end test_convert_to_text;
+
+
+--------------------------------------------------------------------------------
 procedure run(p_tests number default c_all_static_tests) is
 begin
 	--Reset counters.
@@ -718,10 +727,10 @@ begin
 	if bitand(p_tests, c_test_1_character_punctuation) > 0 then test_1_character_punctuation; end if;
 	if bitand(p_tests, c_test_unexpected)              > 0 then test_unexpected; end if;
 	if bitand(p_tests, c_test_utf8)                    > 0 then test_utf8; end if;
-	if bitand(p_tests, c_row_pattern_matching)         > 0 then test_row_pattern_matching; end if;
+	if bitand(p_tests, c_test_row_pattern_matching)    > 0 then test_row_pattern_matching; end if;
 	if bitand(p_tests, c_test_other)                   > 0 then test_other; end if;
 	if bitand(p_tests, c_dynamic_tests)                > 0 then dynamic_tests; end if;
-
+	if bitand(p_tests, c_test_convert_to_text)         > 0 then test_convert_to_text; end if;
 
 	--Print summary of results.
 	dbms_output.put_line(null);

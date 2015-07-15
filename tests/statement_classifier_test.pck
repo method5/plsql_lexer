@@ -18,8 +18,9 @@ pragma serially_reusable;
 --Globals to select which test suites to run.
 c_errors        constant number := power(2, 1);
 c_commands      constant number := power(2, 2);
+c_start_index   constant number := power(2, 3);
 
-c_static_tests  constant number := c_errors+c_commands;
+c_static_tests  constant number := c_errors+c_commands+c_start_index;
 
 c_dynamic_tests constant number := power(2, 30);
 
@@ -72,7 +73,7 @@ end assert_equals;
 
 
 --------------------------------------------------------------------------------
-procedure classify(p_statement nclob, p_output out output_rec) is
+procedure classify(p_statement nclob, p_output out output_rec, p_start_index in number default 1) is
 	v_category varchar2(100);
 	v_statement_type varchar2(100);
 	v_command_name varchar2(64);
@@ -80,8 +81,8 @@ procedure classify(p_statement nclob, p_output out output_rec) is
 	v_lex_sqlcode number;
 	v_lex_sqlerrm varchar2(4000);
 begin
-	statement_classifier.classify(p_statement,
-		v_category,v_statement_type,v_command_name,v_command_type,v_lex_sqlcode,v_lex_sqlerrm);
+	statement_classifier.classify(tokenizer.tokenize(p_statement),
+		v_category,v_statement_type,v_command_name,v_command_type,v_lex_sqlcode,v_lex_sqlerrm,p_start_index);
 
 	p_output.category := v_category;
 	p_output.statement_type := v_statement_type;
@@ -104,7 +105,7 @@ function get_sqlerrm(p_statement nclob) return varchar2 is
 	v_lex_sqlcode number;
 	v_lex_sqlerrm varchar2(4000);
 begin
-	statement_classifier.classify(p_statement,
+	statement_classifier.classify(tokenizer.tokenize(p_statement),
 		v_category,v_statement_type,v_command_name,v_command_type,v_lex_sqlcode,v_lex_sqlerrm);
 	return null;
 exception when others then
@@ -617,6 +618,23 @@ end test_commands;
 
 
 --------------------------------------------------------------------------------
+procedure test_start_index is
+	v_output output_rec;
+
+	--Helper function that concatenates results for easy string comparison.
+	function concat(p_output output_rec) return varchar2 is
+	begin
+		return nvl(p_output.fatal_error,
+			p_output.category||'|'||p_output.statement_type||'|'||p_output.command_name||'|'||p_output.command_type);
+	end;
+begin
+	classify(q'[begin null; end;select * from dual;]', v_output, 8); assert_equals('Start index 1', 'DML|SELECT|SELECT|3', concat(v_output));
+	classify(q'[select * from dual a; <<my_label>>begin null; end;]', v_output, 11); assert_equals('Start index 2', 'PL/SQL|BLOCK|PL/SQL EXECUTE|47', concat(v_output));
+	classify(q'[select * from dual;select * from dual;select * from dual;]', v_output, 17); assert_equals('Start index 1', 'DML|SELECT|SELECT|3', concat(v_output));
+end test_start_index;
+
+
+--------------------------------------------------------------------------------
 procedure dynamic_tests is
 	type clob_table is table of clob;
 	type string_table is table of varchar2(100);
@@ -662,7 +680,8 @@ begin
 
 			g_test_count := g_test_count + 1;
 
-			statement_classifier.classify(v_sql_fulltexts(i), v_category, v_statement_type, v_command_name, v_command_type, v_lex_sqlcode, v_lex_sqlerrm);
+			statement_classifier.classify(tokenizer.tokenize(v_sql_fulltexts(i))
+				,v_category, v_statement_type, v_command_name, v_command_type, v_lex_sqlcode, v_lex_sqlerrm);
 			if v_command_type = v_command_types(i) and v_command_name = v_command_names(i) then
 				g_passed_count := g_passed_count + 1;
 			else
@@ -694,6 +713,7 @@ begin
 	--Run the chosen tests.
 	if bitand(p_tests, c_errors)        > 0 then test_errors; end if;
 	if bitand(p_tests, c_commands)      > 0 then test_commands; end if;
+	if bitand(p_tests, c_start_index)   > 0 then test_start_index; end if;
 	if bitand(p_tests, c_dynamic_tests) > 0 then dynamic_tests; end if;
 
 	--Print summary of results.

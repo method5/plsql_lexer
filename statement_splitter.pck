@@ -31,7 +31,11 @@ TODO
 
 */
 
-function split(p_statements in nclob, p_optional_sqlplus_delimiter in nvarchar2 default null) return nclob_table;
+function split_by_semicolon(p_tokens in token_table) return token_table_table;
+
+function split_by_sqlplus_delimiter(p_statements in nclob, p_sqlplus_delimiter in nclob) return nclob_table;
+
+function split_by_semi_and_sqlplus_del(p_statements in nclob, p_sqlplus_delimiter in nclob) return token_table_table;
 
 end;
 /
@@ -49,7 +53,6 @@ C_COMPOUND_TRIGGER             constant number := 2;
 C_CALL_TRIGGER                 constant number := 3;
 
 
-type token_table_table is table of token_table;
 
 
 
@@ -330,7 +333,7 @@ end only_ws_comments_eof_remain;
 
 --------------------------------------------------------------------------------
 --Return the next concrete token, or NULL if there are no more.
-function get_next_concrete_value_n(p_tokens in out nocopy token_table, p_token_index in number, p_n in number) return nvarchar2 is
+function get_next_concrete_value_n(p_tokens in token_table, p_token_index in number, p_n in number) return nvarchar2 is
 	v_concrete_token_counter number := 0;
 begin
 	--Loop through the tokens.
@@ -395,7 +398,7 @@ BEGIN must come after "begin", "as", "is", ";", or ">>", or the beginning of the
 	- Note: These rules were determined by downloading and searching the BNF descriptions like this: findstr /i /s "as" *.*
 */
 procedure detect_begin(
-	p_tokens in out token_table,
+	p_tokens in token_table,
 	p_token_index in number,
 	p_command_name in varchar2,
 	v_previous_concrete_token_1 in out nocopy token,
@@ -501,10 +504,10 @@ end detect_begin;
 END must come after ";", or as part of a trigger timing point.
 	It cannot come after ">>", labels can't go there without compilation error.
 	end could be an object, but the object will be invalid so things won't compile
-TODO: Add special case for an empty package body or empty type body.
+TODO: Add special case for empty package, package body, or type body.
 */
 procedure detect_end(
-	p_tokens in out nocopy token_table,
+	p_tokens in token_table,
 	p_token_index in number,
 	v_previous_concrete_token_1 in out nocopy token,
 	v_previous_concrete_token_2 in out nocopy token,
@@ -593,16 +596,14 @@ end detect_end;
 
 --------------------------------------------------------------------------------
 procedure add_statement_consume_tokens(
-	p_split_statements in out nocopy nclob_table,
-	p_tokens in out nocopy token_table,
+	p_split_tokens in out nocopy token_table_table,
+	p_old_tokens in token_table,
 	p_terminator number,
-	p_new_statement in out nocopy nclob,
+	p_new_tokens in out nocopy token_table,
 	p_token_index in out number,
 	p_command_name in varchar2,
 	p_trigger_body_start_index in number
 ) is
-	v_new_tokens token_table := token_table();
-
 	v_previous_concrete_token_1 token := token(null, null, null, null);
 	v_previous_concrete_token_2 token := token(null, null, null, null);
 	v_previous_concrete_token_3 token := token(null, null, null, null);
@@ -666,7 +667,7 @@ procedure add_statement_consume_tokens(
 		(
 			v_pivot_paren_counter > 0
 			and
-			p_tokens(p_token_index).value = '('
+			p_old_tokens(p_token_index).value = '('
 		) then
 			v_pivot_paren_counter := v_pivot_paren_counter + 1;
 		--Decrement, if it's in a PIVOT and a ")" is found.
@@ -674,7 +675,7 @@ procedure add_statement_consume_tokens(
 		(
 			v_pivot_paren_counter > 0
 			and
-			p_tokens(p_token_index).value = ')'
+			p_old_tokens(p_token_index).value = ')'
 		) then
 			v_pivot_paren_counter := v_pivot_paren_counter - 1;
 		end if;
@@ -685,8 +686,9 @@ begin
 	if p_terminator = C_TERMINATOR_EOF then
 		--Consume all tokens.
 		loop
-			exit when p_token_index > p_tokens.count;
-			p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+			exit when p_token_index > p_old_tokens.count;
+			p_new_tokens.extend;
+			p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
 			p_token_index := p_token_index + 1;
 		end loop;
 	--Look for a ';' anywhere.
@@ -694,24 +696,29 @@ begin
 		--Build new statement and count tokens.
 		loop
 			--Increment.
-			exit when p_token_index >= p_tokens.count;
-			p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+			exit when p_token_index > p_old_tokens.count;
+			p_new_tokens.extend;
+			p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
 
 			--Detect end of statement.
-			if p_tokens(p_token_index).type = ';' or p_tokens(p_token_index).type = 'EOF' then
+			if p_old_tokens(p_token_index).type = ';' or p_old_tokens(p_token_index).type = 'EOF' then
 				--Stop if no more tokens.
-				if p_token_index = p_tokens.count then
+				if p_token_index = p_old_tokens.count then
+					p_token_index := p_token_index + 1;
 					exit;
 				--Consume all tokens if only whitespace, comments, and EOF remain.
-				elsif only_ws_comments_eof_remain(p_tokens, p_token_index+1) then
+				elsif only_ws_comments_eof_remain(p_old_tokens, p_token_index+1) then
 					--Consume all tokens.
 					loop
 						p_token_index := p_token_index + 1;
-						p_new_statement := p_new_statement || p_tokens(p_token_index).value;
-						exit when p_token_index = p_tokens.count;
+						exit when p_token_index > p_old_tokens.count;
+						p_new_tokens.extend;
+						p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
 					end loop;
+					exit;
 				--Otherwise stop at this spot.
 				else
+					p_token_index := p_token_index + 1;
 					exit;
 				end if;
 			end if;
@@ -732,8 +739,9 @@ begin
 			--Build new statement and count tokens.
 			loop
 				--Increment
-				exit when p_token_index >= p_tokens.count;
-				p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+				exit when p_token_index >= p_old_tokens.count;
+				p_new_tokens.extend;
+				p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
 
 				--Set the PIVOT parentheses counter.
 				set_pivot_paren_counter(v_pivot_paren_counter, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3);
@@ -749,37 +757,38 @@ begin
 				end if;
 
 				--Detect BEGIN and END.
-				detect_begin(p_tokens, p_token_index, p_command_name, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table, v_trigger_body_start_index);
-				detect_end(p_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5, v_block_counter);
+				detect_begin(p_old_tokens, p_token_index, p_command_name, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table, v_trigger_body_start_index);
+				detect_end(p_old_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5, v_block_counter);
 
 				--Detect end of statement.
-				if (v_has_entered_block and v_block_counter = 0) or p_tokens(p_token_index).type = 'EOF' then
+				if (v_has_entered_block and v_block_counter = 0) or p_old_tokens(p_token_index).type = 'EOF' then
 					--Stop if no more tokens.
-					if p_token_index = p_tokens.count then
+					if p_token_index = p_old_tokens.count then
 						exit;
 					--Consume all tokens if only whitespace, comments, and EOF remain.
-					elsif only_ws_comments_eof_remain(p_tokens, p_token_index+1) then
+					elsif only_ws_comments_eof_remain(p_old_tokens, p_token_index+1) then
 						--Consume all tokens.
 						loop
 							p_token_index := p_token_index + 1;
-							p_new_statement := p_new_statement || p_tokens(p_token_index).value;
-							exit when p_token_index = p_tokens.count;
+							exit when p_token_index > p_old_tokens.count;
+							p_new_tokens.extend;
+							p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
 						end loop;
 					--There could be more than one function.
-					elsif has_another_plsql_declaration(p_tokens, p_token_index + 1) then
+					elsif has_another_plsql_declaration(p_old_tokens, p_token_index + 1) then
 						p_token_index := p_token_index + 1;
-						add_statement_consume_tokens(p_split_statements, p_tokens, C_TERMINATOR_PLSQL_DECLARE_END, p_new_statement, p_token_index, p_command_name, null);
+						add_statement_consume_tokens(p_split_tokens, p_old_tokens, C_TERMINATOR_PLSQL_DECLARE_END, p_new_tokens, p_token_index, p_command_name, null);
 						return;
 					--Otherwise look for the next ';'.
 					else
 						p_token_index := p_token_index + 1;
-						add_statement_consume_tokens(p_split_statements, p_tokens, C_TERMINATOR_SEMI, p_new_statement, p_token_index, p_command_name, null);
+						add_statement_consume_tokens(p_split_tokens, p_old_tokens, C_TERMINATOR_SEMI, p_new_tokens, p_token_index, p_command_name, null);
 						return;
 					end if;
 				end if;
 
 				--Shift tokens.
-				shift_tokens_if_not_ws(p_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2,
+				shift_tokens_if_not_ws(p_old_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2,
 					v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
 
 				--Increment
@@ -800,8 +809,9 @@ begin
 			--Build new statement and count tokens.
 			loop
 				--Increment
-				exit when p_token_index >= p_tokens.count;
-				p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+				exit when p_token_index >= p_old_tokens.count;
+				p_new_tokens.extend;
+				p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
 
 				--Set the PIVOT parentheses counter.
 				set_pivot_paren_counter(v_pivot_paren_counter, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3);
@@ -811,39 +821,44 @@ begin
 					p_command_name in ('CREATE TABLE', 'ALTER TABLE')
 					and
 					lower(v_previous_concrete_token_2.value) = 'nested'
-					and lower(v_previous_concrete_token_1.value) = 'table'
+					and
+					lower(v_previous_concrete_token_1.value) = 'table'
 				then
 					v_has_nested_table := true;
 				end if;
 
 				--Detect BEGIN and END.
-				detect_begin(p_tokens, p_token_index, p_command_name, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table, v_trigger_body_start_index);
-				detect_end(p_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5, v_block_counter);
+				detect_begin(p_old_tokens, p_token_index, p_command_name, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table, v_trigger_body_start_index);
+				detect_end(p_old_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5, v_block_counter);
 
 				--Detect end of statement.
-				if (v_has_entered_block and v_block_counter = 0) or p_tokens(p_token_index).type = 'EOF' then
+				if (v_has_entered_block and v_block_counter = 0) or p_old_tokens(p_token_index).type = 'EOF' then
 					--Consume all tokens if only whitespace, comments, and EOF remain.
-					if only_ws_comments_eof_remain(p_tokens, p_token_index+1) then
+					if only_ws_comments_eof_remain(p_old_tokens, p_token_index+1) then
 						--Consume all tokens.
 						loop
 							p_token_index := p_token_index + 1;
-							p_new_statement := p_new_statement || p_tokens(p_token_index).value;
-							exit when p_token_index = p_tokens.count;
+							exit when p_token_index > p_old_tokens.count;
+							p_new_tokens.extend;
+							p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
 						end loop;
+						exit;
 					--Else stop here.
 					else
+						p_token_index := p_token_index + 1;
 						exit;
 					end if;
 				end if;
 
 				--Shift tokens.
-				shift_tokens_if_not_ws(p_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2,
+				shift_tokens_if_not_ws(p_old_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2,
 					v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
 
 				--Increment
 				p_token_index := p_token_index + 1;
 			end loop;
 		end;
+
 	--Match BEGIN and END for a PL/SQL statement that has an extra END.
 	elsif p_terminator = C_TERMINATOR_PLSQL_EXTRA_END then
 		--This is almost identical to C_TERMINATOR_PLSQL_MATCHED_END.
@@ -860,8 +875,9 @@ begin
 			--Build new statement and count tokens.
 			loop
 				--Increment
-				exit when p_token_index >= p_tokens.count;
-				p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+				exit when p_token_index > p_old_tokens.count;
+				p_new_tokens.extend;
+				p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
 
 				--Set the PIVOT parentheses counter.
 				set_pivot_paren_counter(v_pivot_paren_counter, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3);
@@ -871,33 +887,37 @@ begin
 					p_command_name in ('CREATE TABLE', 'ALTER TABLE')
 					and
 					lower(v_previous_concrete_token_2.value) = 'nested'
-					and lower(v_previous_concrete_token_1.value) = 'table'
+					and
+					lower(v_previous_concrete_token_1.value) = 'table'
 				then
 					v_has_nested_table := true;
 				end if;
 
 				--Detect BEGIN and END.
-				detect_begin(p_tokens, p_token_index, p_command_name, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table, v_trigger_body_start_index);
-				detect_end(p_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5, v_block_counter);
+				detect_begin(p_old_tokens, p_token_index, p_command_name, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table, v_trigger_body_start_index);
+				detect_end(p_old_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5, v_block_counter);
 
 				--Detect end of statement.
-				if (v_has_entered_block and v_block_counter = 0) or p_tokens(p_token_index).type = 'EOF' then
+				if (v_has_entered_block and v_block_counter = 0) or p_old_tokens(p_token_index).type = 'EOF' then
 					--Consume all tokens if only whitespace, comments, and EOF remain.
-					if only_ws_comments_eof_remain(p_tokens, p_token_index+1) then
+					if only_ws_comments_eof_remain(p_old_tokens, p_token_index+1) then
 						--Consume all tokens.
 						loop
 							p_token_index := p_token_index + 1;
-							p_new_statement := p_new_statement || p_tokens(p_token_index).value;
-							exit when p_token_index = p_tokens.count;
+							exit when p_token_index > p_old_tokens.count;
+							p_new_tokens.extend;
+							p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
 						end loop;
+						exit;
 					--Else stop here.
 					else
+						p_token_index := p_token_index + 1;
 						exit;
 					end if;
 				end if;
 
 				--Shift tokens.
-				shift_tokens_if_not_ws(p_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2,
+				shift_tokens_if_not_ws(p_old_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2,
 					v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
 
 				--Increment
@@ -926,17 +946,19 @@ begin
 			--Build new statement and count tokens.
 			loop
 				--Increment
-				exit when p_token_index >= p_tokens.count;
-				p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+				exit when p_token_index >= p_old_tokens.count;
+				p_new_tokens.extend;
+				p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
 
 				--Detect the first IS or AS, and possibly an empty package.
-				if not v_is_past_first_is_or_as and lower(p_tokens(p_token_index).value) in ('is', 'as') then
+				if not v_is_past_first_is_or_as and lower(p_old_tokens(p_token_index).value) in ('is', 'as') then
 					v_is_past_first_is_or_as := true;
 
 					--Consume first "is" or "as" and shift tokens.
 					p_token_index := p_token_index + 1;
-					p_new_statement := p_new_statement || p_tokens(p_token_index).value;
-					shift_tokens_if_not_ws(p_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
+					p_new_tokens.extend;
+					p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
+					shift_tokens_if_not_ws(p_old_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
 
 					--Return when empty package.
 					--Special case where the next concrete token is END.
@@ -945,9 +967,9 @@ begin
 						v_next_concrete_value2 nvarchar2(32767);
 						v_next_concrete_value3 nvarchar2(32767);
 					begin
-						v_next_concrete_value1 := get_next_concrete_value_n(p_tokens, p_token_index, 1);
-						v_next_concrete_value2 := get_next_concrete_value_n(p_tokens, p_token_index, 2);
-						v_next_concrete_value3 := get_next_concrete_value_n(p_tokens, p_token_index, 3);
+						v_next_concrete_value1 := get_next_concrete_value_n(p_old_tokens, p_token_index, 1);
+						v_next_concrete_value2 := get_next_concrete_value_n(p_old_tokens, p_token_index, 2);
+						v_next_concrete_value3 := get_next_concrete_value_n(p_old_tokens, p_token_index, 3);
 
 						--Consume tokens and exit if an END is found.
 						if
@@ -968,9 +990,11 @@ begin
 							--Consume all tokens until the final ";".
 							loop
 								p_token_index := p_token_index + 1;
-								p_new_statement := p_new_statement || p_tokens(p_token_index).value;
-								exit when p_tokens(p_token_index).type = ';';
+								p_new_tokens.extend;
+								p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
+								exit when p_old_tokens(p_token_index).type = ';';
 							end loop;
+							p_token_index := p_token_index + 1;
 							exit;
 						end if;
 					end;
@@ -985,22 +1009,22 @@ begin
 					(
 						(
 							(
-								lower(p_tokens(p_token_index).value) in ('procedure', 'function')
+								lower(p_old_tokens(p_token_index).value) in ('procedure', 'function')
 								and
 								--Cursor with multiple CTEs could have one named "function as (select ...",
 								--which is not a real function.
-								lower(get_next_concrete_value_n(p_tokens, p_token_index, 1)) <> 'as'
+								lower(get_next_concrete_value_n(p_old_tokens, p_token_index, 1)) <> 'as'
 							)
 							and
-							not is_external_method(p_tokens, p_token_index)
+							not is_external_method(p_old_tokens, p_token_index)
 						)
 						or
 						(
 							--TODO: What about multiple functions/procedures?
 							--What about a second CTE named "function as (select 1 a from dual)"?
-							lower(p_tokens(p_token_index).value) in ('cursor')
+							lower(p_old_tokens(p_token_index).value) in ('cursor')
 							and
-							has_plsql_declaration(p_tokens, p_token_index)
+							has_plsql_declaration(p_old_tokens, p_token_index)
 						)
 					)
 					then
@@ -1013,16 +1037,17 @@ begin
 							loop
 								--Consume.
 								p_token_index := p_token_index + 1;
-								p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+								p_new_tokens.extend;
+								p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
 
 								--Detect begin and end.
-								detect_begin(p_tokens, p_token_index, p_command_name, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_sub_block, v_sub_block_counter, v_pivot_paren_counter, v_prev_conc_tok_real_begin_sub, v_has_nested_table, v_trigger_body_start_index);
-								detect_end(p_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5, v_sub_block_counter);
+								detect_begin(p_old_tokens, p_token_index, p_command_name, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_sub_block, v_sub_block_counter, v_pivot_paren_counter, v_prev_conc_tok_real_begin_sub, v_has_nested_table, v_trigger_body_start_index);
+								detect_end(p_old_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5, v_sub_block_counter);
 
 								--Stop looking when block is over or out of tokens.
 								exit when
 								(
-									p_token_index = p_tokens.count
+									p_token_index = p_old_tokens.count
 									or
 									(
 										v_has_entered_sub_block
@@ -1032,28 +1057,29 @@ begin
 								);
 
 								--Shift.
-								shift_tokens_if_not_ws(p_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
+								shift_tokens_if_not_ws(p_old_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
 							end loop;
 						end;
 
 					--Ignore non-concrete tokens.
-					elsif p_tokens(p_token_index).type in ('whitespace', 'comment', 'EOF') then
+					elsif p_old_tokens(p_token_index).type in ('whitespace', 'comment', 'EOF') then
 						null;
 
 					--Ignore labels.
 					--Putting a label between procedures is illegal but parsable.
-					elsif p_tokens(p_token_index).type = '<<' then
+					elsif p_old_tokens(p_token_index).type = '<<' then
 							--Consume all tokens until the final ";".
 							loop
 								p_token_index := p_token_index + 1;
-								p_new_statement := p_new_statement || p_tokens(p_token_index).value;
-								shift_tokens_if_not_ws(p_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
-								exit when p_tokens(p_token_index).type = '>>';
+								p_new_tokens.extend;
+								p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
+								shift_tokens_if_not_ws(p_old_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
+								exit when p_old_tokens(p_token_index).type = '>>';
 							end loop;
 
 					--Loop until matching END; and return.
 					--For BEGIN.
-					elsif lower(p_tokens(p_token_index).value) = 'begin' then
+					elsif lower(p_old_tokens(p_token_index).value) = 'begin' then
 						--Consume until matching END.
 						declare
 							v_has_entered_sub_block boolean := true;
@@ -1063,16 +1089,17 @@ begin
 							loop
 								--Consume.
 								p_token_index := p_token_index + 1;
-								p_new_statement := p_new_statement || p_tokens(p_token_index).value;
+								p_new_tokens.extend;
+								p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
 
 								--Detect begin and end.
-								detect_begin(p_tokens, p_token_index, p_command_name, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_sub_block, v_sub_block_counter, v_pivot_paren_counter, v_prev_conc_tok_real_begin_sub, v_has_nested_table, v_trigger_body_start_index);
-								detect_end(p_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5, v_sub_block_counter);
+								detect_begin(p_old_tokens, p_token_index, p_command_name, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_sub_block, v_sub_block_counter, v_pivot_paren_counter, v_prev_conc_tok_real_begin_sub, v_has_nested_table, v_trigger_body_start_index);
+								detect_end(p_old_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5, v_sub_block_counter);
 
 								--Stop looking when block is over or out of tokens.
 								exit when
 								(
-									p_token_index = p_tokens.count
+									p_token_index = p_old_tokens.count
 									or
 									(
 										v_has_entered_sub_block
@@ -1082,18 +1109,21 @@ begin
 								);
 
 								--Shift.
-								shift_tokens_if_not_ws(p_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
+								shift_tokens_if_not_ws(p_old_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
 							end loop;
 						end;
+						p_token_index := p_token_index + 1;
 						exit;
 
 					--Process END and return.
-					elsif lower(p_tokens(p_token_index).value) in ('end') then
+					elsif lower(p_old_tokens(p_token_index).value) in ('end') then
 						loop
 							p_token_index := p_token_index + 1;
-							p_new_statement := p_new_statement || p_tokens(p_token_index).value;
-							exit when p_token_index = p_tokens.count or p_tokens(p_token_index).type = ';';
+							p_new_tokens.extend;
+							p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
+							exit when p_token_index = p_old_tokens.count or p_old_tokens(p_token_index).type = ';';
 						end loop;
+						p_token_index := p_token_index + 1;
 						exit;
 
 					--Loop until next semicolon and continue.
@@ -1101,28 +1131,16 @@ begin
 					else
 						loop
 							p_token_index := p_token_index + 1;
-							p_new_statement := p_new_statement || p_tokens(p_token_index).value;
-							exit when p_token_index = p_tokens.count or p_tokens(p_token_index).type = ';';
+							p_new_tokens.extend;
+							p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
+							exit when p_token_index = p_old_tokens.count or p_old_tokens(p_token_index).type = ';';
 						end loop;
 					end if;
-
-					--TODO
-					/*
-					--Consume all tokens if only whitespace, comments, and EOF remain.
-					if only_ws_comments_eof_remain(p_tokens, p_token_index+1) then
-						--Consume all tokens.
-						loop
-							p_token_index := p_token_index + 1;
-							p_new_statement := p_new_statement || p_tokens(p_token_index).value;
-							exit when p_token_index = p_tokens.count;
-						end loop;
-					end if;
-					*/
 
 				end if;
 
 				--Shift tokens.
-				shift_tokens_if_not_ws(p_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
+				shift_tokens_if_not_ws(p_old_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
 
 				--Increment
 				p_token_index := p_token_index + 1;
@@ -1131,35 +1149,8 @@ begin
 
 	end if;
 
-
-	--Remove the first character if it's a newline.
-	if substr(p_new_statement, 1, 1) = chr(10) and dbms_lob.getLength(p_new_statement) > 1 then
-		dbms_lob.copy(
-			dest_lob => p_new_statement,
-			src_lob => p_new_statement,
-			amount => dbms_lob.getLength(p_new_statement)-1,
-			src_offset => 2);
-		dbms_lob.trim(lob_loc => p_new_statement, newlen => dbms_lob.getLength(p_new_statement)-1);
-	elsif substr(p_new_statement, 1, 2) = chr(13)||chr(10) and dbms_lob.getLength(p_new_statement) > 2 then
-		dbms_lob.copy(
-			dest_lob => p_new_statement,
-			src_lob => p_new_statement,
-			amount => dbms_lob.getLength(p_new_statement)-2,
-			src_offset => 3);
-		dbms_lob.trim(lob_loc => p_new_statement, newlen => dbms_lob.getLength(p_new_statement)-2);
-	end if;
-
-	--Add new statement to array
-	p_split_statements.extend;
-	p_split_statements(p_split_statements.count) := p_new_statement;
-
-	--Create new tokens table excluding the tokens used for the new statement.
-	for i in p_token_index+1 .. p_tokens.count loop
-		v_new_tokens.extend;
-		v_new_tokens(v_new_tokens.count) := p_tokens(i);
-	end loop;
-	p_tokens := v_new_tokens;
-
+	p_split_tokens.extend;
+	p_split_tokens(p_split_tokens.count) := p_new_tokens;
 end add_statement_consume_tokens;
 
 
@@ -1167,10 +1158,9 @@ end add_statement_consume_tokens;
 --Split a string into separate strings by an optional delmiter, usually "/".
 --This follows the SQL*Plus rules - the delimiter must be on a line by itself,
 --although the line may contain whitespace before and after the delimiter.
-function split_string_by_optional_delim(p_statements in nclob, p_optional_sqlplus_delimiter in nvarchar2)
-return nclob_table is
+function split_by_sqlplus_delimiter(p_statements in nclob, p_sqlplus_delimiter in nclob) return nclob_table is
 	v_chars nvarchar2_table := tokenizer.get_nvarchar2_table_from_nclob(p_statements);
-	v_delimiter_size number := nvl(lengthc(p_optional_sqlplus_delimiter), 0);
+	v_delimiter_size number := nvl(lengthc(p_sqlplus_delimiter), 0);
 	v_char_index number := 0;
 	v_string nclob;
 	v_is_empty_line boolean := true;
@@ -1207,12 +1197,12 @@ return nclob_table is
 	end only_ws_before_next_newline;
 begin
 	--Return whole string if the delimiter is NULL.
-	if p_optional_sqlplus_delimiter is null then
+	if p_sqlplus_delimiter is null then
 		v_strings.extend;
 		v_strings(v_strings.count) := p_statements;
 		return v_strings;
 	--Throw an error if the delimiter is whitespace.
-	elsif tokenizer.is_lexical_whitespace(p_optional_sqlplus_delimiter) then
+	elsif tokenizer.is_lexical_whitespace(p_sqlplus_delimiter) then
 		raise_application_error(-20000, 'The optional delimiter cannot be set to whitespace.');
 	end if;
 
@@ -1223,7 +1213,7 @@ begin
 		--Look for delimiter if it's on an empty line.
 		if v_is_empty_line then
 			--Push, increment counter for multi-char delimiters, and exit if last characters are delimiter.
-			if v_char_index = v_chars.count and get_next_n_chars(v_delimiter_size) = p_optional_sqlplus_delimiter then
+			if v_char_index = v_chars.count and get_next_n_chars(v_delimiter_size) = p_sqlplus_delimiter then
 				v_strings.extend;
 				v_strings(v_strings.count) := v_string;
 				v_char_index := v_char_index + v_delimiter_size - 1;
@@ -1238,7 +1228,7 @@ begin
 			elsif tokenizer.is_lexical_whitespace(v_chars(v_char_index)) then
 				v_string := v_string || v_chars(v_char_index);
 			--Split string if delimiter is found
-			elsif get_next_n_chars(v_delimiter_size) = p_optional_sqlplus_delimiter and only_ws_before_next_newline then
+			elsif get_next_n_chars(v_delimiter_size) = p_sqlplus_delimiter and only_ws_before_next_newline then
 				v_strings.extend;
 				v_strings(v_strings.count) := v_string;
 				v_string := null;
@@ -1265,23 +1255,23 @@ begin
 	end loop;
 
 	return v_strings;
-end split_string_by_optional_delim;
+end split_by_sqlplus_delimiter;
 
 
 --------------------------------------------------------------------------------
 --Split a token stream into statements by ";".
-function split_tokens_by_primary_term(p_tokens in out nocopy token_table) return nclob_table is
-	v_split_statements nclob_table := nclob_table();
+function split_by_semicolon(p_tokens in token_table)
+return token_table_table is
+	v_split_tokens token_table_table := token_table_table();
 	v_command_name varchar2(4000);
-	v_temp_new_statement nclob;
-	v_temp_token_index number;
+	v_temp_new_tokens token_table := token_table();
+	v_token_index number := 1;
 	v_trigger_type number;
 	v_trigger_body_start_index number;
 begin
 	--Split into statements.
 	loop
-		v_temp_new_statement := null;
-		v_temp_token_index := 1;
+		v_temp_new_tokens := token_table();
 
 		--Classify.
 		declare
@@ -1289,13 +1279,14 @@ begin
 			v_throwaway_string varchar2(32767);
 		begin
 			statement_classifier.classify(
-				p_abstract_tokens => p_tokens,
+				p_tokens => p_tokens,
 				p_category => v_throwaway_string,
 				p_statement_type => v_throwaway_string,
 				p_command_name => v_command_name,
 				p_command_type => v_throwaway_number,
 				p_lex_sqlcode => v_throwaway_number,
-				p_lex_sqlerrm => v_throwaway_string
+				p_lex_sqlerrm => v_throwaway_string,
+				p_start_index => v_token_index
 			);
 		end;
 
@@ -1304,7 +1295,7 @@ begin
 		--#1: Return everything with no splitting if the statement is Invalid or Nothing.
 		--    These are probably errors but the application must decide how to handle them.
 		if v_command_name in ('Invalid', 'Nothing') then
-			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_EOF, v_temp_new_statement, v_temp_token_index, v_command_name, null);
+			add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_EOF, v_temp_new_tokens, v_token_index, v_command_name, null);
 
 		--#2: Match "}" for Java code.
 		/*
@@ -1335,10 +1326,10 @@ begin
 		(
 			v_command_name in ('CREATE MATERIALIZED VIEW ', 'CREATE SCHEMA', 'CREATE TABLE', 'CREATE VIEW', 'DELETE', 'EXPLAIN', 'INSERT', 'SELECT', 'UPDATE', 'UPSERT')
 			and
-			has_plsql_declaration(p_tokens, v_temp_token_index)
+			has_plsql_declaration(p_tokens, v_token_index)
 		)
 		then
-			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_PLSQL_DECLARE_END, v_temp_new_statement, v_temp_token_index, v_command_name, null);
+			add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_PLSQL_DECLARE_END, v_temp_new_tokens, v_token_index, v_command_name, null);
 
 		--#4: Match PL/SQL BEGIN and END.
 		elsif
@@ -1348,11 +1339,11 @@ begin
 			(
 				v_command_name in ('CREATE FUNCTION','CREATE PROCEDURE')
 				and
-				not is_external_method(p_tokens, v_temp_token_index)
+				not is_external_method(p_tokens, v_token_index)
 			)
 		)
 		 then
-			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_PLSQL_MATCHED_END, v_temp_new_statement, v_temp_token_index, v_command_name, null);
+			add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_PLSQL_MATCHED_END, v_temp_new_tokens, v_token_index, v_command_name, null);
 
 		--#5: Match possibly unbalanced BEGIN and END.  Package bodies sometimes have an
 		--extra END and sometimes they have multiple balanced BEGIN/ENDs.
@@ -1360,62 +1351,60 @@ begin
 		--Ignore BEGIN/END pairs inside CURSOR/FUNCTION/PROCEDURE, and then exit
 		--whenever end_count >= begin_count
 		elsif v_command_name in ('CREATE PACKAGE BODY') then
-			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_PACKAGE_BODY, v_temp_new_statement, v_temp_token_index, v_command_name, null);
+			add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_PACKAGE_BODY, v_temp_new_tokens, v_token_index, v_command_name, null);
 
 		--#6: Stop when there is one "extra" END.
 		elsif v_command_name in ('CREATE PACKAGE', 'CREATE TYPE BODY') then
-			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_PLSQL_EXTRA_END, v_temp_new_statement, v_temp_token_index, v_command_name, null);
+			add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_PLSQL_EXTRA_END, v_temp_new_tokens, v_token_index, v_command_name, null);
 
 		--#7: Triggers may terminate with a matching END, an extra END, or a semicolon.
 		elsif v_command_name in ('CREATE TRIGGER') then
 			get_trigger_type_body_index(p_tokens, v_trigger_type, v_trigger_body_start_index);
 
 			if v_trigger_type = C_REGULAR_TRIGGER then
-				add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_PLSQL_MATCHED_END, v_temp_new_statement, v_temp_token_index, v_command_name, v_trigger_body_start_index);
+				add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_PLSQL_MATCHED_END, v_temp_new_tokens, v_token_index, v_command_name, v_trigger_body_start_index);
 			elsif v_trigger_type = C_COMPOUND_TRIGGER then
-				add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_PLSQL_EXTRA_END, v_temp_new_statement, v_temp_token_index, v_command_name, v_trigger_body_start_index);
+				add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_PLSQL_EXTRA_END, v_temp_new_tokens, v_token_index, v_command_name, v_trigger_body_start_index);
 			elsif v_trigger_type = C_CALL_TRIGGER then
-				add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_SEMI, v_temp_new_statement, v_temp_token_index, v_command_name, v_trigger_body_start_index);
+				add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_SEMI, v_temp_new_tokens, v_token_index, v_command_name, v_trigger_body_start_index);
 			end if;
 
 		--#8: Stop at first ";" for everything else.
 		else
-			add_statement_consume_tokens(v_split_statements, p_tokens, C_TERMINATOR_SEMI, v_temp_new_statement, v_temp_token_index, v_command_name, null);
+			add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_SEMI, v_temp_new_tokens, v_token_index, v_command_name, null);
 		end if;
 
 		--Quit when there are no more tokens.
-		exit when p_tokens.count = 0;
+		exit when v_token_index > p_tokens.count;
 	end loop;
 
-	return v_split_statements;
-end split_tokens_by_primary_term;
+	return v_split_tokens;
+end split_by_semicolon;
 
 
 --------------------------------------------------------------------------------
 --Split a string of separate SQL and PL/SQL statements terminated by ";" and
 --some secondary terminator, usually "/".
-function split(p_statements in nclob, p_optional_sqlplus_delimiter in nvarchar2 default null) return nclob_table is
+function split_by_semi_and_sqlplus_del(p_statements in nclob, p_sqlplus_delimiter in nclob)
+return token_table_table is
 	v_split_statements nclob_table := nclob_table();
-	v_split_tokens token_table_table := token_table_table();
+	v_split_token_tables token_table_table := token_table_table();
 begin
-	--Split the string by the optional delimiter, usually "/".
-	v_split_statements := split_string_by_optional_delim(p_statements, p_optional_sqlplus_delimiter);
+	--First split by SQL*Plus delimiter.
+	v_split_statements := split_by_sqlplus_delimiter(p_statements, p_sqlplus_delimiter);
 
-	--Tokenize the strings.
+	--Split each string further by the primary terminator, ";".
 	for i in 1 .. v_split_statements.count loop
-		v_split_tokens.extend;
-		v_split_tokens(v_split_tokens.count) := tokenizer.tokenize(v_split_statements(i));
-	end loop;
-
-	--Split each set of tokens by the primary terminator, ";".
-	v_split_statements := nclob_table();
-	for i in 1 .. v_split_tokens.count loop
-		v_split_statements := v_split_statements multiset union split_tokens_by_primary_term(v_split_tokens(i));
+		v_split_token_tables :=
+			v_split_token_tables
+			multiset union
+			split_by_semicolon(tokenizer.tokenize(v_split_statements(i)));
 	end loop;
 
 	--Return the statements.
-	return v_split_statements;
-end split;
+	return v_split_token_tables;
+end split_by_semi_and_sqlplus_del;
+
 
 end;
 /

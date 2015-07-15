@@ -11,27 +11,37 @@ See the individual packages for details on each procedure.
 
 		function tokenize(p_source nclob) return token_table;
 
-- `tokenizer.print_tokens` - Print an array of tokens, for testing.
+- `tokenizer.concatenate` - Create NCLOB from tokens.
 
-		function print_tokens(p_tokens token_table) return nclob;
+		function concatenate(p_tokens in token_table) return nclob;
 
 - `statement_splitter.split_statements` - Split a series of statements separated by ";" .
 
-		function split(
-			p_statements                 in nclob,
-			p_optional_sqlplus_delimiter in nvarchar2 default null
+		function split_by_semicolon(
+			p_tokens in token_table
+		) return token_table_table;
+		
+		function split_by_sqlplus_delimiter(
+			p_statements in nclob,
+			p_sqlplus_delimiter in nclob
 		) return nclob_table;
+		
+		function split_by_semi_and_sqlplus_del(
+			p_statements in nclob,
+			p_sqlplus_delimiter in nclob
+		) return token_table_table;
 
 - `statement_classifier.classify` - Classify a statement as DDL, PL/SQL, SELECT, ALTER, etc.
 
 		procedure classify(
-			p_statement       in nclob,
+			p_tokens          in token_table,
 			p_category       out varchar2,
 			p_statement_type out varchar2,
 			p_command_name   out varchar2,
 			p_command_type   out number,
 			p_lex_sqlcode    out number,
-			p_lex_sqlerrm    out varchar2
+			p_lex_sqlerrm    out varchar2,
+			p_start_index     in number default 1
 		);
 
 - `statement_feedback.get_feedback_message` - Get a message similar to SQL*Plus feedback messages.
@@ -74,6 +84,9 @@ See the individual packages for details on each procedure.
         
         --Use VARRAY because it is guaranteed to maintain order.
         create or replace type token_table is varray(2147483647) of token;
+        --Use TABLE here to avoid an ORA-7445 error.
+        --TODO: Can I use a varray of a smaller size to avoid the error?
+        create or replace type token_table_table is table of token_table;
 
 2. Install packages on the desired schema:
 

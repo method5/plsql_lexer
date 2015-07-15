@@ -1,6 +1,6 @@
 create or replace package tokenizer is
 --Copyright (C) 2015 Jon Heller.  This program is licensed under the LGPLv3.
-C_VERSION constant varchar2(10) := '0.2.0';
+C_VERSION constant varchar2(10) := '0.3.0';
 
 
 /*
@@ -71,12 +71,13 @@ Results:  word whitespace * whitespace word whitespace word ; EOF
 */
 
 --Main functions.
-function tokenize(p_source nclob) return token_table;
-function print_tokens(p_tokens token_table) return nclob;
+function tokenize(p_source in nclob) return token_table;
+function concatenate(p_tokens in token_table) return nclob;
 
 --Helper functions useful for some tools.
 function is_lexical_whitespace(p_char nvarchar2) return boolean;
 function get_nvarchar2_table_from_nclob(p_nclob nclob) return nvarchar2_table;
+function print_tokens(p_tokens token_table) return nclob;
 
 end;
 /
@@ -97,7 +98,7 @@ g_token_text nclob;
 g_last_concrete_token token;
 --Track when we're inside a MATCH_RECOGNIZE and a PATTERN to disambiguate "$".
 --"$" is a pattern row when inside, else it could be for conditional compilation
---or an identifier name.  
+--or an identifier name.
 g_match_recognize_paren_count number;
 g_pattern_paren_count number;
 
@@ -590,6 +591,20 @@ begin
 	--Return them.
 	return v_tokens;
 end tokenize;
+
+
+--------------------------------------------------------------------------------
+--Convert the tokens into an NCLOB.
+function concatenate(p_tokens in token_table) return nclob
+is
+	v_nclob nclob;
+begin
+	for i in 1 .. p_tokens.count loop
+		v_nclob := v_nclob || p_tokens(i).value;
+	end loop;
+
+	return v_nclob;
+end concatenate;
 
 
 --------------------------------------------------------------------------------
