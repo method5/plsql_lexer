@@ -2,18 +2,10 @@ create or replace package statement_feedback is
 --Copyright (C) 2015 Jon Heller.  This program is licensed under the LGPLv3.
 
 procedure get_feedback_message(
-		p_statement in nclob,
-		p_rowcount in number,
-		p_success_message out varchar2,
-		p_compile_warning_message out varchar2
-);
-
---It's faster to use the COMMAND_NAME if it's already known.
-procedure get_feedback_message(
-		p_command_name in varchar2,
-		p_rowcount in number,
-		p_success_message out varchar2,
-		p_compile_warning_message out varchar2
+	p_tokens                   in token_table,
+	p_rowcount                 in number,
+	p_success_message         out varchar2,
+	p_compile_warning_message out varchar2
 );
 
 
@@ -290,10 +282,10 @@ end get_feedback_message;
 
 --------------------------------------------------------------------------------
 procedure get_feedback_message(
-		p_statement in nclob,
-		p_rowcount in number,
-		p_success_message out varchar2,
-		p_compile_warning_message out varchar2
+	p_tokens                   in token_table,
+	p_rowcount                 in number,
+	p_success_message         out varchar2,
+	p_compile_warning_message out varchar2
 ) is
 	v_category       varchar2(100);
 	v_statement_type varchar2(100);
@@ -303,7 +295,7 @@ procedure get_feedback_message(
 	v_lex_sqlerrm    varchar2(4000);
 begin
 	--Classify the statement.
-	statement_classifier.classify(p_statement,
+	statement_classifier.classify(p_tokens,
 		v_category,v_statement_type,v_command_name,v_command_type,v_lex_sqlcode,v_lex_sqlerrm
 	);
 

@@ -15,19 +15,23 @@ See the individual packages for details on each procedure.
 
 		function concatenate(p_tokens in token_table) return nclob;
 
-- `statement_splitter.split_statements` - Split a series of statements separated by ";" .
+- `statement_splitter.split_by_semicolon` - Split statements terminated by semicolons.
 
 		function split_by_semicolon(
 			p_tokens in token_table
 		) return token_table_table;
 		
+- `statement_splitter.split_by_sqlplus_delimiter` - Split statements like SQL*Plus - look for a delimeter on line with only whitespace, even if it's inside a string or comment.
+
 		function split_by_sqlplus_delimiter(
-			p_statements in nclob,
+			p_statements        in nclob,
 			p_sqlplus_delimiter in nclob
 		) return nclob_table;
 		
+- `statement_splitter.split_by_semi_and_sqlplus_del` - Split statements like SQL*Plus and also split by a semicolon.
+
 		function split_by_semi_and_sqlplus_del(
-			p_statements in nclob,
+			p_statements        in nclob,
 			p_sqlplus_delimiter in nclob
 		) return token_table_table;
 
@@ -47,17 +51,17 @@ See the individual packages for details on each procedure.
 - `statement_feedback.get_feedback_message` - Get a message similar to SQL*Plus feedback messages.
 
 		procedure get_feedback_message(
-				p_statement                in nclob,
-				p_rowcount                 in number,
-				p_success_message         out varchar2,
-				p_compile_warning_message out varchar2
+			p_tokens                   in token_table,
+			p_rowcount                 in number,
+			p_success_message         out varchar2,
+			p_compile_warning_message out varchar2
 		);
 
 - `statement_semicolon_remover.remove` - Remove extra semicolons to prepare statement to run as dyanmic SQL.
 
 		function remove(
-			p_abstract_tokens in token_table,
-			p_command_name    in varchar2
+			p_tokens       in token_table,
+			p_command_name in varchar2
 		) return nclob;
 
 
