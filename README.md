@@ -95,17 +95,17 @@ See the individual packages for details on each procedure.
 2. Install packages on the desired schema:
 
         alter session set current_schema=&SCHEMA_NAME;
-        @tokenizer.pck
-        @statement_classifier.pck
-        @statement_splitter.pck
-        @statement_feedback.pck
-        @statement_semicolon_remover.pck
+        @tokenizer.plsql
+        @statement_classifier.plsql
+        @statement_splitter.plsql
+        @statement_feedback.plsql
+        @statement_semicolon_remover.plsql
 
 3. Install unit tests (optional):
 
-        @/tests/tokenizer_test.pck
-        @/tests/statement_classifier_test.pck
-        @/tests/statement_splitter_test.pck
+        @/tests/tokenizer_test.plsql
+        @/tests/statement_classifier_test.plsql
+        @/tests/statement_splitter_test.plsql
 
 
 ## License
