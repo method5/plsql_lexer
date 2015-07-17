@@ -38,7 +38,7 @@ declare
 	v_lex_sqlerrm    varchar2(4000);
 begin
 	statement_classifier.classify(
-		tokenizer.tokenize('(with test as (select * from dual) select * from test))',
+		tokenizer.tokenize('(with test as (select * from dual) select * from test))'),
 		v_category,v_statement_type,v_command_name,v_command_type,v_lex_sqlcode,v_lex_sqlerrm
 	);
 
