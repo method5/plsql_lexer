@@ -7,35 +7,40 @@ PL/SQL Lexer is a toolkit for solving real-world language problems, in PL/SQL.
 
 See the individual packages for details on each procedure.
 
-- `tokenizer.tokenize` - Create tokens for SQL and PL/SQL statements.
+
+- `tokenizer` - Converts statements into PL/SQL tokens, and tokens back into strings.
+
+	Create tokens for SQL and PL/SQL statements:
 
 		function tokenize(p_source nclob) return token_table;
 
-- `tokenizer.concatenate` - Create NCLOB from tokens.
+	Create an NCLOB from tokens:
 
 		function concatenate(p_tokens in token_table) return nclob;
 
-- `statement_splitter.split_by_semicolon` - Split statements terminated by semicolons.
+- `statement_splitter`  Split multiple statements into individual statements based on a terminator.
+
+	Split statements terminated by semicolons but keeps the final semicolon.  This is probably the most useful version:
 
 		function split_by_semicolon(
 			p_tokens in token_table
 		) return token_table_table;
-		
-- `statement_splitter.split_by_sqlplus_delimiter` - Split statements like SQL*Plus - look for a delimeter on line with only whitespace, even if it's inside a string or comment.
+
+	Split statements like SQL*Plus and drops the delimiter.  Delimiters must be on a line with only whitespace.  Delimiters may be counted even if it's inside a string or comment:
 
 		function split_by_sqlplus_delimiter(
 			p_statements        in nclob,
-			p_sqlplus_delimiter in nclob
+			p_sqlplus_delimiter in nvarchar2
 		) return nclob_table;
 		
-- `statement_splitter.split_by_semi_and_sqlplus_del` - Split statements like SQL*Plus and also split by a semicolon.
+	Split statements like SQL*Plus and then also split by semicolon:
 
 		function split_by_semi_and_sqlplus_del(
 			p_statements        in nclob,
-			p_sqlplus_delimiter in nclob
+			p_sqlplus_delimiter in nvarchar2
 		) return token_table_table;
 
-- `statement_classifier.classify` - Classify a statement as DDL, PL/SQL, SELECT, ALTER, etc.
+- `statement_classifier` - Classify a statement as DDL, PL/SQL, SELECT, ALTER, etc.
 
 		procedure classify(
 			p_tokens          in token_table,
@@ -48,7 +53,7 @@ See the individual packages for details on each procedure.
 			p_start_index     in number default 1
 		);
 
-- `statement_feedback.get_feedback_message` - Get a message similar to SQL*Plus feedback messages.
+- `statement_feedback` - Get a message similar to SQL*Plus feedback messages.
 
 		procedure get_feedback_message(
 			p_tokens                   in token_table,
@@ -57,9 +62,9 @@ See the individual packages for details on each procedure.
 			p_compile_warning_message out varchar2
 		);
 
-- `statement_semicolon_remover.remove` - Remove extra semicolons to prepare statement to run as dyanmic SQL.
+- `statement_terminator` - Remove the last semicolon terminator, if it's unnecessary.  This will prepare a statement to run as dynamic SQL
 
-		function remove(
+		function remove_semicolon(
 			p_tokens       in token_table,
 			p_command_name in varchar2
 		) return nclob;
@@ -99,7 +104,7 @@ See the individual packages for details on each procedure.
         @statement_classifier.plsql
         @statement_splitter.plsql
         @statement_feedback.plsql
-        @statement_semicolon_remover.plsql
+        @statement_terminator.plsql
 
 3. Install unit tests (optional):
 

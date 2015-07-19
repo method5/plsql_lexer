@@ -33,9 +33,9 @@ TODO
 
 function split_by_semicolon(p_tokens in token_table) return token_table_table;
 
-function split_by_sqlplus_delimiter(p_statements in nclob, p_sqlplus_delimiter in nclob) return nclob_table;
+function split_by_sqlplus_delimiter(p_statements in nclob, p_sqlplus_delimiter in nvarchar2) return nclob_table;
 
-function split_by_semi_and_sqlplus_del(p_statements in nclob, p_sqlplus_delimiter in nclob) return token_table_table;
+function split_by_semi_and_sqlplus_del(p_statements in nclob, p_sqlplus_delimiter in nvarchar2) return token_table_table;
 
 end;
 /
@@ -1158,7 +1158,7 @@ end add_statement_consume_tokens;
 --Split a string into separate strings by an optional delmiter, usually "/".
 --This follows the SQL*Plus rules - the delimiter must be on a line by itself,
 --although the line may contain whitespace before and after the delimiter.
-function split_by_sqlplus_delimiter(p_statements in nclob, p_sqlplus_delimiter in nclob) return nclob_table is
+function split_by_sqlplus_delimiter(p_statements in nclob, p_sqlplus_delimiter in nvarchar2) return nclob_table is
 	v_chars nvarchar2_table := tokenizer.get_nvarchar2_table_from_nclob(p_statements);
 	v_delimiter_size number := nvl(lengthc(p_sqlplus_delimiter), 0);
 	v_char_index number := 0;
@@ -1385,7 +1385,7 @@ end split_by_semicolon;
 --------------------------------------------------------------------------------
 --Split a string of separate SQL and PL/SQL statements terminated by ";" and
 --some secondary terminator, usually "/".
-function split_by_semi_and_sqlplus_del(p_statements in nclob, p_sqlplus_delimiter in nclob)
+function split_by_semi_and_sqlplus_del(p_statements in nclob, p_sqlplus_delimiter in nvarchar2)
 return token_table_table is
 	v_split_statements nclob_table := nclob_table();
 	v_split_token_tables token_table_table := token_table_table();
