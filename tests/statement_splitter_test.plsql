@@ -16,18 +16,22 @@ end;
 pragma serially_reusable;
 
 --Globals to select which test suites to run.
-c_errors             constant number := power(2, 1);
-c_simple             constant number := power(2, 2);
-c_optional_delimiter constant number := power(2, 3);
-c_plsql_declaration  constant number := power(2, 4);
-c_plsql_block        constant number := power(2, 5);
-c_type_body          constant number := power(2, 6);
-c_trigger            constant number := power(2, 7);
-c_proc_and_func      constant number := power(2, 8);
-c_package_body       constant number := power(2, 9);
+c_errors                 constant number := power(2, 1);
+c_simple                 constant number := power(2, 2);
+c_plsql_declaration      constant number := power(2, 3);
+c_plsql_block            constant number := power(2, 4);
+c_type_body              constant number := power(2, 5);
+c_trigger                constant number := power(2, 6);
+c_proc_and_func          constant number := power(2, 7);
+c_package_body           constant number := power(2, 8);
 
-c_static_tests  constant number := c_errors+c_simple+c_optional_delimiter
-	+c_plsql_declaration+c_plsql_block+c_type_body+c_trigger+c_proc_and_func+c_package_body;
+c_sqlplus_delim          constant number := power(2, 30);
+c_semi_and_sqlplus_delim constant number := power(2, 31);
+
+
+c_static_tests  constant number := c_errors+c_simple+c_plsql_declaration
+	+c_plsql_block+c_type_body+c_trigger+c_proc_and_func+c_package_body
+	+c_sqlplus_delim+c_semi_and_sqlplus_delim;
 
 c_dynamic_tests constant number := power(2, 30);
 
@@ -45,18 +49,6 @@ pragma serially_reusable;
 g_test_count number := 0;
 g_passed_count number := 0;
 g_failed_count number := 0;
-
---Global types
-type output_rec is record
-(
-	category varchar2(100),
-	statement_type varchar2(100),
-	command_name varchar2(64),
-	command_type number,
-	lex_sqlcode number,
-	lex_sqlerrm varchar2(4000),
-	fatal_error varchar2(4000)
-);
 
 
 -- =============================================================================
@@ -125,83 +117,6 @@ begin
 	--TODO
 	null;
 end test_simple;
-
-
---------------------------------------------------------------------------------
-procedure test_optional_delimiter is
-	v_statements nclob;
-	v_split_statements token_table_table := token_table_table();
-begin
-	null;
-	--TODO
-	/*
-	--Invalid SQL, but should only be one line.
-	v_statements:='select * from dual/';v_split_statements:=statement_splitter.split_by_semi_and_sqlplus_del(v_statements, '/');
-	assert_equals('Slash 1a', '1', v_split_statements.count);
-	assert_equals('Slash 1b', v_statements, tokenizer.concatenate(v_split_statements(1)));
-
-	--Valid SQL, not split.
-	v_statements:='select * from dual'||chr(10)||'/';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
-	assert_equals('Slash 2a', '1', v_split_statements.count);
-	assert_equals('Slash 2b', 'select * from dual'||chr(10), tokenizer.concatenate(v_split_statements(1)));
-
-	--Valid SQL, split in two.
-	v_statements:='select * from dual a'||chr(10)||' 	/	 '||chr(10)||'select * from dual b';v_split_statements:=statement_splitter.split_by_semicolon(v_statements, '/');
-	assert_equals('Slash 3a', '2', v_split_statements.count);
-	assert_equals('Slash 3b', 'select * from dual a'||chr(10)||' 	', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('Slash 3c', '	 '||chr(10)||'select * from dual b', tokenizer.concatenate(v_split_statements(2)));
-
-	--Valid SQL, split in three.
-	v_statements:='select * from dual a'||chr(10)||' 	/	 '||chr(10)||'select * from dual b; select * from dual c';v_split_statements:=statement_splitter.split_by_semicolon(v_statements, '/');
-	assert_equals('Slash 4a', '3', v_split_statements.count);
-	assert_equals('Slash 4b', 'select * from dual a'||chr(10)||' 	', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('Slash 4c', '	 '||chr(10)||'select * from dual b;', tokenizer.concatenate(v_split_statements(2)));
-	assert_equals('Slash 4c', ' select * from dual c', v_split_statements(3));
-
-	--Valid SQL, split in two with a custom delimiter.
-	v_statements:='select * from dual a'||chr(10)||' 	#	 '||chr(10)||'select * from dual b';v_split_statements:=statement_splitter.split_by_semicolon(v_statements, '#');
-	assert_equals('Slash 5a', '2', v_split_statements.count);
-	assert_equals('Slash 5b', 'select * from dual a'||chr(10)||' 	', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('Slash 5c', '	 '||chr(10)||'select * from dual b', tokenizer.concatenate(v_split_statements(2)));
-
-	--Valid SQL, split in two with a custom multi-character delimiter.
-	--TODO: This shows up as two different tokens - we must collapse them somehow.
-	v_statements:='select * from dual a'||chr(10)||' 	$$	 '||chr(10)||'select * from dual b';v_split_statements:=statement_splitter.split_by_semicolon(v_statements, '$$');
-	assert_equals('Slash 6a', '2', v_split_statements.count);
-	assert_equals('Slash 6b', 'select * from dual a'||chr(10)||' 	', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('Slash 6c', '	 '||chr(10)||'select * from dual b', tokenizer.concatenate(v_split_statements(2)));
-
-	--SQL split in two with a custom delimiter, in the middle of a string.
-	--This is a "bug", but it's how SQL*Plus works.
-	v_statements:='select '''||chr(10)||' 	/	 '||chr(10)||''' from dual';v_split_statements:=statement_splitter.split_by_semicolon(v_statements, '/');
-	assert_equals('Slash 7a', '2', v_split_statements.count);
-	assert_equals('Slash 7b', 'select '''||chr(10)||' 	', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('Slash 7c', '	 '||chr(10)||''' from dual', tokenizer.concatenate(v_split_statements(2)));
-
-	--SQL *not* split in two because the terminator has a non-whitespace item on the same line.
-	--This is a weird, but it's how SQL*Plus works.
-	v_statements:='select * from dual a'||chr(10)||' / --bad comment'||chr(10)||'select * from dual b';v_split_statements:=statement_splitter.split_by_semicolon(v_statements, '/');
-	assert_equals('Slash 8a', '1', v_split_statements.count);
-	assert_equals('Slash 8b', v_statements, tokenizer.concatenate(v_split_statements(1)));
-	*/
-
-/*
-	--Split into two.  Slash on line with just whitespace - spaces, tabs, newlines.
-	select * from dual a
-
-	  /  
-
-	select * from dual b
-	--Not split, newline is not on a line by itself
-	select * from dual a
-	/ --bad comment
-	select * from dual b
-	--Not split, newline is not on a line by itself
-	select * from dual a
-	/* bad comment *SLASH /
-	select * from dual b
-*/
-end test_optional_delimiter;
 
 
 --------------------------------------------------------------------------------
@@ -762,6 +677,95 @@ begin
 end test_package_body;
 
 
+
+--------------------------------------------------------------------------------
+procedure test_sqlplus_delim is
+	v_statements nclob;
+	v_split_statements nclob_table := nclob_table();
+	custom_exception exception;
+	pragma exception_init(custom_exception, -20000);
+begin
+	--NULL delimiter raises exception.
+	begin
+		v_statements:='select * from dual a';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, null);
+		assert_equals('SQL*Plus Delimiter 1', 'Exception', 'No exception');
+	exception when custom_exception then
+		assert_equals('SQL*Plus Delimiter 1', 'ORA-20000: The SQL*Plus delimiter cannot be NULL.', sqlerrm);
+	end;
+
+	--Whitespace delimiter raises exception.
+	begin
+		v_statements:='select * from dual a';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, ' ');
+		assert_equals('SQL*Plus Delimiter 2', 'Exception', 'No exception');
+	exception when custom_exception then
+		assert_equals('SQL*Plus Delimiter 1', 'ORA-20000: The SQL*Plus delimiter cannot be whitespace.', sqlerrm);
+	end;
+
+	--NULL text returns NULL text.
+
+/*
+	--Semicolons do not split.
+	v_statements:='select * from dual a;select * from dual b;';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '/');
+	assert_equals('SQL*Plus Delimiter 1a', '1', v_split_statements.count);
+	assert_equals('SQL*Plus Delimiter 1b', v_statements, v_split_statements(1));
+
+	--TODO:
+	--Slash on line with code does not split.
+	v_statements:='';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '/');
+	assert_equals('SQL*Plus Delimiter a', '1', v_split_statements.count);
+	assert_equals('SQL*Plus Delimiter b', v_statements, v_split_statements(1));
+
+	--Slash on line with comments does not split.
+	v_statements:='';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '/');
+	assert_equals('SQL*Plus Delimiter a', '1', v_split_statements.count);
+	assert_equals('SQL*Plus Delimiter b', v_statements, v_split_statements(1));
+
+	--Simple slash split - slash and whitespace on line
+	v_statements:='';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '/');
+	assert_equals('SQL*Plus Delimiter a', '1', v_split_statements.count);
+	assert_equals('SQL*Plus Delimiter b', v_statements, v_split_statements(1));
+
+	--Default delimiter is slash.
+	v_statements:='';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '/');
+	assert_equals('SQL*Plus Delimiter a', '1', v_split_statements.count);
+	assert_equals('SQL*Plus Delimiter b', v_statements, v_split_statements(1));
+
+	--Use different delimiter.
+	v_statements:='';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '/');
+	assert_equals('SQL*Plus Delimiter a', '1', v_split_statements.count);
+	assert_equals('SQL*Plus Delimiter b', v_statements, v_split_statements(1));
+
+	--Use multi-character delimiter.
+	v_statements:='';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '/');
+	assert_equals('SQL*Plus Delimiter a', '1', v_split_statements.count);
+	assert_equals('SQL*Plus Delimiter b', v_statements, v_split_statements(1));
+
+	--Multiple split lines.
+	v_statements:='';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '/');
+	assert_equals('SQL*Plus Delimiter a', '1', v_split_statements.count);
+	assert_equals('SQL*Plus Delimiter b', v_statements, v_split_statements(1));
+
+	--Slash inside a string splits.
+	v_statements:='';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '/');
+	assert_equals('SQL*Plus Delimiter a', '1', v_split_statements.count);
+	assert_equals('SQL*Plus Delimiter b', v_statements, v_split_statements(1));
+
+	--Slash inside a comment splits.
+	v_statements:='';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '/');
+	assert_equals('SQL*Plus Delimiter a', '1', v_split_statements.count);
+	assert_equals('SQL*Plus Delimiter b', v_statements, v_split_statements(1));
+*/
+end test_sqlplus_delim;
+
+
+--------------------------------------------------------------------------------
+procedure test_semi_and_sqlplus_delim is
+begin
+	--TODO:
+	null;
+end test_semi_and_sqlplus_delim;
+
+
 --------------------------------------------------------------------------------
 procedure dynamic_tests is
 	type clob_table is table of clob;
@@ -835,15 +839,16 @@ begin
 	g_failed_count := 0;
 
 	--Run the chosen tests.
-	if bitand(p_tests, c_errors)             > 0 then test_errors;             end if;
-	if bitand(p_tests, c_simple)             > 0 then test_simple;             end if;
-	if bitand(p_tests, c_optional_delimiter) > 0 then test_optional_delimiter; end if;
-	if bitand(p_tests, c_plsql_declaration)  > 0 then test_plsql_declaration;  end if;
-	if bitand(p_tests, c_plsql_block)        > 0 then test_plsql_block;        end if;
-	if bitand(p_tests, c_type_body)          > 0 then test_type_body;          end if;
-	if bitand(p_tests, c_trigger)            > 0 then test_trigger;            end if;
-	if bitand(p_tests, c_proc_and_func)      > 0 then test_proc_and_func;      end if;
-	if bitand(p_tests, c_package_body)       > 0 then test_package_body;       end if;
+	if bitand(p_tests, c_errors)                 > 0 then test_errors;                 end if;
+	if bitand(p_tests, c_simple)                 > 0 then test_simple;                 end if;
+	if bitand(p_tests, c_plsql_declaration)      > 0 then test_plsql_declaration;      end if;
+	if bitand(p_tests, c_plsql_block)            > 0 then test_plsql_block;            end if;
+	if bitand(p_tests, c_type_body)              > 0 then test_type_body;              end if;
+	if bitand(p_tests, c_trigger)                > 0 then test_trigger;                end if;
+	if bitand(p_tests, c_proc_and_func)          > 0 then test_proc_and_func;          end if;
+	if bitand(p_tests, c_package_body)           > 0 then test_package_body;           end if;
+	if bitand(p_tests, c_sqlplus_delim)          > 0 then test_sqlplus_delim;          end if;
+	if bitand(p_tests, c_semi_and_sqlplus_delim) > 0 then test_semi_and_sqlplus_delim; end if;
 
 	if bitand(p_tests, c_dynamic_tests)      > 0 then dynamic_tests;           end if;
 

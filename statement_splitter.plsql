@@ -33,9 +33,9 @@ TODO
 
 function split_by_semicolon(p_tokens in token_table) return token_table_table;
 
-function split_by_sqlplus_delimiter(p_statements in nclob, p_sqlplus_delimiter in nvarchar2) return nclob_table;
+function split_by_sqlplus_delimiter(p_statements in nclob, p_sqlplus_delimiter in nvarchar2 default '/') return nclob_table;
 
-function split_by_semi_and_sqlplus_del(p_statements in nclob, p_sqlplus_delimiter in nvarchar2) return token_table_table;
+function split_by_semi_and_sqlplus_del(p_statements in nclob, p_sqlplus_delimiter in nvarchar2 default '/') return token_table_table;
 
 end;
 /
@@ -1158,7 +1158,7 @@ end add_statement_consume_tokens;
 --Split a string into separate strings by an optional delmiter, usually "/".
 --This follows the SQL*Plus rules - the delimiter must be on a line by itself,
 --although the line may contain whitespace before and after the delimiter.
-function split_by_sqlplus_delimiter(p_statements in nclob, p_sqlplus_delimiter in nvarchar2) return nclob_table is
+function split_by_sqlplus_delimiter(p_statements in nclob, p_sqlplus_delimiter in nvarchar2 default '/') return nclob_table is
 	v_chars nvarchar2_table := tokenizer.get_nvarchar2_table_from_nclob(p_statements);
 	v_delimiter_size number := nvl(lengthc(p_sqlplus_delimiter), 0);
 	v_char_index number := 0;
@@ -1196,14 +1196,17 @@ function split_by_sqlplus_delimiter(p_statements in nclob, p_sqlplus_delimiter i
 		return true;
 	end only_ws_before_next_newline;
 begin
-	--Return whole string if the delimiter is NULL.
+	--Throw an error if the delimiter is null.
 	if p_sqlplus_delimiter is null then
+		raise_application_error(-20000, 'The SQL*Plus delimiter cannot be NULL.');
+	--Throw an error if the delimiter is whitespace.
+	elsif tokenizer.is_lexical_whitespace(p_sqlplus_delimiter) then
+		raise_application_error(-20000, 'The SQL*Plus delimiter cannot be whitespace.');
+	--Return an empty string if the string is NULL.
+	elsif p_statements is null then
 		v_strings.extend;
 		v_strings(v_strings.count) := p_statements;
 		return v_strings;
-	--Throw an error if the delimiter is whitespace.
-	elsif tokenizer.is_lexical_whitespace(p_sqlplus_delimiter) then
-		raise_application_error(-20000, 'The optional delimiter cannot be set to whitespace.');
 	end if;
 
 	--Loop through characters and build strings.
@@ -1385,7 +1388,7 @@ end split_by_semicolon;
 --------------------------------------------------------------------------------
 --Split a string of separate SQL and PL/SQL statements terminated by ";" and
 --some secondary terminator, usually "/".
-function split_by_semi_and_sqlplus_del(p_statements in nclob, p_sqlplus_delimiter in nvarchar2)
+function split_by_semi_and_sqlplus_del(p_statements in nclob, p_sqlplus_delimiter in nvarchar2 default '/')
 return token_table_table is
 	v_split_statements nclob_table := nclob_table();
 	v_split_token_tables token_table_table := token_table_table();
