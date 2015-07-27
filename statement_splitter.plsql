@@ -1158,6 +1158,7 @@ end add_statement_consume_tokens;
 --Split a string into separate strings by an optional delmiter, usually "/".
 --This follows the SQL*Plus rules - the delimiter must be on a line by itself,
 --although the line may contain whitespace before and after the delimiter.
+--The delimiter and whitespace on the same line are included with the first statement.
 function split_by_sqlplus_delimiter(p_statements in nclob, p_sqlplus_delimiter in nvarchar2 default '/') return nclob_table is
 	v_chars nvarchar2_table := tokenizer.get_nvarchar2_table_from_nclob(p_statements);
 	v_delimiter_size number := nvl(lengthc(p_sqlplus_delimiter), 0);
@@ -1196,6 +1197,8 @@ function split_by_sqlplus_delimiter(p_statements in nclob, p_sqlplus_delimiter i
 		return true;
 	end only_ws_before_next_newline;
 begin
+	--Special cases.
+	--
 	--Throw an error if the delimiter is null.
 	if p_sqlplus_delimiter is null then
 		raise_application_error(-20000, 'The SQL*Plus delimiter cannot be NULL.');
@@ -1215,14 +1218,8 @@ begin
 
 		--Look for delimiter if it's on an empty line.
 		if v_is_empty_line then
-			--Push, increment counter for multi-char delimiters, and exit if last characters are delimiter.
-			if v_char_index = v_chars.count and get_next_n_chars(v_delimiter_size) = p_sqlplus_delimiter then
-				v_strings.extend;
-				v_strings(v_strings.count) := v_string;
-				v_char_index := v_char_index + v_delimiter_size - 1;
-				exit;
 			--Add char, push, and exit if it's the last character.
-			elsif v_char_index = v_chars.count then
+			if v_char_index = v_chars.count then
 				v_string := v_string || v_chars(v_char_index);
 				v_strings.extend;
 				v_strings(v_strings.count) := v_string;
@@ -1230,12 +1227,29 @@ begin
 			--Continue if it's still whitespace.
 			elsif tokenizer.is_lexical_whitespace(v_chars(v_char_index)) then
 				v_string := v_string || v_chars(v_char_index);
-			--Split string if delimiter is found
+			--Split string if delimiter is found.
 			elsif get_next_n_chars(v_delimiter_size) = p_sqlplus_delimiter and only_ws_before_next_newline then
+				--Consume delimiter.
+				for i in 1 .. v_delimiter_size loop
+					v_string := v_string || v_chars(v_char_index);
+					v_char_index := v_char_index + 1;
+				end loop;
+
+				--Consume all tokens until either end of string or next character is non-whitespace.
+				loop
+					v_string := v_string || v_chars(v_char_index);
+					v_char_index := v_char_index + 1;
+					exit when v_char_index = v_chars.count or not tokenizer.is_lexical_whitespace(v_chars(v_char_index+1));
+				end loop;
+
+				--Remove extra increment.
+				v_char_index := v_char_index - 1;
+
+				--Add string and start over.
 				v_strings.extend;
 				v_strings(v_strings.count) := v_string;
 				v_string := null;
-				v_char_index := v_char_index + v_delimiter_size - 1;
+				v_is_empty_line := false;
 			--It's no longer an empty line otherwise.
 			else
 				v_string := v_string || v_chars(v_char_index);

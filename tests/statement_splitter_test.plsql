@@ -33,7 +33,7 @@ c_static_tests  constant number := c_errors+c_simple+c_plsql_declaration
 	+c_plsql_block+c_type_body+c_trigger+c_proc_and_func+c_package_body
 	+c_sqlplus_delim+c_semi_and_sqlplus_delim;
 
-c_dynamic_tests constant number := power(2, 30);
+c_dynamic_tests constant number := power(2, 50);
 
 c_all_tests constant number := c_static_tests+c_dynamic_tests;
 
@@ -698,63 +698,85 @@ begin
 		v_statements:='select * from dual a';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, ' ');
 		assert_equals('SQL*Plus Delimiter 2', 'Exception', 'No exception');
 	exception when custom_exception then
-		assert_equals('SQL*Plus Delimiter 1', 'ORA-20000: The SQL*Plus delimiter cannot be whitespace.', sqlerrm);
+		assert_equals('SQL*Plus Delimiter 2', 'ORA-20000: The SQL*Plus delimiter cannot be whitespace.', sqlerrm);
 	end;
 
-	--NULL text returns NULL text.
+	--NULL input returns NULL output.
+	v_statements:='';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '/');
+	assert_equals('SQL*Plus Delimiter 3a', '1', v_split_statements.count);
+	assert_equals('SQL*Plus Delimiter 3b', v_statements, v_split_statements(1));
 
-/*
 	--Semicolons do not split.
 	v_statements:='select * from dual a;select * from dual b;';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '/');
-	assert_equals('SQL*Plus Delimiter 1a', '1', v_split_statements.count);
-	assert_equals('SQL*Plus Delimiter 1b', v_statements, v_split_statements(1));
+	assert_equals('SQL*Plus Delimiter 4a', '1', v_split_statements.count);
+	assert_equals('SQL*Plus Delimiter 4b', v_statements, v_split_statements(1));
 
-	--TODO:
 	--Slash on line with code does not split.
-	v_statements:='';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '/');
-	assert_equals('SQL*Plus Delimiter a', '1', v_split_statements.count);
-	assert_equals('SQL*Plus Delimiter b', v_statements, v_split_statements(1));
+	v_statements:='select * from dual a / select * from dual b';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '/');
+	assert_equals('SQL*Plus Delimiter 5a', '1', v_split_statements.count);
+	assert_equals('SQL*Plus Delimiter 5b', v_statements, v_split_statements(1));
 
 	--Slash on line with comments does not split.
-	v_statements:='';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '/');
-	assert_equals('SQL*Plus Delimiter a', '1', v_split_statements.count);
-	assert_equals('SQL*Plus Delimiter b', v_statements, v_split_statements(1));
+	v_statements:='select * from dual a '||chr(10)||'/ --comment'||chr(10)||'select * from dual b';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '/');
+	assert_equals('SQL*Plus Delimiter 6a', '1', v_split_statements.count);
+	assert_equals('SQL*Plus Delimiter 6b', v_statements, v_split_statements(1));
 
 	--Simple slash split - slash and whitespace on line
-	v_statements:='';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '/');
-	assert_equals('SQL*Plus Delimiter a', '1', v_split_statements.count);
-	assert_equals('SQL*Plus Delimiter b', v_statements, v_split_statements(1));
+	v_statements:='select * from dual a '||chr(10)||'/'||chr(10)||'select * from dual b';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '/');
+	assert_equals('SQL*Plus Delimiter 7a', '2', v_split_statements.count);
+	assert_equals('SQL*Plus Delimiter 7b', 'select * from dual a '||chr(10)||'/'||chr(10), v_split_statements(1));
+	assert_equals('SQL*Plus Delimiter 7b', 'select * from dual b', v_split_statements(2));
 
 	--Default delimiter is slash.
-	v_statements:='';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '/');
-	assert_equals('SQL*Plus Delimiter a', '1', v_split_statements.count);
-	assert_equals('SQL*Plus Delimiter b', v_statements, v_split_statements(1));
+	v_statements:='select * from dual a '||chr(10)||'/'||chr(10)||'select * from dual b';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements);
+	assert_equals('SQL*Plus Delimiter 8a', '2', v_split_statements.count);
+	assert_equals('SQL*Plus Delimiter 8b', 'select * from dual a '||chr(10)||'/'||chr(10), v_split_statements(1));
+	assert_equals('SQL*Plus Delimiter 8b', 'select * from dual b', v_split_statements(2));
 
-	--Use different delimiter.
-	v_statements:='';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '/');
-	assert_equals('SQL*Plus Delimiter a', '1', v_split_statements.count);
-	assert_equals('SQL*Plus Delimiter b', v_statements, v_split_statements(1));
+	--Different delimiter.
+	v_statements:='select * from dual a '||chr(10)||'%'||chr(10)||'select * from dual b';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '%');
+	assert_equals('SQL*Plus Delimiter 9a', '2', v_split_statements.count);
+	assert_equals('SQL*Plus Delimiter 9b', 'select * from dual a '||chr(10)||'%'||chr(10), v_split_statements(1));
+	assert_equals('SQL*Plus Delimiter 9b', 'select * from dual b', v_split_statements(2));
 
-	--Use multi-character delimiter.
-	v_statements:='';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '/');
-	assert_equals('SQL*Plus Delimiter a', '1', v_split_statements.count);
-	assert_equals('SQL*Plus Delimiter b', v_statements, v_split_statements(1));
+	--Multi-character delimiter 1.
+	v_statements:='select * from dual a '||chr(10)||'**'||chr(10)||'select * from dual b';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '**');
+	assert_equals('SQL*Plus Delimiter 10a', '2', v_split_statements.count);
+	assert_equals('SQL*Plus Delimiter 10b', 'select * from dual a '||chr(10)||'**'||chr(10), v_split_statements(1));
+	assert_equals('SQL*Plus Delimiter 10b', 'select * from dual b', v_split_statements(2));
 
-	--Multiple split lines.
-	v_statements:='';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '/');
-	assert_equals('SQL*Plus Delimiter a', '1', v_split_statements.count);
-	assert_equals('SQL*Plus Delimiter b', v_statements, v_split_statements(1));
+	--Multi-character delimiter 2.
+	v_statements:='select * from dual a '||chr(10)||'asd'||chr(10)||'select * from dual b';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, 'asd');
+	assert_equals('SQL*Plus Delimiter 11a', '2', v_split_statements.count);
+	assert_equals('SQL*Plus Delimiter 11b', 'select * from dual a '||chr(10)||'asd'||chr(10), v_split_statements(1));
+	assert_equals('SQL*Plus Delimiter 11b', 'select * from dual b', v_split_statements(2));
+
+	--Multiple split lines 1.
+	v_statements:='select * from dual a '||chr(10)||' / '||chr(10)||'select * from dual b '||chr(10)||'	/	'||chr(10)||'select * from dual c';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '/');
+	assert_equals('SQL*Plus Delimiter 12a', '3', v_split_statements.count);
+	assert_equals('SQL*Plus Delimiter 12b', 'select * from dual a '||chr(10)||' / '||chr(10), v_split_statements(1));
+	assert_equals('SQL*Plus Delimiter 12c', 'select * from dual b '||chr(10)||'	/	'||chr(10), v_split_statements(2));
+	assert_equals('SQL*Plus Delimiter 12d', 'select * from dual c', v_split_statements(3));
+
+	--Multiple split lines 2.
+	v_statements:='select * from dual a '||chr(10)||' / '||chr(10)||'select * from dual b '||chr(10)||'	/	'||chr(10)||'select * from dual c '||chr(10)||'/'||chr(10)||'asdf';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '/');
+	assert_equals('SQL*Plus Delimiter 13a', '4', v_split_statements.count);
+	assert_equals('SQL*Plus Delimiter 13b', 'select * from dual a '||chr(10)||' / '||chr(10), v_split_statements(1));
+	assert_equals('SQL*Plus Delimiter 13c', 'select * from dual b '||chr(10)||'	/	'||chr(10), v_split_statements(2));
+	assert_equals('SQL*Plus Delimiter 13d', 'select * from dual c '||chr(10)||'/'||chr(10), v_split_statements(3));
+	assert_equals('SQL*Plus Delimiter 13e', 'asdf', v_split_statements(4));
 
 	--Slash inside a string splits.
-	v_statements:='';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '/');
-	assert_equals('SQL*Plus Delimiter a', '1', v_split_statements.count);
-	assert_equals('SQL*Plus Delimiter b', v_statements, v_split_statements(1));
+	v_statements:='select '''||chr(10)||'/'||chr(10)||''' from dual;';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '/');
+	assert_equals('SQL*Plus Delimiter 14a', '2', v_split_statements.count);
+	assert_equals('SQL*Plus Delimiter 14b', 'select '''||chr(10)||'/'||chr(10), v_split_statements(1));
+	assert_equals('SQL*Plus Delimiter 14b', ''' from dual;', v_split_statements(2));
 
 	--Slash inside a comment splits.
-	v_statements:='';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '/');
-	assert_equals('SQL*Plus Delimiter a', '1', v_split_statements.count);
-	assert_equals('SQL*Plus Delimiter b', v_statements, v_split_statements(1));
-*/
+	v_statements:='select /*'||chr(10)||'/'||chr(10)||'*/ 1 from dual;';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, '/');
+	assert_equals('SQL*Plus Delimiter 15a', '2', v_split_statements.count);
+	assert_equals('SQL*Plus Delimiter 15b', 'select /*'||chr(10)||'/'||chr(10), v_split_statements(1));
+	assert_equals('SQL*Plus Delimiter 15b', '*/ 1 from dual;', v_split_statements(2));
 end test_sqlplus_delim;
 
 
