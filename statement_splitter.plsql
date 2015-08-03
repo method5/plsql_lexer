@@ -681,6 +681,67 @@ procedure add_statement_consume_tokens(
 		end if;
 	end set_pivot_paren_counter;
 
+	---------------------------------------
+	--Track the first "IS" or "AS" and handle an empty package or empty package body.
+	procedure track_first_isas_and_empty_pkg(
+		p_is_past_first_is_or_as in out boolean,
+		p_exit_loop out boolean
+	) is
+	begin
+		--Do not exit the outer loop by default.
+		p_exit_loop := false;
+
+		--Detect the first IS or AS, and possibly an empty package.
+		if not p_is_past_first_is_or_as and lower(p_old_tokens(p_token_index).value) in ('is', 'as') then
+			p_is_past_first_is_or_as := true;
+
+			--Consume first "is" or "as" and shift tokens.
+			p_token_index := p_token_index + 1;
+			p_new_tokens.extend;
+			p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
+			shift_tokens_if_not_ws(p_old_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
+
+			--Return when empty package.
+			--Special case where the next concrete token is END.
+			declare
+				v_next_concrete_value1 nvarchar2(32767);
+				v_next_concrete_value2 nvarchar2(32767);
+				v_next_concrete_value3 nvarchar2(32767);
+			begin
+				v_next_concrete_value1 := get_next_concrete_value_n(p_old_tokens, p_token_index, 1);
+				v_next_concrete_value2 := get_next_concrete_value_n(p_old_tokens, p_token_index, 2);
+				v_next_concrete_value3 := get_next_concrete_value_n(p_old_tokens, p_token_index, 3);
+
+				--Consume tokens and exit if an END is found.
+				if
+				(
+					--Regular "END;".
+					(
+						lower(v_next_concrete_value1) = 'end'
+						and
+						lower(v_next_concrete_value2) = ';'
+					)
+					or
+					(
+						lower(v_next_concrete_value1) = 'end'
+						and
+						lower(v_next_concrete_value3) = ';'
+					)
+				) then
+					--Consume all tokens until the final ";".
+					loop
+						p_token_index := p_token_index + 1;
+						p_new_tokens.extend;
+						p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
+						exit when p_old_tokens(p_token_index).type = ';';
+					end loop;
+					p_token_index := p_token_index + 1;
+					p_exit_loop := true;
+				end if;
+			end;
+		end if;
+	end track_first_isas_and_empty_pkg;
+
 begin
 	--Consume everything
 	if p_terminator = C_TERMINATOR_EOF then
@@ -871,6 +932,9 @@ begin
 			v_prev_conc_tok_was_real_begin boolean := false;
 			v_has_nested_table boolean := false;
 			v_trigger_body_start_index number := p_trigger_body_start_index;
+
+			v_is_past_first_is_or_as boolean := false;
+			v_exit_loop boolean := false;
 		begin
 			--Build new statement and count tokens.
 			loop
@@ -878,6 +942,12 @@ begin
 				exit when p_token_index > p_old_tokens.count;
 				p_new_tokens.extend;
 				p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
+
+				--Detect the first IS or AS, and possibly an empty package.
+				track_first_isas_and_empty_pkg(v_is_past_first_is_or_as, v_exit_loop);
+				if v_exit_loop then
+					exit;
+				end if;
 
 				--Set the PIVOT parentheses counter.
 				set_pivot_paren_counter(v_pivot_paren_counter, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3);
@@ -898,7 +968,7 @@ begin
 				detect_end(p_old_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5, v_block_counter);
 
 				--Detect end of statement.
-				if (v_has_entered_block and v_block_counter = 0) or p_old_tokens(p_token_index).type = 'EOF' then
+				if v_block_counter = 0 or p_old_tokens(p_token_index).type = 'EOF' then
 					--Consume all tokens if only whitespace, comments, and EOF remain.
 					if only_ws_comments_eof_remain(p_old_tokens, p_token_index+1) then
 						--Consume all tokens.
@@ -938,6 +1008,7 @@ begin
 			v_prev_conc_tok_was_real_begin boolean := false;
 
 			v_is_past_first_is_or_as boolean := false;
+			v_exit_loop boolean := false;
 
 			--Not needed, only used because it's required by detect_begin.
 			v_has_nested_table boolean := false;
@@ -951,53 +1022,9 @@ begin
 				p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
 
 				--Detect the first IS or AS, and possibly an empty package.
-				if not v_is_past_first_is_or_as and lower(p_old_tokens(p_token_index).value) in ('is', 'as') then
-					v_is_past_first_is_or_as := true;
-
-					--Consume first "is" or "as" and shift tokens.
-					p_token_index := p_token_index + 1;
-					p_new_tokens.extend;
-					p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
-					shift_tokens_if_not_ws(p_old_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
-
-					--Return when empty package.
-					--Special case where the next concrete token is END.
-					declare
-						v_next_concrete_value1 nvarchar2(32767);
-						v_next_concrete_value2 nvarchar2(32767);
-						v_next_concrete_value3 nvarchar2(32767);
-					begin
-						v_next_concrete_value1 := get_next_concrete_value_n(p_old_tokens, p_token_index, 1);
-						v_next_concrete_value2 := get_next_concrete_value_n(p_old_tokens, p_token_index, 2);
-						v_next_concrete_value3 := get_next_concrete_value_n(p_old_tokens, p_token_index, 3);
-
-						--Consume tokens and exit if an END is found.
-						if
-						(
-							--Regular "END;".
-							(
-								lower(v_next_concrete_value1) = 'end'
-								and
-								lower(v_next_concrete_value2) = ';'
-							)
-							or
-							(
-								lower(v_next_concrete_value1) = 'end'
-								and
-								lower(v_next_concrete_value3) = ';'
-							)
-						) then
-							--Consume all tokens until the final ";".
-							loop
-								p_token_index := p_token_index + 1;
-								p_new_tokens.extend;
-								p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
-								exit when p_old_tokens(p_token_index).type = ';';
-							end loop;
-							p_token_index := p_token_index + 1;
-							exit;
-						end if;
-					end;
+				track_first_isas_and_empty_pkg(v_is_past_first_is_or_as, v_exit_loop);
+				if v_exit_loop then
+					exit;
 				end if;
 
 				--Start looking for procedure|function|cursor|begin|end after the first IS|AS was found
@@ -1239,7 +1266,7 @@ begin
 				loop
 					v_string := v_string || v_chars(v_char_index);
 					v_char_index := v_char_index + 1;
-					exit when v_char_index = v_chars.count or not tokenizer.is_lexical_whitespace(v_chars(v_char_index+1));
+					exit when v_char_index = v_chars.count or not tokenizer.is_lexical_whitespace(v_chars(v_char_index));
 				end loop;
 
 				--Remove extra increment.

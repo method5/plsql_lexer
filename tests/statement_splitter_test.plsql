@@ -20,17 +20,18 @@ c_errors                 constant number := power(2, 1);
 c_simple                 constant number := power(2, 2);
 c_plsql_declaration      constant number := power(2, 3);
 c_plsql_block            constant number := power(2, 4);
-c_type_body              constant number := power(2, 5);
-c_trigger                constant number := power(2, 6);
-c_proc_and_func          constant number := power(2, 7);
-c_package_body           constant number := power(2, 8);
+c_package                constant number := power(2, 5);
+c_type_body              constant number := power(2, 6);
+c_trigger                constant number := power(2, 7);
+c_proc_and_func          constant number := power(2, 8);
+c_package_body           constant number := power(2, 9);
 
 c_sqlplus_delim          constant number := power(2, 30);
 c_semi_and_sqlplus_delim constant number := power(2, 31);
 
 
 c_static_tests  constant number := c_errors+c_simple+c_plsql_declaration
-	+c_plsql_block+c_type_body+c_trigger+c_proc_and_func+c_package_body
+	+c_plsql_block+c_package+c_type_body+c_trigger+c_proc_and_func+c_package_body
 	+c_sqlplus_delim+c_semi_and_sqlplus_delim;
 
 c_dynamic_tests constant number := power(2, 50);
@@ -113,9 +114,6 @@ begin
 	v_statements:='a'||chr(10);v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
 	assert_equals('Simple split 4a', 1, v_split_statements.count);
 	assert_equals('Simple split 4b', 'a'||chr(10), tokenizer.concatenate(v_split_statements(1)));
-
-	--TODO
-	null;
 end test_simple;
 
 
@@ -359,6 +357,41 @@ end test_plsql_block;
 
 
 --------------------------------------------------------------------------------
+procedure test_package is
+	v_statements nclob;
+	v_split_statements token_table_table := token_table_table();
+begin
+	--Empty package.
+	v_statements:='create or replace package test_package is end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	assert_equals('Package 1a', 2, v_split_statements.count);
+	assert_equals('Packabe 1b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+
+	--Package with procedures and functions and items.
+	v_statements:='
+		create or replace package test_package is
+			procedure procedure1;
+			function function1 return number;
+		end;select * from dual;';
+	v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	assert_equals('Package 2a', 2, v_split_statements.count);
+	assert_equals('Packabe 2b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+
+	--Package with PLSQL_DECLARATION cursor.
+	--Using a PLSQL_DECLARATION in a cursor is invalid but it does compile.
+	v_statements:='
+		create or replace package test_package is
+			cursor c1 is select 1 end from dual;
+			cursor c2 is with function f return number is begin begin return 1; end; end; select f end from dual;
+			procedure procedure1;
+			function function1 return number;
+		end;select * from dual;';
+	v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	assert_equals('Package 3a', 2, v_split_statements.count);
+	assert_equals('Packabe 3b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+end test_package;
+
+
+--------------------------------------------------------------------------------
 procedure test_type_body is
 	v_statements nclob;
 	v_split_statements token_table_table := token_table_table();
@@ -375,7 +408,7 @@ begin
 		final instantiable constructor function type1 return self as result
 	);
 	*/
-/*
+
 	v_statements:='
 		create or replace type body type1 is
 			member procedure procedure1 is begin null; end;
@@ -384,9 +417,7 @@ begin
 			final instantiable constructor function type1 return self as result is begin null; end;
 		end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
 	assert_equals('Type Body 1a', 2, v_split_statements.count);
-	assert_equals('Type body 1b', ' select * from dual;', tokenizer.concatenate(v_split_statements(2)));
-*/
-	null;
+	assert_equals('Type body 1b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
 end test_type_body;
 
 
@@ -865,6 +896,7 @@ begin
 	if bitand(p_tests, c_simple)                 > 0 then test_simple;                 end if;
 	if bitand(p_tests, c_plsql_declaration)      > 0 then test_plsql_declaration;      end if;
 	if bitand(p_tests, c_plsql_block)            > 0 then test_plsql_block;            end if;
+	if bitand(p_tests, c_package)                > 0 then test_package;                end if;
 	if bitand(p_tests, c_type_body)              > 0 then test_type_body;              end if;
 	if bitand(p_tests, c_trigger)                > 0 then test_trigger;                end if;
 	if bitand(p_tests, c_proc_and_func)          > 0 then test_proc_and_func;          end if;
