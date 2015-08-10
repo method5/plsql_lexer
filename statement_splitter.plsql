@@ -357,16 +357,17 @@ end get_next_concrete_value_n;
 
 --------------------------------------------------------------------------------
 /*
-BEGIN must come after "begin", "as", "is", ";", or ">>", or the beginning of the string,
-	or in the special case of a trigger the first BEGIN can happen anywhere after
-	all the excluded BEGINs are thrown out (based on the trigger type).
+BEGIN must come after "begin", "as", "is", ";", or ">>", "then", "else", "loop",
+	the beginning of the string, or in the special case of a trigger the first
+	BEGIN can happen anywhere after	all the excluded BEGINs are thrown out
+	(based on the trigger type).
 	- "as" could be a column name, but it cannot be referenced as a column name:
 		select as from (select 1 as from dual);
 			   *
 		ERROR at line 1:
 		ORA-00936: missing expression
 	- Some forms of "begin begin" do not count, such as select begin begin from (select 1 begin from dual);
-	- Exclude "as begin" if it's used as an alias.
+	- Exclude "as begin", "then begin", "else begin", and "loop begin" if it's used as an alias.
 		Exclude where next concrete token is ",", "from", "into", or "bulk collect".  For column aliases.
 		Exclude where next concrete token is "," or ")".  For CLUSTER_ID USING, model columns, PIVOT_IN_CLAUSE, XMLATTRIBUTES, XMLCOLATTVAL, XMLELEMENT, XMLFOREST, XMLnamespaces_clause.
 		Exclude where next concrete token is "," or ")" or "columns".  For XMLTABLE_options.
@@ -382,7 +383,7 @@ BEGIN must come after "begin", "as", "is", ";", or ">>", or the beginning of the
 				for deptno
 				in  (1,2)
 			);
-		RULE: Exclude when command_name in ('ALTER TABLE', 'CREATE TABLE') and previous1 = "as" and previous2 = "store".  For nested_table_col_properties.
+		Exclude when command_name in ('ALTER TABLE', 'CREATE TABLE') and previous1 = "as" and previous2 = "store".  For nested_table_col_properties.
 			create type type1 is table of number;
 			create table test1
 			(
@@ -396,6 +397,7 @@ BEGIN must come after "begin", "as", "is", ";", or ">>", or the beginning of the
 			and "DEFAULT string".  Although the documentation implies " 'A' as begin default 'B' " is valid it is NOT.
 			It must be " 'A' as begin, default 'B' ", which is handled by above rules.
 	- Note: These rules were determined by downloading and searching the BNF descriptions like this: findstr /i /s "as" *.*
+		and findstr /i /s "statement" *.*
 */
 procedure detect_begin(
 	p_tokens in token_table,
@@ -427,7 +429,7 @@ begin
 			and
 			(
 				(
-					lower(v_previous_concrete_token_1.value) in ('as', 'is', ';', '>>')
+					lower(v_previous_concrete_token_1.value) in ('as', 'is', ';', '>>', 'then', 'else', 'loop')
 					or
 					v_previous_concrete_token_1.type is null
 				)
@@ -529,12 +531,15 @@ begin
 		)
 		or
 		--End with optional name: "end object_name;".
+		--But "object_name" cannot be "if", "loop", or "case".
 		(
-			lower(v_previous_concrete_token_1.type) = 'word'
+			v_previous_concrete_token_1.type = 'word'
 			and
 			lower(v_previous_concrete_token_2.value) = 'end'
 			and
 			lower(v_previous_concrete_token_3.type) = ';'
+			and
+			lower(v_previous_concrete_token_1.value) not in ('if', 'loop', 'case')
 		)
 		or
 		--Trigger timing points end.

@@ -353,6 +353,62 @@ begin
 	assert_equals('plsql_block: "as end" does not count 2a', 2, v_split_statements.count);
 	assert_equals('plsql_block: "as end" does not count 2b', 'declare v_test number; begin with end as (select 1 a from dual) select a into v_test from end; end;', tokenizer.concatenate(v_split_statements(1)));
 	assert_equals('plsql_block: "as end" does not count 2c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+
+	--Don't count "end if".
+	v_statements:='begin if 1=1 then null; end if; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	assert_equals('PLSQL Block 1a', 2, v_split_statements.count);
+	assert_equals('PLSQL Block 1b', 'begin if 1=1 then null; end if; end;', tokenizer.concatenate(v_split_statements(1)));
+	assert_equals('PLSQL Block 1c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+
+	--Don't count "end loop".
+	v_statements:='begin loop null; end loop; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	assert_equals('PLSQL Block 2a', 2, v_split_statements.count);
+	assert_equals('PLSQL Block 2b', 'begin loop null; end loop; end;', tokenizer.concatenate(v_split_statements(1)));
+	assert_equals('PLSQL Block 2c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+
+	--Don't count "end case".
+	v_statements:='begin case when 1=1 then null; end case; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	assert_equals('PLSQL Block 3a', 2, v_split_statements.count);
+	assert_equals('PLSQL Block 3b', 'begin case when 1=1 then null; end case; end;', tokenizer.concatenate(v_split_statements(1)));
+	assert_equals('PLSQL Block 3c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+
+	--Count "begin begin".
+	v_statements:='begin begin null; end; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	assert_equals('PLSQL Block 4a', 2, v_split_statements.count);
+	assert_equals('PLSQL Block 4b', 'begin begin null; end; end;', tokenizer.concatenate(v_split_statements(1)));
+	assert_equals('PLSQL Block 4c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+
+	--(Cannot test "as begin" and "is begin", those are tested in test_proc_and_func.)
+
+	--Count "; begin".
+	v_statements:='declare a number; begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	assert_equals('PLSQL Block 5a', 2, v_split_statements.count);
+	assert_equals('PLSQL Block 5b', 'declare a number; begin null; end;', tokenizer.concatenate(v_split_statements(1)));
+	assert_equals('PLSQL Block 5c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+
+	--Count ">> begin".
+	v_statements:='declare a number; <<label1>> begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	assert_equals('PLSQL Block 6a', 2, v_split_statements.count);
+	assert_equals('PLSQL Block 6b', 'declare a number; <<label1>> begin null; end;', tokenizer.concatenate(v_split_statements(1)));
+	assert_equals('PLSQL Block 6c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+
+	--Count "then begin".
+	v_statements:='begin if 1=1 then begin null; end; end if; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	assert_equals('PLSQL Block 7a', 2, v_split_statements.count);
+	assert_equals('PLSQL Block 7b', 'begin if 1=1 then begin null; end; end if; end;', tokenizer.concatenate(v_split_statements(1)));
+	assert_equals('PLSQL Block 7c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+
+	--Count "else begin".
+	v_statements:='begin if 1=1 then null; else begin null; end; end if; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	assert_equals('PLSQL Block 8a', 2, v_split_statements.count);
+	assert_equals('PLSQL Block 8b', 'begin if 1=1 then null; else begin null; end; end if; end;', tokenizer.concatenate(v_split_statements(1)));
+	assert_equals('PLSQL Block 8c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+
+	--Count "loop begin".
+	v_statements:='begin for i in 1 .. 2 loop begin null; end; end loop; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	assert_equals('PLSQL Block 9a', 2, v_split_statements.count);
+	assert_equals('PLSQL Block 9b', 'begin for i in 1 .. 2 loop begin null; end; end loop; end;', tokenizer.concatenate(v_split_statements(1)));
+	assert_equals('PLSQL Block 9c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
 end test_plsql_block;
 
 
