@@ -882,55 +882,59 @@ procedure dynamic_tests is
 	type number_table is table of number;
 	v_sql_ids string_table;
 	v_sql_fulltexts clob_table;
-	v_command_types number_table;
-	v_command_names string_table;
 	sql_cursor sys_refcursor;
+	v_split_statements token_table_table := token_table_table();
 begin
-	--Test everything in GV$SQL.
+	--Test statements in GV$SQL.
+	--Takes 171 seconds on my PC.
 	open sql_cursor for
 	q'<
 		--Only need to select one value per SQL_ID.
-		select sql_id, sql_fulltext, command_type, command_name
+		select sql_id, sql_fulltext
 		from
 		(
-			select sql_id, sql_fulltext, command_type, command_name, row_number() over (partition by sql_id order by 1) rownumber
+			select sql_id, sql_fulltext, row_number() over (partition by sql_id order by 1) rownumber
 			from gv$sql
-			join gv$sqlcommand using (command_type)
 			--TEST - takes 2 seconds
-			where sql_id = 'dfffkcnqfystw'
+			--where sql_id = 'dfffkcnqfystw'
+			--TEST
+			--where rownum <= 100
 		)
 		where rownumber = 1
 		order by sql_id
 	>';
 
 	loop
-		fetch sql_cursor bulk collect into v_sql_ids, v_sql_fulltexts, v_command_types, v_command_names limit 100;
+		fetch sql_cursor bulk collect into v_sql_ids, v_sql_fulltexts limit 100;
 		exit when v_sql_fulltexts.count = 0;
 
 		--Debug if there is an infinite loop.
 		--dbms_output.put_line('SQL_ID: '||statements.sql_id);
 
 		for i in 1 .. v_sql_fulltexts.count loop
-
 			g_test_count := g_test_count + 1;
 
-			--TODO: Test that each statement is only split into one
+			--Test that each statement is only split into one
+			v_split_statements := statement_splitter.split_by_semicolon(tokenizer.tokenize(v_sql_fulltexts(i)));
 
-			/*
-			statement_classifier.classify(v_sql_fulltexts(i), v_category, v_statement_type, v_command_name, v_command_type, v_lex_sqlcode, v_lex_sqlerrm);
-			if v_command_type = v_command_types(i) and v_command_name = v_command_names(i) then
+			if v_split_statements.count = 1 then
 				g_passed_count := g_passed_count + 1;
 			else
 				g_failed_count := g_failed_count + 1;
 				dbms_output.put_line('Failed: '||v_sql_ids(i));
-				dbms_output.put_line('Expected Command Type: '||v_command_types(i));
-				dbms_output.put_line('Expected Command Name: '||v_command_names(i));
-				dbms_output.put_line('Actual Command Type:   '||v_command_type);
-				dbms_output.put_line('Actual Command Name:   '||v_command_name);
+				dbms_output.put_line('Expected Statement Count: 1');
+				dbms_output.put_line('Actual Statemrnt Count:   '||v_split_statements.count);
 			end if;
-			*/
 		end loop;
 	end loop;
+
+	--TODO: Test DBA_SOURCE.
+	/*
+	select owner, name, type, line, text, row_number() over (partition by owner, name, type order by line)
+	from all_source
+	order by owner, name, type, line;
+	*/
+
 end dynamic_tests;
 
 
