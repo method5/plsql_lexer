@@ -884,6 +884,9 @@ procedure dynamic_tests is
 	v_sql_fulltexts clob_table;
 	sql_cursor sys_refcursor;
 	v_split_statements token_table_table := token_table_table();
+
+	v_source clob;
+	v_statements token_table_table;
 begin
 	--Test statements in GV$SQL.
 	--Takes 171 seconds on my PC.
@@ -928,15 +931,51 @@ begin
 		end loop;
 	end loop;
 
-	--TODO: Test DBA_SOURCE.
-	/*
-	select owner, name, type, line, text, row_number() over (partition by owner, name, type order by line)
-	from all_source
-	order by owner, name, type, line;
-	*/
+	declare
+		v_number number;
+	begin
+		select count(*) into v_number from all_source;
+	end;
 
+	--Test all source code.
+	--Takes 2.5 hours on my PC.
+	--
+	--Loop through all source code.
+	for source_code in
+	(
+		select owner, name, type, line, text
+			,row_number() over (partition by owner, name, type order by line desc) last_when_1
+		from all_source
+		--Test small subset:
+		--where owner = 'APEX_040200' and name like 'APEX%'
+		order by owner, name, type, line
+	) loop
+		--Append text and possibly process previous source.
+		if source_code.last_when_1 = 1 then
+			g_test_count := g_test_count + 1;
+
+			--Process source
+			v_statements := statement_splitter.split_by_semicolon(tokenizer.tokenize(v_source));
+
+			--Count as success or failure depending on count.
+			if v_statements.count = 1 then
+				g_passed_count := g_passed_count + 1;
+			else
+				g_failed_count := g_failed_count + 1;
+				dbms_output.put_line('OWNER: '||source_code.owner);
+				dbms_output.put_line('NAME:  '||source_code.name);
+				dbms_output.put_line('TYPE:  '||source_code.type);
+				dbms_output.put_line('Count: '||v_statements.count);
+			end if;
+
+			--Start new source code.
+			v_source := source_code.text;
+		else
+			v_source := v_source ||source_code.text;
+		end if;
+
+	end loop;
 end dynamic_tests;
-
 
 
 -- =============================================================================
