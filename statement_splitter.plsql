@@ -805,7 +805,7 @@ begin
 			--Build new statement and count tokens.
 			loop
 				--Increment
-				exit when p_token_index >= p_old_tokens.count;
+				exit when p_token_index > p_old_tokens.count;
 				p_new_tokens.extend;
 				p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
 
@@ -875,7 +875,7 @@ begin
 			--Build new statement and count tokens.
 			loop
 				--Increment
-				exit when p_token_index >= p_old_tokens.count;
+				exit when p_token_index > p_old_tokens.count;
 				p_new_tokens.extend;
 				p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
 
@@ -1022,7 +1022,7 @@ begin
 			--Build new statement and count tokens.
 			loop
 				--Increment
-				exit when p_token_index >= p_old_tokens.count;
+				exit when p_token_index > p_old_tokens.count;
 				p_new_tokens.extend;
 				p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
 
