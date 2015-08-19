@@ -420,7 +420,8 @@ begin
 	--Empty package.
 	v_statements:='create or replace package test_package is end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
 	assert_equals('Package 1a', 2, v_split_statements.count);
-	assert_equals('Packabe 1b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Package 1b', 'create or replace package test_package is end;', tokenizer.concatenate(v_split_statements(1)));
+	assert_equals('Package 1c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
 
 	--Package with procedures and functions and items.
 	v_statements:='
@@ -430,7 +431,7 @@ begin
 		end;select * from dual;';
 	v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
 	assert_equals('Package 2a', 2, v_split_statements.count);
-	assert_equals('Packabe 2b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Package 2b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
 
 	--Package with PLSQL_DECLARATION cursor.
 	--Using a PLSQL_DECLARATION in a cursor is invalid but it does compile.
@@ -443,7 +444,7 @@ begin
 		end;select * from dual;';
 	v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
 	assert_equals('Package 3a', 2, v_split_statements.count);
-	assert_equals('Packabe 3b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Package 3b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
 end test_package;
 
 
@@ -676,13 +677,13 @@ begin
 		create or replace package body test_package is
 		end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
 	assert_equals('Package Body 1a', 2, v_split_statements.count);
-	assert_equals('Packabe Body 1b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Package Body 1b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
 
 	v_statements:='
 		create or replace package body test_package is
 		end test_package;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
 	assert_equals('Package Body 1.5a', 2, v_split_statements.count);
-	assert_equals('Packabe Body 1.5b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Package Body 1.5b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
 
 	--#2: One matched BEGIN and END when there is only an initialization block.
 	v_statements:='
@@ -691,7 +692,7 @@ begin
 			null;
 		end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
 	assert_equals('Package Body 2a', 2, v_split_statements.count);
-	assert_equals('Packabe Body 2b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Package Body 2b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
 
 	--#3: Matched BEGIN and END and extra END.
 	v_statements:='
@@ -699,7 +700,7 @@ begin
 			procedure test1 is begin null; end;
 		end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
 	assert_equals('Package Body 3a', 2, v_split_statements.count);
-	assert_equals('Packabe Body 3b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Package Body 3b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
 
 	--#4: Two sets of matched BEGINs and ENDs - from methods.
 	v_statements:='
@@ -709,7 +710,7 @@ begin
 			null;
 		end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
 	assert_equals('Package Body 4a', 2, v_split_statements.count);
-	assert_equals('Packabe Body 4b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Package Body 4b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
 
 	--#4.5: Two sets of matched BEGINs and ENDs - from methods.
 	v_statements:='
@@ -720,7 +721,7 @@ begin
 			null;
 		end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
 	assert_equals('Package Body 4.5a', 2, v_split_statements.count);
-	assert_equals('Packabe Body 4.5b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Package Body 4.5b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
 
 	--#5: Two sets of matched BEGINs and ENDs - from CURSORS and methods.
 	v_statements:='
@@ -731,7 +732,7 @@ begin
 			null;
 		end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
 	assert_equals('Package Body 5a', 2, v_split_statements.count);
-	assert_equals('Packabe Body 5b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Package Body 5b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
 
 	--#5.5: Sets of matched BEGINs and ENDs - from CURSORS with multiple plsql_declarations
 	-- and a SQL WITH named "function".  The SQL statements are valid, although it's an
@@ -744,7 +745,7 @@ begin
 			null;
 		end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
 	assert_equals('Package Body 5.5a', 2, v_split_statements.count);
-	assert_equals('Packabe Body 5.5b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Package Body 5.5b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
 
 	--#6: Items only.
 	v_statements:=q'<
@@ -755,7 +756,7 @@ begin
 			string_nt type1 := type1('asdf', 'qwer');
 		end;select * from dual;>';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
 	assert_equals('Package Body 6a', 2, v_split_statements.count);
-	assert_equals('Packabe Body 6b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Package Body 6b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
 
 	--#7: External functions.
 	v_statements:=q'<
@@ -764,7 +765,7 @@ begin
 			function randomuuid2 return varchar2 as language java name 'RandomUUID.create() return java.lang.String';
 		end;select * from dual;>';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
 	assert_equals('Package Body 7a', 2, v_split_statements.count);
-	assert_equals('Packabe Body 7b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Package Body 7b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
 
 end test_package_body;
 

@@ -506,7 +506,7 @@ end detect_begin;
 END must come after ";", or as part of a trigger timing point.
 	It cannot come after ">>", labels can't go there without compilation error.
 	end could be an object, but the object will be invalid so things won't compile
-TODO: Add special case for empty package, package body, or type body.
+Note: Special case of "END" in empty package is handled elsewhere.
 */
 procedure detect_end(
 	p_tokens in token_table,

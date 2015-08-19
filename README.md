@@ -167,14 +167,16 @@ After following the installation steps above this code should be runnable:
 
 			--For debugging, print the statement and COMMAND_NAME.
 			dbms_output.put_line(chr(10)||'Statement '||i||' : '||
-				replace(replace(tokenizer.concatenate(v_split_statements(i)), chr(10)), chr(9)));
+				replace(replace(
+					tokenizer.concatenate(v_split_statements(i))
+				,chr(10)), chr(9)));
 			dbms_output.put_line('Command Name: '||v_command_name);
 
 			--Handle different command types.
 			--
 			--Prevent Anonymous Blocks from running.
 			if v_command_name = 'PL/SQL EXECUTE' then
-				dbms_output.put_line('Error       : Anonymous PL/SQL blocks are not allowed.');
+				dbms_output.put_line('Error       : Anonymous PL/SQL blocks not allowed.');
 			--Warning message if "Invalid" - probably a typo.
 			elsif v_command_name = 'Invalid' then
 				dbms_output.put_line('Warning     : Could not classify this statement, '||
