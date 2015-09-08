@@ -34,7 +34,9 @@ c_static_tests  constant number := c_errors+c_simple+c_plsql_declaration
 	+c_plsql_block+c_package+c_type_body+c_trigger+c_proc_and_func+c_package_body
 	+c_sqlplus_delim+c_semi_and_sqlplus_delim;
 
-c_dynamic_tests constant number := power(2, 50);
+c_dynamic_sql constant number := power(2, 51);
+c_dynamic_plsql constant number := power(2, 52);
+c_dynamic_tests constant number := c_dynamic_sql + c_dynamic_plsql;
 
 c_all_tests constant number := c_static_tests+c_dynamic_tests;
 
@@ -409,6 +411,12 @@ begin
 	assert_equals('PLSQL Block 9a', 2, v_split_statements.count);
 	assert_equals('PLSQL Block 9b', 'begin for i in 1 .. 2 loop begin null; end; end loop; end;', tokenizer.concatenate(v_split_statements(1)));
 	assert_equals('PLSQL Block 9c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+
+	--DECLARE with PROCEDURE.
+	v_statements:='declare procedure p1 is begin null; end; begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	assert_equals('PLSQL Block 10a', 2, v_split_statements.count);
+	assert_equals('PLSQL Block 10b', 'declare procedure p1 is begin null; end; begin null; end;', tokenizer.concatenate(v_split_statements(1)));
+	assert_equals('PLSQL Block 10c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
 end test_plsql_block;
 
 
@@ -882,7 +890,7 @@ end test_semi_and_sqlplus_delim;
 
 
 --------------------------------------------------------------------------------
-procedure dynamic_tests is
+procedure test_dynamic_sql is
 	type clob_table is table of clob;
 	type string_table is table of varchar2(100);
 	type number_table is table of number;
@@ -936,13 +944,22 @@ begin
 			end if;
 		end loop;
 	end loop;
+end test_dynamic_sql;
 
-	declare
-		v_number number;
-	begin
-		select count(*) into v_number from all_source;
-	end;
 
+--------------------------------------------------------------------------------
+procedure test_dynamic_plsql is
+	type clob_table is table of clob;
+	type string_table is table of varchar2(100);
+	type number_table is table of number;
+	v_sql_ids string_table;
+	v_sql_fulltexts clob_table;
+	sql_cursor sys_refcursor;
+	v_split_statements token_table_table := token_table_table();
+
+	v_source clob;
+	v_statements token_table_table;
+begin
 	--Test all source code.
 	--Takes 2.5 hours on my PC.
 	--
@@ -954,14 +971,18 @@ begin
 		from all_source
 		--Test small subset:
 		--where owner = 'APEX_040200' and name like 'APEX%'
+		where owner = 'APEX_040200' --and name like 'WWV_FLOW_AUTHORIZED_URLS_T1'
 		order by owner, name, type, line
 	) loop
-		--Append text and possibly process previous source.
+		--Append source.
+		v_source := v_source ||source_code.text;
+
+		--Process previous source.
 		if source_code.last_when_1 = 1 then
 			g_test_count := g_test_count + 1;
 
-			--Process source
-			v_statements := statement_splitter.split_by_semicolon(tokenizer.tokenize(v_source));
+			--Process source after adding "CREATE" to each statement.
+			v_statements := statement_splitter.split_by_semicolon(tokenizer.tokenize('create '||v_source));
 
 			--Count as success or failure depending on count.
 			if v_statements.count = 1 then
@@ -975,13 +996,11 @@ begin
 			end if;
 
 			--Start new source code.
-			v_source := source_code.text;
-		else
-			v_source := v_source ||source_code.text;
+			v_source := null;
 		end if;
 
 	end loop;
-end dynamic_tests;
+end test_dynamic_plsql;
 
 
 -- =============================================================================
@@ -1009,7 +1028,8 @@ begin
 	if bitand(p_tests, c_sqlplus_delim)          > 0 then test_sqlplus_delim;          end if;
 	if bitand(p_tests, c_semi_and_sqlplus_delim) > 0 then test_semi_and_sqlplus_delim; end if;
 
-	if bitand(p_tests, c_dynamic_tests)      > 0 then dynamic_tests;           end if;
+	if bitand(p_tests, c_dynamic_sql)            > 0 then test_dynamic_sql;            end if;
+	if bitand(p_tests, c_dynamic_plsql)          > 0 then test_dynamic_plsql;          end if;
 
 	--Print summary of results.
 	dbms_output.put_line(null);
