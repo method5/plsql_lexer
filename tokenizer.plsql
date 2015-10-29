@@ -86,7 +86,7 @@ create or replace package body tokenizer is
 --Globals
 
 --A logical character may contain 2 physical characters (or code points).
---For example, the 4-byte unicode character unistr('\D841\DF79') is counted as
+--For example, the 4-byte Unicode character unistr('\D841\DF79') is counted as
 --2 characters when it's in a NCLOB.
 g_chars nvarchar2_table := nvarchar2_table();
 
@@ -211,7 +211,7 @@ end track_row_pattern_matching;
 
 --------------------------------------------------------------------------------
 --Return the next token from a string.
---Type is one of: EOF, whitespace, comment, text, numeric, word, or special charcters.
+--Type is one of: EOF, whitespace, comment, text, numeric, word, or special characters.
 --See the package specification for some information on the tokenizer.
 function get_token return token is
 	v_quote_delimiter nvarchar2(1 char);
@@ -442,7 +442,7 @@ begin
 		return token('numeric', g_token_text, null, null);
 	end if;
 
-	--Word - quoted identifier.  Note that quoted identifers are not escaped.
+	--Word - quoted identifier.  Note that quoted identifiers are not escaped.
 	--Do *not* check for these errors in words:
 	--"ORA-00972: identifier is too long" or "ORA-01741: illegal zero-length identifier".
 	--Database links have different rules, like 128 bytes instead of 30, and we
@@ -527,7 +527,7 @@ begin
 	end if;
 
 	--2-character punctuation operators.
-	--Igore the IBM "not" character - it's in the manual but is only supported
+	--Ignore the IBM "not" character - it's in the manual but is only supported
 	--on obsolete platforms: http://stackoverflow.com/q/9305925/409172
 	if g_last_char||look_ahead(1) in ('~=','!=','^=','<>',':=','=>','>=','<=','<<','>>','{-','-}','*?','+?','??',',}','}?','{,') then
 		g_token_text := g_last_char || get_char;
@@ -663,7 +663,7 @@ end is_lexical_whitespace;
 
 --------------------------------------------------------------------------------
 --Create a nested table of characters.
---This extra step takes care of non-trivial unicode processing up front.
+--This extra step takes care of non-trivial Unicode processing up front.
 --This cannot be simplified with SUBSTRC, that will not work for large CLOBs.
 --TODO: Is there an easier way to do this?
 function get_nvarchar2_table_from_nclob(p_nclob nclob) return nvarchar2_table

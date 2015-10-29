@@ -30,14 +30,14 @@ See the individual packages for details on each procedure.
 
 		function split_by_sqlplus_delimiter(
 			p_statements        in nclob,
-			p_sqlplus_delimiter in nvarchar2
+			p_sqlplus_delimiter in nvarchar2 default '/'
 		) return nclob_table;
 		
 	Split statements like SQL*Plus and then also split by semicolon:
 
 		function split_by_semi_and_sqlplus_del(
 			p_statements        in nclob,
-			p_sqlplus_delimiter in nvarchar2
+			p_sqlplus_delimiter in nvarchar2 default '/'
 		) return token_table_table;
 
 - `statement_classifier` - Classify a statement as DDL, PL/SQL, SELECT, ALTER, etc.
