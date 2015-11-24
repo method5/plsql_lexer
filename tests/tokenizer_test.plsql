@@ -36,14 +36,14 @@ c_test_convert_to_text         constant number := power(2, 16);
 c_dynamic_tests             constant number := power(2, 30);
 
 --Default option is to run all static test suites.
-c_all_static_tests          constant number := c_test_whitespace+c_test_comment+
+c_static_tests          constant number := c_test_whitespace+c_test_comment+
 	c_test_text+c_test_numeric+c_test_word+c_test_inquiry_directive+
 	c_test_preproc_control_token+c_test_3_character_punctuation+c_test_2_character_punctuation+
 	c_test_1_character_punctuation+c_test_unexpected+c_test_utf8+c_test_row_pattern_matching+
 	c_test_other+c_test_convert_to_text;
 
 --Run the unit tests and display the results in dbms output.
-procedure run(p_tests number default c_all_static_tests);
+procedure run(p_tests number default c_static_tests);
 
 end;
 /
@@ -702,17 +702,23 @@ end dynamic_tests;
 --------------------------------------------------------------------------------
 procedure test_convert_to_text is
 begin
-	assert_equals('Convert To Text 1' ,'select * from dual', tokenizer.convert_tokens_to_text(tokenizer.tokenize('select * from dual')));
+	assert_equals('Convert To Text 1' ,'select * from dual', tokenizer.concatenate(tokenizer.tokenize('select * from dual')));
 end test_convert_to_text;
 
 
 --------------------------------------------------------------------------------
-procedure run(p_tests number default c_all_static_tests) is
+procedure run(p_tests number default c_static_tests) is
 begin
 	--Reset counters.
 	g_test_count := 0;
 	g_passed_count := 0;
 	g_failed_count := 0;
+
+	--Print header.
+	dbms_output.put_line(null);
+	dbms_output.put_line('----------------------------------------');
+	dbms_output.put_line('PL/SQL Tokenizer Test Summary');
+	dbms_output.put_line('----------------------------------------');
 
 	--Run the chosen tests.
 	if bitand(p_tests, c_test_whitespace)              > 0 then test_whitespace; end if;
@@ -734,30 +740,15 @@ begin
 
 	--Print summary of results.
 	dbms_output.put_line(null);
-	dbms_output.put_line('----------------------------------------');
-	dbms_output.put_line('PL/SQL Lexer Test Summary');
-	dbms_output.put_line('----------------------------------------');
 	dbms_output.put_line('Total : '||g_test_count);
 	dbms_output.put_line('Passed: '||g_passed_count);
 	dbms_output.put_line('Failed: '||g_failed_count);
 
 	--Print easy to read pass or fail message.
 	if g_failed_count = 0 then
-		dbms_output.put_line('
-  _____         _____ _____ 
- |  __ \ /\    / ____/ ____|
- | |__) /  \  | (___| (___  
- |  ___/ /\ \  \___ \\___ \ 
- | |  / ____ \ ____) |___) |
- |_| /_/    \_\_____/_____/');
+		dbms_output.put_line(plsql_lexer_test.C_PASS_MESSAGE);
 	else
-		dbms_output.put_line('
-  ______      _____ _      
- |  ____/\   |_   _| |     
- | |__ /  \    | | | |     
- |  __/ /\ \   | | | |     
- | | / ____ \ _| |_| |____ 
- |_|/_/    \_\_____|______|');
+		dbms_output.put_line(plsql_lexer_test.C_FAIL_MESSAGE);
 	end if;
 end run;
 

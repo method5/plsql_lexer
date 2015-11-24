@@ -710,6 +710,12 @@ begin
 	g_passed_count := 0;
 	g_failed_count := 0;
 
+	--Print header.
+	dbms_output.put_line(null);
+	dbms_output.put_line('----------------------------------------');
+	dbms_output.put_line('PL/SQL Statement Classifier Test Summary');
+	dbms_output.put_line('----------------------------------------');
+
 	--Run the chosen tests.
 	if bitand(p_tests, c_errors)        > 0 then test_errors; end if;
 	if bitand(p_tests, c_commands)      > 0 then test_commands; end if;
@@ -718,30 +724,15 @@ begin
 
 	--Print summary of results.
 	dbms_output.put_line(null);
-	dbms_output.put_line('----------------------------------------');
-	dbms_output.put_line('PL/SQL Statement Classifier Test Summary');
-	dbms_output.put_line('----------------------------------------');
 	dbms_output.put_line('Total : '||g_test_count);
 	dbms_output.put_line('Passed: '||g_passed_count);
 	dbms_output.put_line('Failed: '||g_failed_count);
 
 	--Print easy to read pass or fail message.
 	if g_failed_count = 0 then
-		dbms_output.put_line('
-  _____         _____ _____
- |  __ \ /\    / ____/ ____|
- | |__) /  \  | (___| (___
- |  ___/ /\ \  \___ \\___ \
- | |  / ____ \ ____) |___) |
- |_| /_/    \_\_____/_____/');
+		dbms_output.put_line(plsql_lexer_test.C_PASS_MESSAGE);
 	else
-		dbms_output.put_line('
-  ______      _____ _
- |  ____/\   |_   _| |
- | |__ /  \    | | | |
- |  __/ /\ \   | | | |
- | | / ____ \ _| |_| |____
- |_|/_/    \_\_____|______|');
+		dbms_output.put_line(plsql_lexer_test.C_FAIL_MESSAGE);
 	end if;
 end run;
 

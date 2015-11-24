@@ -62,13 +62,21 @@ See the individual packages for details on each procedure.
 			p_compile_warning_message out varchar2
 		);
 
-- `statement_terminator` - Remove the last semicolon terminator, if it's unnecessary.  This will prepare a statement to run as dynamic SQL
+- `statement_terminator` - Remove unnecessary terminating semicolon and SQL*Plus delimiters.  This prepares a statement to run as dynamic SQL.
 
 		function remove_semicolon(
-			p_tokens       in token_table,
-			p_command_name in varchar2
+			p_tokens in token_table
 		) return nclob;
 
+		function remove_sqlplus_delimiter(
+			p_statement in nclob,
+			p_sqlplus_delimiter in nvarchar2 default '/'
+		) return nclob;
+
+		function remove_semi_and_sqlplus_del(
+			p_tokens in token_table,
+			p_sqlplus_delimiter in nvarchar2 default '/'
+		) return nclob;
 
 ## How to Install
 
@@ -108,6 +116,7 @@ See the individual packages for details on each procedure.
 
 3. Install unit tests (optional):
 
+        @/tests/plsql_lexer_test.plsql
         @/tests/tokenizer_test.plsql
         @/tests/statement_classifier_test.plsql
         @/tests/statement_splitter_test.plsql
