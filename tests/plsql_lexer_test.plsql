@@ -39,6 +39,7 @@ procedure run_static_tests is
 begin
 	statement_classifier_test.run(p_tests => statement_classifier_test.c_static_tests);
 	statement_splitter_test.run(p_tests => statement_splitter_test.c_static_tests);
+	statement_terminator_test.run(p_tests => statement_terminator_test.c_static_tests);
 	tokenizer_test.run(p_tests => tokenizer_test.c_static_tests);
 end;
 
@@ -49,6 +50,7 @@ procedure run_dynamic_tests is
 begin
 	statement_classifier_test.run(p_tests => statement_classifier_test.c_dynamic_tests);
 	statement_splitter_test.run(p_tests => statement_splitter_test.c_dynamic_tests);
+	statement_terminator_test.run(p_tests => statement_terminator_test.c_dynamic_tests);
 	tokenizer_test.run(p_tests => tokenizer_test.c_dynamic_tests);
 end;
 

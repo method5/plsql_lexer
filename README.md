@@ -116,11 +116,11 @@ See the individual packages for details on each procedure.
 
 3. Install unit tests (optional):
 
-        @/tests/plsql_lexer_test.plsql
         @/tests/tokenizer_test.plsql
         @/tests/statement_classifier_test.plsql
         @/tests/statement_splitter_test.plsql
-
+        @/tests/statement_terminator_test.plsql
+        @/tests/plsql_lexer_test.plsql
 
 ## Example
 

@@ -1,11 +1,11 @@
 create or replace package tokenizer_test authid current_user is
 /*
-## Purpose ##
+== Purpose ==
 
 Unit tests for tokenizer.
 
 
-## Example ##
+== Example ==
 
 begin
 	tokenzier_test.run;

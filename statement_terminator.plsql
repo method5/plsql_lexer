@@ -30,6 +30,8 @@ must not have a semicolon, but "create procedure ..." must end with a semicolon.
 Only the last semicolon is removed.  Just like with SQL*Plus, statements
 that end with two semicolons will not work correctly.
 
+Statements with serious parsing errors, like unclosed comments, may not be changed.
+
 
 == EXAMPLE ==
 
@@ -102,6 +104,8 @@ end build_statement_as_is;
 --Remove extra semicolons, if any, to prepare for dynamic execution.
 function remove_semicolon(p_tokens in token_table) return nclob is
 	v_command_name varchar2(4000);
+	v_lex_sqlcode  number;
+	v_lex_sqlerrm  varchar2(4000);
 	v_throwaway    varchar2(4000);
 begin
 	--Classify the tokens/statement.
@@ -111,12 +115,15 @@ begin
 		p_statement_type => v_throwaway,
 		p_command_name => v_command_name,
 		p_command_type => v_throwaway,
-		p_lex_sqlcode => v_throwaway,
-		p_lex_sqlerrm => v_throwaway
+		p_lex_sqlcode => v_lex_sqlcode,
+		p_lex_sqlerrm => v_lex_sqlerrm
 	);
 
+	--Do nothing if there's a serious parsing error:
+	if v_lex_sqlcode is not null or v_lex_sqlerrm is not null then
+		return build_statement_as_is(p_tokens);
 	--Remove semicolons from these:
-	if v_command_name in (
+	elsif v_command_name in (
 		'ADMINISTER KEY MANAGEMENT','ALTER ASSEMBLY','ALTER AUDIT POLICY','ALTER CLUSTER','ALTER DATABASE',
 		'ALTER DATABASE LINK','ALTER DIMENSION','ALTER DISK GROUP','ALTER EDITION','ALTER FLASHBACK ARCHIVE',
 		'ALTER FUNCTION','ALTER INDEX','ALTER INDEXTYPE','ALTER JAVA','ALTER LIBRARY','ALTER MATERIALIZED VIEW ',

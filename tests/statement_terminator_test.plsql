@@ -1,15 +1,15 @@
-create or replace package statement_classifier_test authid current_user is
+create or replace package statement_terminator_test authid current_user is
 /*
 == Purpose ==
 
-Unit tests for statement_classifier.
+Unit tests for statement_terminator.
 
 
 == Example ==
 
 begin
-	statement_classifier_test.run;
-	statement_classifier_test.run(statement_classifier_test.c_dynamic_tests);
+	statement_terminator_test.run;
+	statement_terminator_test.run(statement_terminator_test.c_dynamic_tests);
 end;
 
 */
@@ -18,9 +18,8 @@ pragma serially_reusable;
 --Globals to select which test suites to run.
 c_errors        constant number := power(2, 1);
 c_commands      constant number := power(2, 2);
-c_start_index   constant number := power(2, 3);
 
-c_static_tests  constant number := c_errors+c_commands+c_start_index;
+c_static_tests  constant number := c_errors+c_commands;
 
 c_dynamic_tests constant number := power(2, 30);
 
@@ -31,25 +30,13 @@ procedure run(p_tests number default c_static_tests);
 
 end;
 /
-create or replace package body statement_classifier_test is
+create or replace package body statement_terminator_test is
 pragma serially_reusable;
 
 --Global counters.
 g_test_count number := 0;
 g_passed_count number := 0;
 g_failed_count number := 0;
-
---Global types
-type output_rec is record
-(
-	category varchar2(100),
-	statement_type varchar2(100),
-	command_name varchar2(64),
-	command_type number,
-	lex_sqlcode number,
-	lex_sqlerrm varchar2(4000),
-	fatal_error varchar2(4000)
-);
 
 
 -- =============================================================================
@@ -73,44 +60,10 @@ end assert_equals;
 
 
 --------------------------------------------------------------------------------
-procedure classify(p_statement nclob, p_output out output_rec, p_start_index in number default 1) is
-	v_category varchar2(100);
-	v_statement_type varchar2(100);
-	v_command_name varchar2(64);
-	v_command_type number;
-	v_lex_sqlcode number;
-	v_lex_sqlerrm varchar2(4000);
+function get_wo_semi(p_statement clob) return clob is
 begin
-	statement_classifier.classify(tokenizer.tokenize(p_statement),
-		v_category,v_statement_type,v_command_name,v_command_type,v_lex_sqlcode,v_lex_sqlerrm,p_start_index);
-
-	p_output.category := v_category;
-	p_output.statement_type := v_statement_type;
-	p_output.command_name := v_command_name;
-	p_output.command_type := v_command_type;
-	p_output.lex_sqlcode := v_lex_sqlcode;
-	p_output.lex_sqlerrm := v_lex_sqlerrm;
-	p_output.fatal_error := null;
-exception when others then
-	p_output.fatal_error := dbms_utility.format_error_stack||dbms_utility.format_error_backtrace;
-end classify;
-
-
---------------------------------------------------------------------------------
-function get_sqlerrm(p_statement nclob) return varchar2 is
-	v_category varchar2(100);
-	v_statement_type varchar2(100);
-	v_command_name varchar2(64);
-	v_command_type number;
-	v_lex_sqlcode number;
-	v_lex_sqlerrm varchar2(4000);
-begin
-	statement_classifier.classify(tokenizer.tokenize(p_statement),
-		v_category,v_statement_type,v_command_name,v_command_type,v_lex_sqlcode,v_lex_sqlerrm);
-	return null;
-exception when others then
-	return sqlerrm;
-end get_sqlerrm;
+	return statement_terminator.remove_semicolon(p_tokens => tokenizer.tokenize(p_source => p_statement));
+end get_wo_semi;
 
 
 -- =============================================================================
@@ -118,83 +71,67 @@ end get_sqlerrm;
 -- =============================================================================
 
 --------------------------------------------------------------------------------
+--NOTE: This test suite is very similar to the one in STATEMENT_CLASSIFIER_TEST.
+--If you add a test case here you should probably add one there as well.
 procedure test_errors is
-	v_output output_rec;
-
-	--Helper function that concatenates results for easy string comparison.
-	function concat(p_output output_rec) return varchar2 is
-	begin
-		return nvl(p_output.fatal_error,
-			p_output.category||'|'||p_output.statement_type||'|'||p_output.command_name||'|'||p_output.command_type);
-	end;
+	v_statement clob;
 begin
-	classify('(select * from dual)', v_output);
-	assert_equals('No errors 1', null, v_output.lex_sqlcode);
-	assert_equals('No errors 1', null, v_output.lex_sqlerrm);
+	v_statement := 'select * from dual;';
+	assert_equals('No errors', 'select * from dual', get_wo_semi(v_statement));
 
-	classify('(select * from dual) /*', v_output);
-	assert_equals('Comment error 1', -1742, v_output.lex_sqlcode);
-	assert_equals('Comment error 2', 'comment not terminated properly', v_output.lex_sqlerrm);
+	--The string should not change at all if there are significant parsing errors. 
+	v_statement := '(select * from dual); /*';
+	assert_equals('Comment error', v_statement, get_wo_semi(v_statement));
 
-	classify('(select * from dual) "', v_output);
-	assert_equals('Missing double quote error 1', -1740, v_output.lex_sqlcode);
-	assert_equals('Missing double quote error 2', 'missing double quote in identifier', v_output.lex_sqlerrm);
+	v_statement := '(select * from dual); "';
+	assert_equals('Missing double quote error 1', v_statement, get_wo_semi(v_statement));
+	v_statement := '(select * from dual) ";';
+	assert_equals('Missing double quote error 2', v_statement, get_wo_semi(v_statement));
 
-	--"Zero-length identifier" error, but must be caught by the parser.
-	classify('(select 1 "" from dual)', v_output);
-	assert_equals('Zero-length identifier 1', null, v_output.lex_sqlcode);
-	assert_equals('Zero-length identifier 2', null, v_output.lex_sqlerrm);
+	--These are *not* knowable lexical errors.
+	--They could be valid for links so they cannot be checked at lex time.
+	v_statement := '(select 1 "" from dual);';
+	assert_equals('Zero-length identifier 1', '(select 1 "" from dual)', get_wo_semi(v_statement));
+	v_statement := '(select 1 a123456789012345678901234567890 from dual);';
+	assert_equals('Identifier too long error 1', '(select 1 a123456789012345678901234567890 from dual)', get_wo_semi(v_statement));
+	v_statement := '(select 1 "a123456789012345678901234567890" from dual);';
+	assert_equals('Identifier too long error 2', '(select 1 "a123456789012345678901234567890" from dual)', get_wo_semi(v_statement));
 
-	--"identifier is too long" error, but must be caught by the parser.
-	classify('(select 1 a123456789012345678901234567890 from dual)', v_output);
-	assert_equals('Identifier too long error 1', null, v_output.lex_sqlcode);
-	assert_equals('Identifier too long error 2', null, v_output.lex_sqlerrm);
+	v_statement := q'<select q'  ' from dual;>';
+	assert_equals('Invalid character 1', v_statement, get_wo_semi(v_statement));
 
-	--"identifier is too long" error, but must be caught by the parser.
-	classify('(select 1 "a123456789012345678901234567890" from dual)', v_output);
-	assert_equals('Identifier too long error 3', null, v_output.lex_sqlcode);
-	assert_equals('Identifier too long error 4', null, v_output.lex_sqlerrm);
+	v_statement := q'<select nq'  ' from dual;>';
+	assert_equals('Invalid character 2', v_statement, get_wo_semi(v_statement));
 
-	classify(q'<declare v_test varchar2(100) := q'  '; begin null; end;>', v_output);
-	assert_equals('Invalid character 1', -911, v_output.lex_sqlcode);
-	assert_equals('Invalid character 2', 'invalid character', v_output.lex_sqlerrm);
-	classify(q'<declare v_test varchar2(100) := nq'  '; begin null; end;>', v_output);
-	assert_equals('Invalid character 3', -911, v_output.lex_sqlcode);
-	assert_equals('Invalid character 4', 'invalid character', v_output.lex_sqlerrm);
+	v_statement := '(select * from dual); '' ';
+	assert_equals('String not terminated 1', v_statement, get_wo_semi(v_statement));
 
-	classify('(select * from dual) '' ', v_output);
-	assert_equals('String not terminated 1', -1756, v_output.lex_sqlcode);
-	assert_equals('String not terminated 2', 'quoted string not properly terminated', v_output.lex_sqlerrm);
-	classify(q'<(select * from dual) q'!' >', v_output);
-	assert_equals('String not terminated 3', -1756, v_output.lex_sqlcode);
-	assert_equals('String not terminated 4', 'quoted string not properly terminated', v_output.lex_sqlerrm);
+	v_statement := q'<(select * from dual); q'!' >';
+	assert_equals('String not terminated 2', v_statement, get_wo_semi(v_statement));
 
-	--Invalid.
-	classify(q'[asdf]', v_output); assert_equals('Cannot classify 1', 'Invalid|Invalid|Invalid|-1', concat(v_output));
-	classify(q'[create tableS test1(a number);]', v_output); assert_equals('Cannot classify 2', 'Invalid|Invalid|Invalid|-1', concat(v_output));
-	classify(q'[seeelect * from dual]', v_output); assert_equals('Cannot classify 3', 'Invalid|Invalid|Invalid|-1', concat(v_output));
-	classify(q'[alter what_is_this set x = y;]', v_output); assert_equals('Cannot classify 4', 'Invalid|Invalid|Invalid|-1', concat(v_output));
-	classify(q'[upsert my_table using other_table on (my_table.a = other_table.a) when matched then update set b = 1]', v_output); assert_equals('Cannot classify 5', 'Invalid|Invalid|Invalid|-1', concat(v_output));
+	v_statement := q'<(select * from dual); q'!;' >';
+	assert_equals('String not terminated 3', v_statement, get_wo_semi(v_statement));
 
-	--Nothing.
-	classify(q'[]', v_output); assert_equals('Nothing to classify 1', 'Nothing|Nothing|Nothing|-2', concat(v_output));
-	classify(q'[ 	 ]', v_output); assert_equals('Nothing to classify 2', 'Nothing|Nothing|Nothing|-2', concat(v_output));
-	classify(q'[ /* asdf */ ]', v_output); assert_equals('Nothing to classify 3', 'Nothing|Nothing|Nothing|-2', concat(v_output));
-	classify(q'[ -- comment ]', v_output); assert_equals('Nothing to classify 4', 'Nothing|Nothing|Nothing|-2', concat(v_output));
-	classify(q'[ /* asdf ]', v_output); assert_equals('Nothing to classify 5', 'Nothing|Nothing|Nothing|-2', concat(v_output));
+	--Invalid
+	v_statement := q'[asdf;]'; assert_equals('Invalid 1', v_statement, get_wo_semi(v_statement));
+	v_statement := q'[create tableS test1(a number);]'; assert_equals('Invalid 2', v_statement, get_wo_semi(v_statement));
+	v_statement := q'[seeelect * from dual;]'; assert_equals('Invalid 3', v_statement, get_wo_semi(v_statement));
+	v_statement := q'[alter what_is_this set x = y;]'; assert_equals('Invalid 4', v_statement, get_wo_semi(v_statement));
+	v_statement := q'[upsert my_table using other_table on (my_table.a = other_table.a) when matched then update set b = 1;]'; assert_equals('Invalid 5', v_statement, get_wo_semi(v_statement));
+
+	--Nothing
+	v_statement := q'[;]'; assert_equals('Nothing 1', v_statement, get_wo_semi(v_statement));
+	v_statement := q'[ 	 ;]'; assert_equals('Nothing 2', v_statement, get_wo_semi(v_statement));
+	v_statement := q'[ /* asdf */ ;]'; assert_equals('Nothing 3', v_statement, get_wo_semi(v_statement));
+	v_statement := q'[; -- comment ]'; assert_equals('Nothing 4', v_statement, get_wo_semi(v_statement));
+	v_statement := q'[; /* asdf ]'; assert_equals('Nothing 5', v_statement, get_wo_semi(v_statement));
 end test_errors;
 
 
 --------------------------------------------------------------------------------
+--NOTE: This test suite is very similar to the one in STATEMENT_CLASSIFIER_TEST.
+--If you add a test case here you should probably add one there as well.
 procedure test_commands is
-	v_output output_rec;
-
-	--Helper function that concatenates results for easy string comparison.
-	function concat(p_output output_rec) return varchar2 is
-	begin
-		return nvl(p_output.fatal_error,
-			p_output.category||'|'||p_output.statement_type||'|'||p_output.command_name||'|'||p_output.command_type);
-	end;
 begin
 	/*
 	DDL
@@ -213,17 +150,20 @@ begin
 		BLOCK
 	*/
 
+	null;
+
+/*
 	--These tests are based on `select * from v$sqlcommand order by command_name;`,
 	--and comparing syntx with the manual.
-	classify(q'[/*comment*/ adMINister /*asdf*/ kEy manaGEment create keystore 'asdf' identified by qwer]', v_output); assert_equals('ADMINISTER KEY MANAGEMENT', 'DDL|ADMINISTER KEY MANAGEMENT|ADMINISTER KEY MANAGEMENT|238', concat(v_output));
-	classify(q'[ alter assemBLY /*I don't think this is a real command but whatever*/]', v_output); assert_equals('ALTER ASSEMBLY', 'DDL|ALTER|ALTER ASSEMBLY|217', concat(v_output));
+	classify(q'[\*comment*\ adMINister \*asdf*\ kEy manaGEment create keystore 'asdf' identified by qwer]', v_output); assert_equals('ADMINISTER KEY MANAGEMENT', 'DDL|ADMINISTER KEY MANAGEMENT|ADMINISTER KEY MANAGEMENT|238', concat(v_output));
+	classify(q'[ alter assemBLY \*I don't think this is a real command but whatever*\]', v_output); assert_equals('ALTER ASSEMBLY', 'DDL|ALTER|ALTER ASSEMBLY|217', concat(v_output));
 	classify(q'[ ALTEr AUDIt POLICY myPOLICY drop roles myRole; --comment]', v_output); assert_equals('ALTER AUDIT POLICY', 'DDL|ALTER|ALTER AUDIT POLICY|230', concat(v_output));
 	classify(q'[	alter	cluster	schema.my_cluster parallel 8]', v_output); assert_equals('ALTER CLUSTER', 'DDL|ALTER|ALTER CLUSTER|5', concat(v_output));
 	classify(q'[alter database cdb1 mount]', v_output); assert_equals('ALTER DATABASE', 'DDL|ALTER|ALTER DATABASE|35', concat(v_output));
 	classify(q'[alter shared public database link my_link connect to me identified by "password";]', v_output); assert_equals('ALTER DATABASE LINK', 'DDL|ALTER|ALTER DATABASE LINK|225', concat(v_output));
 	classify(q'[ alter dimENSION my_dimension#12 compile;]', v_output); assert_equals('ALTER DIMENSION', 'DDL|ALTER|ALTER DIMENSION|175', concat(v_output));
 	--Command name has extra space, real command is "DISKGROUP".
-	classify(q'[/*+useless comment*/ alter diskgroup +orcl13 resize disk '/emcpowersomething/' size 500m;]', v_output); assert_equals('ALTER DISKGROUP', 'DDL|ALTER|ALTER DISK GROUP|193', concat(v_output));
+	classify(q'[\*+useless comment*\ alter diskgroup +orcl13 resize disk '/emcpowersomething/' size 500m;]', v_output); assert_equals('ALTER DISKGROUP', 'DDL|ALTER|ALTER DISK GROUP|193', concat(v_output));
 	--Undocumented feature:
 	classify(q'[ alter EDITION my_edition unusable]', v_output); assert_equals('ALTER EDITION', 'DDL|ALTER|ALTER EDITION|213', concat(v_output));
 	classify(q'[ alter  flashback  archive myarchive set default;]', v_output); assert_equals('ALTER FLASHBACK ARCHIVE', 'DDL|ALTER|ALTER FLASHBACK ARCHIVE|219', concat(v_output));
@@ -234,8 +174,8 @@ begin
 	classify(q'[alter library test_library editionable compile;]', v_output); assert_equals('ALTER LIBRARY', 'DDL|ALTER|ALTER LIBRARY|196', concat(v_output));
 	classify(q'[ALTER  MATERIALIZED  VIEW a_schema.mv_name cache consider fresh;]', v_output); assert_equals('ALTER MATERIALIZED VIEW ', 'DDL|ALTER|ALTER MATERIALIZED VIEW |75', concat(v_output));
 	classify(q'[ALTER  SNAPSHOT a_schema.mv_name cache consider fresh;]', v_output); assert_equals('ALTER MATERIALIZED VIEW ', 'DDL|ALTER|ALTER MATERIALIZED VIEW |75', concat(v_output));
-	classify(q'[ALTER /*a*/ MATERIALIZED /*b*/ VIEW /*c*/LOG force on my_table parallel 10]', v_output); assert_equals('ALTER MATERIALIZED VIEW LOG', 'DDL|ALTER|ALTER MATERIALIZED VIEW LOG|72', concat(v_output));
-	classify(q'[ALTER /*a*/ SNAPSHOT /*c*/LOG force on my_table parallel 10]', v_output); assert_equals('ALTER MATERIALIZED VIEW LOG', 'DDL|ALTER|ALTER MATERIALIZED VIEW LOG|72', concat(v_output));
+	classify(q'[ALTER \*a*\ MATERIALIZED \*b*\ VIEW \*c*\LOG force on my_table parallel 10]', v_output); assert_equals('ALTER MATERIALIZED VIEW LOG', 'DDL|ALTER|ALTER MATERIALIZED VIEW LOG|72', concat(v_output));
+	classify(q'[ALTER \*a*\ SNAPSHOT \*c*\LOG force on my_table parallel 10]', v_output); assert_equals('ALTER MATERIALIZED VIEW LOG', 'DDL|ALTER|ALTER MATERIALIZED VIEW LOG|72', concat(v_output));
 	classify(q'[ alter  materialized	zonemap my_schema.my_zone enable pruning]', v_output); assert_equals('ALTER MATERIALIZED ZONEMAP', 'DDL|ALTER|ALTER MATERIALIZED ZONEMAP|240', concat(v_output));
 	classify(q'[alter operator my_operator add binding (number) return (number) using my_function]', v_output); assert_equals('ALTER OPERATOR', 'DDL|ALTER|ALTER OPERATOR|183', concat(v_output));
 	classify(q'[alter outline public my_outline disable;]', v_output); assert_equals('ALTER OUTLINE', 'DDL|ALTER|ALTER OUTLINE|179', concat(v_output));
@@ -271,7 +211,7 @@ begin
 	classify(q'[ALTER SESSION set current_schema=my_schema]', v_output); assert_equals('ALTER SESSION', 'Session Control|ALTER SESSION|ALTER SESSION|42', concat(v_output));
 	--An old version of "ALTER SNAPSHOT"?  This is not supported in 11gR2+.
 	--classify(q'[ALTER SUMMARY a_schema.mv_name cache;]', v_output); assert_equals('ALTER SUMMARY', 'DDL|ALTER|ALTER SUMMARY|172', concat(v_output));
-	classify(q'[ALTER /**/public/**/ SYNONYM my_synonym compile]', v_output); assert_equals('ALTER SYNONYM', 'DDL|ALTER|ALTER SYNONYM|192', concat(v_output));
+	classify(q'[ALTER \**\public\**\ SYNONYM my_synonym compile]', v_output); assert_equals('ALTER SYNONYM', 'DDL|ALTER|ALTER SYNONYM|192', concat(v_output));
 	classify(q'[ALTER SYNONYM  my_synonym compile]', v_output); assert_equals('ALTER SYNONYM', 'DDL|ALTER|ALTER SYNONYM|192', concat(v_output));
 	classify(q'[alter system set memory_target=5m]', v_output); assert_equals('ALTER SYSTEM', 'System Control|ALTER SYSTEM|ALTER SYSTEM|49', concat(v_output));
 	classify(q'[alter system reset "_stupid_hidden_parameter"]', v_output); assert_equals('ALTER SYSTEM', 'System Control|ALTER SYSTEM|ALTER SYSTEM|49', concat(v_output));
@@ -560,7 +500,7 @@ begin
 	classify(q'[GRANT dba my_user]', v_output); assert_equals('GRANT OBJECT 1', 'DDL|GRANT|GRANT OBJECT|17', concat(v_output));
 	classify(q'[GRANT select on my_table to some_other_user with grant option]', v_output); assert_equals('GRANT OBJECT 2', 'DDL|GRANT|GRANT OBJECT|17', concat(v_output));
 	classify(q'[GRANT dba to my_package]', v_output); assert_equals('GRANT OBJECT 3', 'DDL|GRANT|GRANT OBJECT|17', concat(v_output));
-	classify(q'[INSERT /*+ append */ into my_table select * from other_table]', v_output); assert_equals('INSERT', 'DML|INSERT|INSERT|2', concat(v_output));
+	classify(q'[INSERT \*+ append *\ into my_table select * from other_table]', v_output); assert_equals('INSERT', 'DML|INSERT|INSERT|2', concat(v_output));
 	classify(q'[INSERT all into table1(a) values(b) into table2(a) values(b) select b from another_table;]', v_output); assert_equals('INSERT', 'DML|INSERT|INSERT|2', concat(v_output));
 	classify(q'[LOCK TABLE my_schema.my_table in exclsive mode]', v_output); assert_equals('LOCK TABLE', 'DML|LOCK TABLE|LOCK TABLE|26', concat(v_output));
 	--See "UPSERT" for "MERGE".
@@ -569,7 +509,7 @@ begin
 	classify(q'[NOAUDIT policy my_policy by some_user]', v_output); assert_equals('NOAUDIT OBJECT', 'DDL|NOAUDIT|NOAUDIT OBJECT|31', concat(v_output));
 
 	classify(q'[ <<my_label>>begin null; end;]', v_output); assert_equals('PL/SQL EXECUTE', 'PL/SQL|BLOCK|PL/SQL EXECUTE|47', concat(v_output));
-	classify(q'[/*asdf*/declare v_test number; begin null; end; /]', v_output); assert_equals('PL/SQL EXECUTE', 'PL/SQL|BLOCK|PL/SQL EXECUTE|47', concat(v_output));
+	classify(q'[\*asdf*\declare v_test number; begin null; end; /]', v_output); assert_equals('PL/SQL EXECUTE', 'PL/SQL|BLOCK|PL/SQL EXECUTE|47', concat(v_output));
 	classify(q'[  begin null; end; /]', v_output); assert_equals('PL/SQL EXECUTE', 'PL/SQL|BLOCK|PL/SQL EXECUTE|47', concat(v_output));
 
 	--Command name has space instead of underscore.
@@ -590,7 +530,7 @@ begin
 	classify(q'[SAVEPOINT my_savepoint;]', v_output); assert_equals('SAVEPOINT', 'Transaction Control|SAVEPOINT|SAVEPOINT|46', concat(v_output));
 
 	classify(q'[select * from dual;]', v_output); assert_equals('SELECT 1', 'DML|SELECT|SELECT|3', concat(v_output));
-	classify(q'[/*asdf*/select * from dual;]', v_output); assert_equals('SELECT 2', 'DML|SELECT|SELECT|3', concat(v_output));
+	classify(q'[\*asdf*\select * from dual;]', v_output); assert_equals('SELECT 2', 'DML|SELECT|SELECT|3', concat(v_output));
 	classify(q'[((((select * from dual))));]', v_output); assert_equals('SELECT 3', 'DML|SELECT|SELECT|3', concat(v_output));
 	classify(q'[with test1 as (select 1 a from dual) select * from test1;]', v_output); assert_equals('SELECT 4', 'DML|SELECT|SELECT|3', concat(v_output));
 	classify(q'[with function test_function return number is begin return 1; end; select test_function from dual;
@@ -613,25 +553,8 @@ begin
 	classify(q'[merge into table1 using table2 on (table1.a = table2.a) when not matched then update set table1.a = 1;]', v_output); assert_equals('UPSERT', 'DML|MERGE|UPSERT|189', concat(v_output));
 	--Not a real command, this is part of ANALYZE.
 	--classify(q'[VALIDATE INDEX]', v_output); assert_equals('VALIDATE INDEX', '?|?|VALIDATE INDEX|23', concat(v_output));
-
+*/
 end test_commands;
-
-
---------------------------------------------------------------------------------
-procedure test_start_index is
-	v_output output_rec;
-
-	--Helper function that concatenates results for easy string comparison.
-	function concat(p_output output_rec) return varchar2 is
-	begin
-		return nvl(p_output.fatal_error,
-			p_output.category||'|'||p_output.statement_type||'|'||p_output.command_name||'|'||p_output.command_type);
-	end;
-begin
-	classify(q'[begin null; end;select * from dual;]', v_output, 8); assert_equals('Start index 1', 'DML|SELECT|SELECT|3', concat(v_output));
-	classify(q'[select * from dual a; <<my_label>>begin null; end;]', v_output, 11); assert_equals('Start index 2', 'PL/SQL|BLOCK|PL/SQL EXECUTE|47', concat(v_output));
-	classify(q'[select * from dual;select * from dual;select * from dual;]', v_output, 17); assert_equals('Start index 1', 'DML|SELECT|SELECT|3', concat(v_output));
-end test_start_index;
 
 
 --------------------------------------------------------------------------------
@@ -719,7 +642,6 @@ begin
 	--Run the chosen tests.
 	if bitand(p_tests, c_errors)        > 0 then test_errors; end if;
 	if bitand(p_tests, c_commands)      > 0 then test_commands; end if;
-	if bitand(p_tests, c_start_index)   > 0 then test_start_index; end if;
 	if bitand(p_tests, c_dynamic_tests) > 0 then dynamic_tests; end if;
 
 	--Print summary of results.

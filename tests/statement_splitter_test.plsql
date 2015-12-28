@@ -1,11 +1,11 @@
 create or replace package statement_splitter_test authid current_user is
 /*
-## Purpose ##
+== Purpose ==
 
 Unit tests for statement_splitter.
 
 
-## Example ##
+== Example ==
 
 begin
 	statement_splitter_test.run;
