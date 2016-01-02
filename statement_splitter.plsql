@@ -1233,11 +1233,15 @@ begin
 	--Throw an error if the delimiter is null.
 	if p_sqlplus_delimiter is null then
 		raise_application_error(-20000, 'The SQL*Plus delimiter cannot be NULL.');
-	--Throw an error if the delimiter is whitespace.
-	elsif tokenizer.is_lexical_whitespace(p_sqlplus_delimiter) then
-		raise_application_error(-20000, 'The SQL*Plus delimiter cannot be whitespace.');
+	end if;
+	--Throw an error if the delimiter contains whitespace.
+	for i in 1 .. lengthc(p_sqlplus_delimiter) loop
+		if tokenizer.is_lexical_whitespace(substrc(p_sqlplus_delimiter, i, 1)) then
+			raise_application_error(-20001, 'The SQL*Plus delimiter cannot contain whitespace.');
+		end if;
+	end loop;
 	--Return an empty string if the string is NULL.
-	elsif p_statements is null then
+	if p_statements is null then
 		v_strings.extend;
 		v_strings(v_strings.count) := p_statements;
 		return v_strings;

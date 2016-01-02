@@ -30,7 +30,8 @@ must not have a semicolon, but "create procedure ..." must end with a semicolon.
 Only the last semicolon is removed.  Just like with SQL*Plus, statements
 that end with two semicolons will not work correctly.
 
-Statements with serious parsing errors, like unclosed comments, may not be changed.
+Semicolons may not be removed if the statement has a serious parsing error, like
+an unclosed comment.
 
 
 == EXAMPLE ==
@@ -189,9 +190,114 @@ function remove_sqlplus_delimiter(
 	p_sqlplus_delimiter in nvarchar2 default '/'
 ) return nclob
 is
+	v_tokens token_table := tokenizer.tokenize(p_statement);
+
+	v_delimiter_begin_index number;
+	v_delimiter_end_index number;
+
+	v_2_token_before_delimiter token;
+	v_1_token_before_delimiter token;
+	v_potential_delimiter nclob;
+	v_1_token_after_delimiter token;
+	v_2_token_after_delimiter token;
+
+	v_statement_without_delimiter nclob;
 begin
-	--TODO
-	null;
+	--Special cases.
+	--
+	--Throw an error if the delimiter is null.
+	if p_sqlplus_delimiter is null then
+		raise_application_error(-20000, 'The SQL*Plus delimiter cannot be NULL.');
+	end if;
+	--Throw an error if the delimiter contains whitespace.
+	for i in 1 .. lengthc(p_sqlplus_delimiter) loop
+		if tokenizer.is_lexical_whitespace(substrc(p_sqlplus_delimiter, i, 1)) then
+			raise_application_error(-20001, 'The SQL*Plus delimiter cannot contain whitespace.');
+		end if;
+	end loop;
+	--Return an empty string if the string is NULL.
+	if p_statement is null then
+		return null;
+	end if;
+
+	--Gather tokens before and after, and delimiter.
+	--
+	--Loop through all tokens in reverse order.
+	for token_index in reverse 1 .. v_tokens.count loop
+		--Look for the last non-whitespace/comment/EOF
+		if v_tokens(token_index).type not in (tokenizer.c_whitespace, tokenizer.c_comment, tokenizer.c_eof) then
+			v_delimiter_end_index := token_index;
+
+			--Get tokens after delimiter.
+			v_1_token_after_delimiter := v_tokens(token_index + 1);
+			if token_index + 2 <= v_tokens.count then
+				v_2_token_after_delimiter := v_tokens(token_index + 2);
+			end if;
+
+			--Get potential delimiter - go until whitespace or comment found.
+			for delimiter_index in reverse 1 .. token_index loop
+				--Build delimiter.
+				if v_tokens(delimiter_index).type not in (tokenizer.c_whitespace, tokenizer.c_comment) then
+					v_potential_delimiter := v_tokens(delimiter_index).value || v_potential_delimiter;
+				--If something else found, get tokens before delimiter and quit.
+				else
+					v_delimiter_begin_index := delimiter_index + 1;
+					v_1_token_before_delimiter := v_tokens(delimiter_index);
+					if delimiter_index - 1 >= 1 then
+						v_2_token_before_delimiter := v_tokens(delimiter_index - 1);
+					end if;
+					exit;
+				end if;
+			end loop;
+
+			--Quit outer loop.
+			exit;
+		end if;
+	end loop;
+
+	--DEBUG, TODO:
+--	dbms_output.put_line('Before 2: '||case when v_2_token_before_delimiter is not null then v_2_token_before_delimiter.value end);
+--	dbms_output.put_line('Before 1: '||case when v_1_token_before_delimiter is not null then v_1_token_before_delimiter.value end);
+--	dbms_output.put_line('Potential Delimiter: '||v_potential_delimiter);
+--	dbms_output.put_line('SQL*Plus Delimiter: '||p_sqlplus_delimiter);
+--	dbms_output.put_line('After 1: '||case when v_1_token_after_delimiter is not null then v_1_token_after_delimiter.value end);
+--	dbms_output.put_line('After 2: '||case when v_2_token_after_delimiter is not null then v_2_token_after_delimiter.value end);
+
+	--Return the original statement if these conditions do not match:
+	if
+		--Delimiters must match.
+		(p_sqlplus_delimiter = v_potential_delimiter) and
+		--Before the delimiter, if anything, must be whitespace.
+		(v_1_token_before_delimiter is null or v_1_token_before_delimiter.type = tokenizer.c_whitespace) and
+		--If there are two tokens before then the first token before must have a newline.
+		(v_2_token_before_delimiter is null or instr(v_1_token_before_delimiter.value, chr(10)) >= 1) and
+		--After the delimiter, if anything, must be whitespace or EOF.
+		(v_1_token_after_delimiter is null or v_1_token_after_delimiter.type in (tokenizer.c_whitespace, tokenizer.c_eof)) and
+		--There is only one token after, or the second token after is EOF, or the first token after has a newline.
+		(v_2_token_after_delimiter is null or v_2_token_after_delimiter.type = tokenizer.c_eof
+		or
+			(
+				instr(v_1_token_after_delimiter.value, chr(10)) >= 1
+			)
+		)
+	then
+		null;
+	else
+		return p_statement;
+	end if;
+
+	--Put the string back together without the delimiter.
+	if v_delimiter_begin_index is null then
+		v_statement_without_delimiter := p_statement;
+	else
+		for i in 1 .. v_tokens.count loop
+			if i not between v_delimiter_begin_index and v_delimiter_end_index then
+				v_statement_without_delimiter := v_statement_without_delimiter || v_tokens(i).value;
+			end if;
+		end loop;
+	end if;
+
+	return v_statement_without_delimiter;
 end remove_sqlplus_delimiter;
 
 
@@ -203,7 +309,7 @@ function remove_semi_and_sqlplus_del(
 is
 begin
 	--TODO
-	null;
+	return null;
 end remove_semi_and_sqlplus_del;
 
 end;

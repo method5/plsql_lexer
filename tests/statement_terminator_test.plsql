@@ -16,10 +16,13 @@ end;
 pragma serially_reusable;
 
 --Globals to select which test suites to run.
-c_errors        constant number := power(2, 1);
-c_commands      constant number := power(2, 2);
+c_semicolon          constant number := power(2, 1);
+c_semicolon_errors   constant number := power(2, 2);
+c_semicolon_commands constant number := power(2, 3);
+c_sqlplus            constant number := power(2, 4);
+c_sqlplus_and_semi   constant number := power(2, 5);
 
-c_static_tests  constant number := c_errors+c_commands;
+c_static_tests  constant number := c_semicolon+c_semicolon_errors+c_semicolon_commands+c_sqlplus+c_sqlplus_and_semi;
 
 c_dynamic_tests constant number := power(2, 30);
 
@@ -66,6 +69,13 @@ begin
 end get_wo_semi;
 
 
+--------------------------------------------------------------------------------
+function get_wo_sqlplus(p_statement clob) return clob is
+begin
+	return statement_terminator.remove_sqlplus_delimiter(p_statement => p_statement);
+end get_wo_sqlplus;
+
+
 -- =============================================================================
 -- Test Suites
 -- =============================================================================
@@ -73,7 +83,26 @@ end get_wo_semi;
 --------------------------------------------------------------------------------
 --NOTE: This test suite is very similar to the one in STATEMENT_CLASSIFIER_TEST.
 --If you add a test case here you should probably add one there as well.
-procedure test_errors is
+procedure test_semicolon is
+	v_statement clob;
+begin
+	--Simple example.
+	v_statement := 'select * from dual;';
+	assert_equals('Simple 1', 'select * from dual', get_wo_semi(v_statement));
+
+	--Only remove one semicolon, not two.
+	v_statement := 'select * from dual;;';
+	assert_equals('Only remove one semi 1', 'select * from dual;', get_wo_semi(v_statement));
+
+	--TODO:
+	null;
+end test_semicolon;
+
+
+--------------------------------------------------------------------------------
+--NOTE: This test suite is very similar to the one in STATEMENT_CLASSIFIER_TEST.
+--If you add a test case here you should probably add one there as well.
+procedure test_semicolon_errors is
 	v_statement clob;
 begin
 	v_statement := 'select * from dual;';
@@ -125,13 +154,13 @@ begin
 	v_statement := q'[ /* asdf */ ;]'; assert_equals('Nothing 3', v_statement, get_wo_semi(v_statement));
 	v_statement := q'[; -- comment ]'; assert_equals('Nothing 4', v_statement, get_wo_semi(v_statement));
 	v_statement := q'[; /* asdf ]'; assert_equals('Nothing 5', v_statement, get_wo_semi(v_statement));
-end test_errors;
+end test_semicolon_errors;
 
 
 --------------------------------------------------------------------------------
 --NOTE: This test suite is very similar to the one in STATEMENT_CLASSIFIER_TEST.
 --If you add a test case here you should probably add one there as well.
-procedure test_commands is
+procedure test_semicolon_commands is
 begin
 	/*
 	DDL
@@ -151,6 +180,7 @@ begin
 	*/
 
 	null;
+	--TODO:
 
 /*
 	--These tests are based on `select * from v$sqlcommand order by command_name;`,
@@ -554,7 +584,57 @@ begin
 	--Not a real command, this is part of ANALYZE.
 	--classify(q'[VALIDATE INDEX]', v_output); assert_equals('VALIDATE INDEX', '?|?|VALIDATE INDEX|23', concat(v_output));
 */
-end test_commands;
+end test_semicolon_commands;
+
+
+--------------------------------------------------------------------------------
+procedure test_sqlplus is
+	v_statement clob;
+begin
+	--Simple.
+	v_statement := 'select * from dual'||chr(10)||'/';
+	assert_equals('Simple 1', 'select * from dual'||chr(10), get_wo_sqlplus(v_statement));
+
+	--Ignore whitespace around slash.
+	v_statement := 'select * from dual'||chr(10)||' / ';
+	assert_equals('Ignore whitespace around slash 1', 'select * from dual'||chr(10)||'  ', get_wo_sqlplus(v_statement));
+	v_statement := 'select * from dual'||chr(10)||chr(10)||chr(10)||' / ';
+	assert_equals('Ignore whitespace around slash 2', 'select * from dual'||chr(10)||chr(10)||chr(10)||'  ', get_wo_sqlplus(v_statement));
+	v_statement := 'select * from dual'||chr(10)||'		 / 		';
+	assert_equals('Ignore whitespace around slash 3', 'select * from dual'||chr(10)||'		  		', get_wo_sqlplus(v_statement));
+	v_statement := 'select * from dual'||chr(10)||chr(13)||' / ';
+	assert_equals('Ignore whitespace around slash 4', 'select * from dual'||chr(10)||chr(13)||'  ', get_wo_sqlplus(v_statement));
+
+	--Ignore slash if there's non-whitespace.
+	v_statement := 'select * from dual'||chr(10)||' / --asdf';
+	assert_equals('Ignore if non-whitespace on line 1', v_statement, get_wo_sqlplus(v_statement));
+	v_statement := 'select * from dual'||chr(10)||'a /';
+	assert_equals('Ignore if non-whitespace on line 2', v_statement, get_wo_sqlplus(v_statement));
+	v_statement := 'select * from dual'||chr(10)||' / /*comment*/';
+	assert_equals('Ignore if non-whitespace on line 3', v_statement, get_wo_sqlplus(v_statement));
+	v_statement := 'select * from dual'||chr(10)||'/*comment*/ / ';
+	assert_equals('Ignore if non-whitespace on line 4', v_statement, get_wo_sqlplus(v_statement));
+
+
+	--Remove slash if there's a comment on the *next* line.
+
+	--Double slashes are not removed.
+
+	--Always remove the slash, regardless of the command type, even for garbage.
+
+	--Test multi-character delimiter.
+
+	--Test UTF8 characters delimiter.
+
+end test_sqlplus;
+
+
+--------------------------------------------------------------------------------
+procedure test_sqlplus_and_semi is
+begin
+	--TODO
+	null;
+end test_sqlplus_and_semi;
 
 
 --------------------------------------------------------------------------------
@@ -640,9 +720,12 @@ begin
 	dbms_output.put_line('----------------------------------------');
 
 	--Run the chosen tests.
-	if bitand(p_tests, c_errors)        > 0 then test_errors; end if;
-	if bitand(p_tests, c_commands)      > 0 then test_commands; end if;
-	if bitand(p_tests, c_dynamic_tests) > 0 then dynamic_tests; end if;
+	if bitand(p_tests, c_semicolon)          > 0 then test_semicolon; end if;
+	if bitand(p_tests, c_semicolon_errors)   > 0 then test_semicolon_errors; end if;
+	if bitand(p_tests, c_semicolon_commands) > 0 then test_semicolon_commands; end if;
+	if bitand(p_tests, c_sqlplus)            > 0 then test_sqlplus; end if;
+	if bitand(p_tests, c_sqlplus_and_semi)   > 0 then test_sqlplus_and_semi; end if;
+	if bitand(p_tests, c_dynamic_tests)      > 0 then dynamic_tests; end if;
 
 	--Print summary of results.
 	dbms_output.put_line(null);
