@@ -238,6 +238,7 @@ begin
 			for delimiter_index in reverse 1 .. token_index loop
 				--Build delimiter.
 				if v_tokens(delimiter_index).type not in (tokenizer.c_whitespace, tokenizer.c_comment) then
+					v_delimiter_begin_index := delimiter_index;
 					v_potential_delimiter := v_tokens(delimiter_index).value || v_potential_delimiter;
 				--If something else found, get tokens before delimiter and quit.
 				else

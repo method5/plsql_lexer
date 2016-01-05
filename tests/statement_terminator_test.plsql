@@ -615,12 +615,21 @@ begin
 	v_statement := 'select * from dual'||chr(10)||'/*comment*/ / ';
 	assert_equals('Ignore if non-whitespace on line 4', v_statement, get_wo_sqlplus(v_statement));
 
-
 	--Remove slash if there's a comment on the *next* line.
+	v_statement := 'select * from dual'||chr(10)||' /'||chr(10)||'/*asdf*/';
+	assert_equals('Remove slash if comment on next line', 'select * from dual'||chr(10)||' '||chr(10)||'/*asdf*/', get_wo_sqlplus(v_statement));
 
 	--Double slashes are not removed.
+	v_statement := 'select * from dual'||chr(10)||'//';
+	assert_equals('Double slashes are not removed', v_statement, get_wo_sqlplus(v_statement));
 
 	--Always remove the slash, regardless of the command type, even for garbage.
+	v_statement := 'asdf'||chr(10)||'/';
+	assert_equals('Remove slash regardless of command 1', 'asdf'||chr(10), get_wo_sqlplus(v_statement));
+	v_statement := ' / ';
+	assert_equals('Remove slash regardless of command 2', '  ', get_wo_sqlplus(v_statement));
+	v_statement := '/';
+	assert_equals('Remove slash regardless of command 3', '', get_wo_sqlplus(v_statement));
 
 	--Test multi-character delimiter.
 
