@@ -6,6 +6,7 @@ create or replace type token is object
 (
       type     varchar2(4000),
       value    nclob,
+      token_end_posistion number,
       --Although called "SQL" code and errm, these may also apply to PL/SQL.
       --They would not match the real PL/SQL error messages, but the information
       --should still be helpful to parse broken code.
