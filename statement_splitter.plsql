@@ -5,7 +5,7 @@ function split_by_semicolon(p_tokens in token_table) return token_table_table;
 
 function split_by_sqlplus_delimiter(p_statements in nclob, p_sqlplus_delimiter in nvarchar2 default '/') return nclob_table;
 
-function split_by_semi_and_sqlplus_del(p_statements in nclob, p_sqlplus_delimiter in nvarchar2 default '/') return token_table_table;
+function split_by_sqlplus_del_and_semi(p_statements in nclob, p_sqlplus_delimiter in nvarchar2 default '/') return token_table_table;
 
 /*
 
@@ -1437,7 +1437,7 @@ end split_by_semicolon;
 --------------------------------------------------------------------------------
 --Split a string of separate SQL and PL/SQL statements terminated by ";" and
 --some secondary terminator, usually "/".
-function split_by_semi_and_sqlplus_del(p_statements in nclob, p_sqlplus_delimiter in nvarchar2 default '/')
+function split_by_sqlplus_del_and_semi(p_statements in nclob, p_sqlplus_delimiter in nvarchar2 default '/')
 return token_table_table is
 	v_split_statements nclob_table := nclob_table();
 	v_split_token_tables token_table_table := token_table_table();
@@ -1455,7 +1455,7 @@ begin
 
 	--Return the statements.
 	return v_split_token_tables;
-end split_by_semi_and_sqlplus_del;
+end split_by_sqlplus_del_and_semi;
 
 
 end;

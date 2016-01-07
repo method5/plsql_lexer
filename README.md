@@ -35,7 +35,7 @@ See the individual packages for details on each procedure.
 		
 	Split statements like SQL*Plus and then also split by semicolon:
 
-		function split_by_semi_and_sqlplus_del(
+		function split_by_sqlplus_del_and_semi(
 			p_statements        in nclob,
 			p_sqlplus_delimiter in nvarchar2 default '/'
 		) return token_table_table;
@@ -66,17 +66,17 @@ See the individual packages for details on each procedure.
 
 		function remove_semicolon(
 			p_tokens in token_table
-		) return nclob;
+		) return token_table;
 
 		function remove_sqlplus_delimiter(
-			p_statement in nclob,
-			p_sqlplus_delimiter in nvarchar2 default '/'
-		) return nclob;
-
-		function remove_semi_and_sqlplus_del(
 			p_tokens in token_table,
 			p_sqlplus_delimiter in nvarchar2 default '/'
-		) return nclob;
+		) return token_table;
+
+		function remove_sqlplus_del_and_semi(
+			p_tokens in token_table,
+			p_sqlplus_delimiter in nvarchar2 default '/'
+		) return token_table;
 
 ## How to Install
 
@@ -203,8 +203,9 @@ After following the installation steps above this code should be runnable:
 					v_compile_warning_message varchar2(4000);
 				begin
 					--Remove extra semicolons and run.
-					execute immediate to_clob(statement_terminator.remove_semicolon(
-						p_tokens => v_split_statements(i)));
+					execute immediate to_clob(tokenizer.concatenate(
+						statement_terminator.remove_semicolon(
+							p_tokens => v_split_statements(i))));
 					--Get the feedback message.
 					statement_feedback.get_feedback_message(
 						p_tokens => v_split_statements(i), 

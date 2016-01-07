@@ -1,11 +1,11 @@
 create or replace package statement_splitter_test authid current_user is
 /*
-== Purpose ==
+## Purpose ##
 
 Unit tests for statement_splitter.
 
 
-== Example ==
+## Example ##
 
 begin
 	statement_splitter_test.run;
@@ -27,12 +27,12 @@ c_proc_and_func          constant number := power(2, 8);
 c_package_body           constant number := power(2, 9);
 
 c_sqlplus_delim          constant number := power(2, 30);
-c_semi_and_sqlplus_delim constant number := power(2, 31);
+c_sqlplus_delim_and_semi constant number := power(2, 31);
 
 
 c_static_tests  constant number := c_errors+c_simple+c_plsql_declaration
 	+c_plsql_block+c_package+c_type_body+c_trigger+c_proc_and_func+c_package_body
-	+c_sqlplus_delim+c_semi_and_sqlplus_delim;
+	+c_sqlplus_delim+c_sqlplus_delim_and_semi;
 
 c_dynamic_sql constant number := power(2, 51);
 c_dynamic_plsql constant number := power(2, 52);
@@ -882,11 +882,11 @@ end test_sqlplus_delim;
 
 
 --------------------------------------------------------------------------------
-procedure test_semi_and_sqlplus_delim is
+procedure test_sqlplus_delim_and_semi is
 begin
 	--TODO:
 	null;
-end test_semi_and_sqlplus_delim;
+end test_sqlplus_delim_and_semi;
 
 
 --------------------------------------------------------------------------------
@@ -1020,7 +1020,7 @@ begin
 	if bitand(p_tests, c_proc_and_func)          > 0 then test_proc_and_func;          end if;
 	if bitand(p_tests, c_package_body)           > 0 then test_package_body;           end if;
 	if bitand(p_tests, c_sqlplus_delim)          > 0 then test_sqlplus_delim;          end if;
-	if bitand(p_tests, c_semi_and_sqlplus_delim) > 0 then test_semi_and_sqlplus_delim; end if;
+	if bitand(p_tests, c_sqlplus_delim_and_semi) > 0 then test_sqlplus_delim_and_semi; end if;
 
 	if bitand(p_tests, c_dynamic_sql)            > 0 then test_dynamic_sql;            end if;
 	if bitand(p_tests, c_dynamic_plsql)          > 0 then test_dynamic_plsql;          end if;

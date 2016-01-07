@@ -65,15 +65,26 @@ end assert_equals;
 --------------------------------------------------------------------------------
 function get_wo_semi(p_statement clob) return clob is
 begin
-	return statement_terminator.remove_semicolon(p_tokens => tokenizer.tokenize(p_source => p_statement));
+	return tokenizer.concatenate(statement_terminator.remove_semicolon(p_tokens => tokenizer.tokenize(p_source => p_statement)));
 end get_wo_semi;
 
 
 --------------------------------------------------------------------------------
-function get_wo_sqlplus(p_statement clob) return clob is
+function get_wo_sqlplus(p_statement clob, p_delimiter in varchar2 default '/') return clob is
 begin
-	return statement_terminator.remove_sqlplus_delimiter(p_statement => p_statement);
+	return tokenizer.concatenate(statement_terminator.remove_sqlplus_delimiter(
+		p_tokens => tokenizer.tokenize(p_statement),
+		p_sqlplus_delimiter => p_delimiter));
 end get_wo_sqlplus;
+
+
+--------------------------------------------------------------------------------
+function get_wo_sqlplus_and_semi(p_statement clob, p_delimiter in varchar2 default '/') return clob is
+begin
+	return tokenizer.concatenate(statement_terminator.remove_sqlplus_del_and_semi(
+		p_tokens => tokenizer.tokenize(p_source => p_statement),
+		p_sqlplus_delimiter => p_delimiter));
+end get_wo_sqlplus_and_semi;
 
 
 -- =============================================================================
@@ -631,18 +642,31 @@ begin
 	v_statement := '/';
 	assert_equals('Remove slash regardless of command 3', '', get_wo_sqlplus(v_statement));
 
+	--Nothing should return nothing.
+	v_statement := '';
+	assert_equals('Nothing 1', '', get_wo_sqlplus(v_statement));
+
 	--Test multi-character delimiter.
+	v_statement := 'select * from dual'||chr(10)||'//';
+	assert_equals('Simple 1', 'select * from dual'||chr(10), get_wo_sqlplus(v_statement, '//'));
+	v_statement := 'select * from dual'||chr(10)||'reallyLongDelimiterWhyWouldAnyoneDoThis?';
+	assert_equals('Simple 1', 'select * from dual'||chr(10), get_wo_sqlplus(v_statement, 'reallyLongDelimiterWhyWouldAnyoneDoThis?'));
 
 	--Test UTF8 characters delimiter.
-
+	v_statement := 'select * from dual'||chr(10)||unistr('\d841\df79');
+	assert_equals('Simple 1', 'select * from dual'||chr(10), get_wo_sqlplus(v_statement, unistr('\d841\df79')));
 end test_sqlplus;
 
 
 --------------------------------------------------------------------------------
 procedure test_sqlplus_and_semi is
+	v_statement clob;
 begin
-	--TODO
-	null;
+	--Simple.
+	v_statement := 'select * from dual;'||chr(10)||'/';
+	assert_equals('Simple 1', 'select * from dual'||chr(10), get_wo_sqlplus_and_semi(v_statement));
+
+	--TODO: Add more here.
 end test_sqlplus_and_semi;
 
 

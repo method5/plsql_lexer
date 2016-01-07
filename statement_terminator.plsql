@@ -3,17 +3,17 @@ create or replace package statement_terminator is
 
 function remove_semicolon(
 	p_tokens in token_table
-) return nclob;
+) return token_table;
 
 function remove_sqlplus_delimiter(
-	p_statement in nclob,
-	p_sqlplus_delimiter in nvarchar2 default '/'
-) return nclob;
-
-function remove_semi_and_sqlplus_del(
 	p_tokens in token_table,
 	p_sqlplus_delimiter in nvarchar2 default '/'
-) return nclob;
+) return token_table;
+
+function remove_sqlplus_del_and_semi(
+	p_tokens in token_table,
+	p_sqlplus_delimiter in nvarchar2 default '/'
+) return token_table;
 
 /*
 
@@ -60,8 +60,8 @@ create or replace package body statement_terminator is
 --------------------------------------------------------------------------------
 --Build the statement excluding the last semicolon, if any.
 function build_statement_wo_semicolon(p_abstract_tokens token_table)
-return nclob is
-	v_statement nclob;
+return token_table is
+	v_tokens token_table := token_table();
 	v_semicolon_index number := -1;
 begin
 	--Find the index of the last semicolon token.
@@ -79,31 +79,18 @@ begin
 	--Put together string, excluding the semicolon;
 	for i in 1 .. p_abstract_tokens.count loop
 		if i <> v_semicolon_index then
-			v_statement := v_statement || p_abstract_tokens(i).value;
+			v_tokens.extend;
+			v_tokens(v_tokens.count) := p_abstract_tokens(i);
 		end if;
 	end loop;
 
-	return v_statement;
+	return v_tokens;
 end build_statement_wo_semicolon;
 
 
 --------------------------------------------------------------------------------
---Return the statement without any modification.
-function build_statement_as_is(p_abstract_tokens token_table)
-return nclob is
-	v_statement nclob;
-begin
-	for i in 1 .. p_abstract_tokens.count loop
-		v_statement := v_statement || p_abstract_tokens(i).value;
-	end loop;
-
-	return v_statement;
-end build_statement_as_is;
-
-
---------------------------------------------------------------------------------
 --Remove extra semicolons, if any, to prepare for dynamic execution.
-function remove_semicolon(p_tokens in token_table) return nclob is
+function remove_semicolon(p_tokens in token_table) return token_table is
 	v_command_name varchar2(4000);
 	v_lex_sqlcode  number;
 	v_lex_sqlerrm  varchar2(4000);
@@ -122,7 +109,7 @@ begin
 
 	--Do nothing if there's a serious parsing error:
 	if v_lex_sqlcode is not null or v_lex_sqlerrm is not null then
-		return build_statement_as_is(p_tokens);
+		return p_tokens;
 	--Remove semicolons from these:
 	elsif v_command_name in (
 		'ADMINISTER KEY MANAGEMENT','ALTER ASSEMBLY','ALTER AUDIT POLICY','ALTER CLUSTER','ALTER DATABASE',
@@ -176,7 +163,7 @@ begin
 		'Invalid',
 		'Nothing'
 	) then
-		return build_statement_as_is(p_tokens);
+		return p_tokens;
 	else
 		raise_application_error(-20000, 'Cannot determine if statement needs a semicolon.'||
 			'  The command name "'||v_command_name||'" is not recognized.');
@@ -186,12 +173,10 @@ end remove_semicolon;
 
 --------------------------------------------------------------------------------
 function remove_sqlplus_delimiter(
-	p_statement in nclob,
+	p_tokens in token_table,
 	p_sqlplus_delimiter in nvarchar2 default '/'
-) return nclob
+) return token_table
 is
-	v_tokens token_table := tokenizer.tokenize(p_statement);
-
 	v_delimiter_begin_index number;
 	v_delimiter_end_index number;
 
@@ -201,7 +186,7 @@ is
 	v_1_token_after_delimiter token;
 	v_2_token_after_delimiter token;
 
-	v_statement_without_delimiter nclob;
+	v_tokens_without_delimiter token_table := token_table();
 begin
 	--Special cases.
 	--
@@ -216,36 +201,36 @@ begin
 		end if;
 	end loop;
 	--Return an empty string if the string is NULL.
-	if p_statement is null then
+	if p_tokens is null then
 		return null;
 	end if;
 
 	--Gather tokens before and after, and delimiter.
 	--
 	--Loop through all tokens in reverse order.
-	for token_index in reverse 1 .. v_tokens.count loop
+	for token_index in reverse 1 .. p_tokens.count loop
 		--Look for the last non-whitespace/comment/EOF
-		if v_tokens(token_index).type not in (tokenizer.c_whitespace, tokenizer.c_comment, tokenizer.c_eof) then
+		if p_tokens(token_index).type not in (tokenizer.c_whitespace, tokenizer.c_comment, tokenizer.c_eof) then
 			v_delimiter_end_index := token_index;
 
 			--Get tokens after delimiter.
-			v_1_token_after_delimiter := v_tokens(token_index + 1);
-			if token_index + 2 <= v_tokens.count then
-				v_2_token_after_delimiter := v_tokens(token_index + 2);
+			v_1_token_after_delimiter := p_tokens(token_index + 1);
+			if token_index + 2 <= p_tokens.count then
+				v_2_token_after_delimiter := p_tokens(token_index + 2);
 			end if;
 
 			--Get potential delimiter - go until whitespace or comment found.
 			for delimiter_index in reverse 1 .. token_index loop
 				--Build delimiter.
-				if v_tokens(delimiter_index).type not in (tokenizer.c_whitespace, tokenizer.c_comment) then
+				if p_tokens(delimiter_index).type not in (tokenizer.c_whitespace, tokenizer.c_comment) then
 					v_delimiter_begin_index := delimiter_index;
-					v_potential_delimiter := v_tokens(delimiter_index).value || v_potential_delimiter;
+					v_potential_delimiter := p_tokens(delimiter_index).value || v_potential_delimiter;
 				--If something else found, get tokens before delimiter and quit.
 				else
 					v_delimiter_begin_index := delimiter_index + 1;
-					v_1_token_before_delimiter := v_tokens(delimiter_index);
+					v_1_token_before_delimiter := p_tokens(delimiter_index);
 					if delimiter_index - 1 >= 1 then
-						v_2_token_before_delimiter := v_tokens(delimiter_index - 1);
+						v_2_token_before_delimiter := p_tokens(delimiter_index - 1);
 					end if;
 					exit;
 				end if;
@@ -255,14 +240,6 @@ begin
 			exit;
 		end if;
 	end loop;
-
-	--DEBUG, TODO:
---	dbms_output.put_line('Before 2: '||case when v_2_token_before_delimiter is not null then v_2_token_before_delimiter.value end);
---	dbms_output.put_line('Before 1: '||case when v_1_token_before_delimiter is not null then v_1_token_before_delimiter.value end);
---	dbms_output.put_line('Potential Delimiter: '||v_potential_delimiter);
---	dbms_output.put_line('SQL*Plus Delimiter: '||p_sqlplus_delimiter);
---	dbms_output.put_line('After 1: '||case when v_1_token_after_delimiter is not null then v_1_token_after_delimiter.value end);
---	dbms_output.put_line('After 2: '||case when v_2_token_after_delimiter is not null then v_2_token_after_delimiter.value end);
 
 	--Return the original statement if these conditions do not match:
 	if
@@ -284,34 +261,34 @@ begin
 	then
 		null;
 	else
-		return p_statement;
+		return p_tokens;
 	end if;
 
 	--Put the string back together without the delimiter.
 	if v_delimiter_begin_index is null then
-		v_statement_without_delimiter := p_statement;
+		v_tokens_without_delimiter := p_tokens;
 	else
-		for i in 1 .. v_tokens.count loop
+		for i in 1 .. p_tokens.count loop
 			if i not between v_delimiter_begin_index and v_delimiter_end_index then
-				v_statement_without_delimiter := v_statement_without_delimiter || v_tokens(i).value;
+				v_tokens_without_delimiter.extend;
+				v_tokens_without_delimiter(v_tokens_without_delimiter.count) := p_tokens(i);
 			end if;
 		end loop;
 	end if;
 
-	return v_statement_without_delimiter;
+	return v_tokens_without_delimiter;
 end remove_sqlplus_delimiter;
 
 
 --------------------------------------------------------------------------------
-function remove_semi_and_sqlplus_del(
+function remove_sqlplus_del_and_semi(
 	p_tokens in token_table,
 	p_sqlplus_delimiter in nvarchar2 default '/'
-) return nclob
+) return token_table
 is
 begin
-	--TODO
-	return null;
-end remove_semi_and_sqlplus_del;
+	return remove_semicolon(remove_sqlplus_delimiter(p_tokens, p_sqlplus_delimiter));
+end remove_sqlplus_del_and_semi;
 
 end;
 /
