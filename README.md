@@ -80,47 +80,20 @@ See the individual packages for details on each procedure.
 
 ## How to Install
 
-1. Create objects on the desired schema:
+1. Create objects and packages on the desired schema:
 
-        alter session set current_schema=&SCHEMA_NAME;
-        
-        create or replace type nclob_table is table of nclob;
-        
-        create or replace type nvarchar2_table is table of nvarchar2(2 char);
-        
-        create or replace type token is object
-        (
-            type     varchar2(4000),
-            value    nclob,
-            --Although called "SQL" code and errm, these may also apply to PL/SQL.
-            --They would not match the real PL/SQL error messages, but the information
-            --should still be helpful to parse broken code.
-            sqlcode  number,
-            sqlerrm  varchar2(4000)
-        );
-        
-        --Use VARRAY because it is guaranteed to maintain order.
-        create or replace type token_table is varray(2147483647) of token;
-        --Use TABLE here to avoid an ORA-7445 error.
-        --TODO: Can I use a varray of a smaller size to avoid the error?
-        create or replace type token_table_table is table of token_table;
+        alter session set current_schema=&schema_name;
+        @install.sql
 
-2. Install packages on the desired schema:
+2. Install unit tests (optional):
 
-        alter session set current_schema=&SCHEMA_NAME;
-        @tokenizer.plsql
-        @statement_classifier.plsql
-        @statement_splitter.plsql
-        @statement_feedback.plsql
-        @statement_terminator.plsql
+        alter session set current_schema=&schema_name;
+        @install-unit-tests.sql
 
-3. Install unit tests (optional):
+## How to uninstall
 
-        @/tests/tokenizer_test.plsql
-        @/tests/statement_classifier_test.plsql
-        @/tests/statement_splitter_test.plsql
-        @/tests/statement_terminator_test.plsql
-        @/tests/plsql_lexer_test.plsql
+        alter session set current_schema=&schema_name;
+        @uninstall.sql
 
 ## Example
 
