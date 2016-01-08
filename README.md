@@ -88,7 +88,7 @@ See the individual packages for details on each procedure.
 2. Install unit tests (optional):
 
         alter session set current_schema=&schema_name;
-        @install-unit-tests.sql
+        @install_unit_tests.sql
 
 ## How to uninstall
 
