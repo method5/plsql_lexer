@@ -276,7 +276,7 @@ function get_token return token is
 begin
 	--Out of characters.
 	if g_last_char_position > g_chars.count or g_chars.count = 0 then
-		return token('EOF', null, null, null);
+		return token('EOF', null, g_last_char_position, null, null);
 	end if;
 
 	--Load first character.
@@ -292,7 +292,7 @@ begin
 			exit when not is_lexical_whitespace(g_last_char);
 			g_token_text := g_token_text || g_last_char;
 		end loop;
-		return token('whitespace', g_token_text, null, null);
+		return token('whitespace', g_token_text, g_last_char_position, null, null);
 	end if;
 
 	--Single line comment.
@@ -304,7 +304,7 @@ begin
 			exit when g_last_char = chr(10) or g_last_char is null;
 			g_token_text := g_token_text || g_last_char;
 		end loop;
-		return token('comment', g_token_text, null, null);
+		return token('comment', g_token_text, g_last_char_position, null, null);
 	end if;
 
 	--Multi-line comment.
@@ -322,11 +322,11 @@ begin
 			if look_ahead(1) is null then
 				g_token_text := g_token_text || g_last_char;
 				g_last_char := get_char;
-				return token('comment', g_token_text, -01742, 'comment not terminated properly');
+				return token('comment', g_token_text, g_last_char_position, -01742, 'comment not terminated properly');
 			end if;
 			g_token_text := g_token_text || g_last_char;
 		end loop;
-		return token('comment', g_token_text, null, null);
+		return token('comment', g_token_text, g_last_char_position, null, null);
 	end if;
 
 	--Text.
@@ -347,11 +347,11 @@ begin
 			elsif look_ahead(1) is null then
 				g_token_text := g_token_text || g_last_char;
 				g_last_char := get_char;
-				return token('text', g_token_text, -01756, 'quoted string not properly terminated');
+				return token('text', g_token_text, g_last_char_position, -01756, 'quoted string not properly terminated');
 			end if;
 			g_token_text := g_token_text || g_last_char;
 		end loop;
-		return token('text', g_token_text, null, null);
+		return token('text', g_token_text, g_last_char_position, null, null);
 	end if;
 
 	--Nvarchar text.
@@ -375,11 +375,11 @@ begin
 			elsif look_ahead(1) is null then
 				g_token_text := g_token_text || g_last_char;
 				g_last_char := get_char;
-				return token('text', g_token_text, -01756, 'quoted string not properly terminated');
+				return token('text', g_token_text, g_last_char_position, -01756, 'quoted string not properly terminated');
 			end if;
 			g_token_text := g_token_text || g_last_char;
 		end loop;
-		return token('text', g_token_text, null, null);
+		return token('text', g_token_text, g_last_char_position, null, null);
 	end if;
 
 	--Alternative quoting mechanism.
@@ -409,7 +409,7 @@ begin
 					g_last_char := get_char;
 					g_token_text := g_token_text || g_last_char;
 					g_last_char := get_char;
-					return token('text', g_token_text, -00911, 'invalid character');
+					return token('text', g_token_text, g_last_char_position, -00911, 'invalid character');
 				end if;
 
 				g_token_text := g_token_text || g_last_char;
@@ -421,11 +421,11 @@ begin
 			if look_ahead(1) is null then
 				g_token_text := g_token_text || g_last_char;
 				g_last_char := get_char;
-				return token('text', g_token_text, -01756, 'quoted string not properly terminated');
+				return token('text', g_token_text, g_last_char_position, -01756, 'quoted string not properly terminated');
 			end if;
 			g_token_text := g_token_text || g_last_char;
 		end loop;
-		return token('text', g_token_text, null, null);
+		return token('text',g_token_text, g_last_char_position , null, null);
 	end if;
 
 	--Nvarchar alternative quoting mechanism.
@@ -457,7 +457,7 @@ begin
 					g_last_char := get_char;
 					g_token_text := g_token_text || g_last_char;
 					g_last_char := get_char;
-					return token('text', g_token_text, -00911, 'invalid character');
+					return token('text', g_token_text, g_last_char_position, -00911, 'invalid character');
 				end if;
 
 				g_token_text := g_token_text || g_last_char;
@@ -469,11 +469,11 @@ begin
 			if look_ahead(1) is null then
 				g_token_text := g_token_text || g_last_char;
 				g_last_char := get_char;
-				return token('text', g_token_text, -01756, 'quoted string not properly terminated');
+				return token('text', g_token_text, g_last_char_position, -01756, 'quoted string not properly terminated');
 			end if;
 			g_token_text := g_token_text || g_last_char;
 		end loop;
-		return token('text', g_token_text, null, null);
+		return token('text', g_token_text, g_last_char_position, null, null);
 	end if;
 
 	--Numeric.
@@ -497,7 +497,7 @@ begin
 		--Regular "length" is fine here since numerics cannot be more than one code point.
 		g_last_char_position := g_last_char_position + length(g_token_text) - 1;
 		g_last_char := get_char;
-		return token('numeric', g_token_text, null, null);
+		return token('numeric', g_token_text, g_last_char_position, null, null);
 	end if;
 
 	--Word - quoted identifier.  Note that quoted identifiers are not escaped.
@@ -517,11 +517,11 @@ begin
 			if look_ahead(1) is null then
 				g_token_text := g_token_text || g_last_char;
 				g_last_char := get_char;
-				return token('word', g_token_text, -01740, 'missing double quote in identifier');
+				return token('word', g_token_text, g_last_char_position, -01740, 'missing double quote in identifier');
 			end if;
 			g_token_text := g_token_text || g_last_char;
 		end loop;
-		return token('word', g_token_text, null, null);
+		return token('word', g_token_text, g_last_char_position, null, null);
 	end if;
 
 	--Word.
@@ -544,7 +544,7 @@ begin
 
 			g_token_text := g_token_text || g_last_char;
 		end loop;
-		return token('word', g_token_text, null, null);
+		return token('word', g_token_text, g_last_char_position, null, null);
 	end if;
 
 	--Inquiry Directive.
@@ -559,7 +559,7 @@ begin
 			end if;
 			g_token_text := g_token_text || g_last_char;
 		end loop;
-		return token('inquiry_directive', g_token_text, null, null);
+		return token('inquiry_directive', g_token_text, g_last_char_position, null, null);
 	end if;
 
 	--Inquiry Directive.
@@ -573,7 +573,7 @@ begin
 			end if;
 			g_token_text := g_token_text || g_last_char;
 		end loop;
-		return token('preprocessor_control_token', g_token_text, null, null);
+		return token('preprocessor_control_token', g_token_text, g_last_char_position, null, null);
 	end if;
 
 	--3-character punctuation operators.
@@ -581,7 +581,7 @@ begin
 	if g_last_char||look_ahead(1)||look_ahead(2) in (',}?') then
 		g_token_text := g_last_char || get_char || get_char;
 		g_last_char := get_char;
-		return token(g_token_text, g_token_text, null, null);
+		return token(g_token_text, g_token_text, g_last_char_position, null, null);
 	end if;
 
 	--2-character punctuation operators.
@@ -590,33 +590,33 @@ begin
 	if g_last_char||look_ahead(1) in ('~=','!=','^=','<>',':=','=>','>=','<=','<<','>>','{-','-}','*?','+?','??',',}','}?','{,') then
 		g_token_text := g_last_char || get_char;
 		g_last_char := get_char;
-		return token(g_token_text, g_token_text, null, null);
+		return token(g_token_text, g_token_text, g_last_char_position, null, null);
 	end if;
 
 	if g_last_char||look_ahead(1) in ('**','||') and g_pattern_paren_count = 0 then
 		g_token_text := g_last_char || get_char;
 		g_last_char := get_char;
-		return token(g_token_text, g_token_text, null, null);
+		return token(g_token_text, g_token_text, g_last_char_position, null, null);
 	end if;
 
 	--1-character punctuation operators.
 	if g_last_char in ('@','%','^','*','(',')','-','+','=','[',']','{','}','|',':',';','<',',','>','.','/','?') then
 		g_token_text := g_last_char;
 		g_last_char := get_char;
-		return token(g_token_text, g_token_text, null, null);
+		return token(g_token_text, g_token_text, g_last_char_position, null, null);
 	end if;
 
 	--"$" only counts as "$" inside row pattern matching.
 	if g_last_char = '$' and g_pattern_paren_count > 0 then
 		g_token_text := g_last_char;
 		g_last_char := get_char;
-		return token(g_token_text, g_token_text, null, null);
+		return token(g_token_text, g_token_text, g_last_char_position, null, null);
 	end if;
 
 	--Unexpected - everything else.
 	g_token_text := g_last_char;
 	g_last_char := get_char;
-	return token('unexpected', g_token_text, null, null);
+	return token('unexpected', g_token_text, g_last_char_position, null, null);
 end get_token;
 
 
@@ -630,7 +630,7 @@ begin
 	g_chars := get_nvarchar2_table_from_nclob(p_source);
 	--set_g_chars(p_source);
 	g_last_char_position := 0;
-	g_last_concrete_token := token(null, null, null, null);
+	g_last_concrete_token := token(null, null, g_last_char_position, null, null);
 	g_match_recognize_paren_count := 0;
 	g_pattern_paren_count := 0;
 
