@@ -9,4 +9,16 @@ prompt Installing tests/statement_terminator_test.plsql
 start tests/statement_terminator_test.plsql
 prompt Installing tests/plsql_lexer_test.plsql
 start tests/plsql_lexer_test.plsql
-prompt Done
+
+prompt Running unit tests, this may take a minute.
+prompt Do not trust any packages with errors.
+
+set serveroutput on
+set linesize 1000
+begin
+	plsql_lexer_test.run_static_tests;
+end;
+/
+
+
+prompt Done installing and running unit tests.

@@ -1,11 +1,11 @@
 create or replace package statement_splitter_test authid current_user is
 /*
-## Purpose ##
+= Purpose ==
 
 Unit tests for statement_splitter.
 
 
-## Example ##
+== Example ==
 
 begin
 	statement_splitter_test.run;
@@ -783,14 +783,16 @@ end test_package_body;
 procedure test_sqlplus_delim is
 	v_statements nclob;
 	v_split_statements nclob_table := nclob_table();
-	custom_exception exception;
-	pragma exception_init(custom_exception, -20000);
+	custom_exception_20000 exception;
+	pragma exception_init(custom_exception_20000, -20000);
+	custom_exception_20001 exception;
+	pragma exception_init(custom_exception_20001, -20001);
 begin
 	--NULL delimiter raises exception.
 	begin
 		v_statements:='select * from dual a';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, null);
 		assert_equals('SQL*Plus Delimiter 1', 'Exception', 'No exception');
-	exception when custom_exception then
+	exception when custom_exception_20000 then
 		assert_equals('SQL*Plus Delimiter 1', 'ORA-20000: The SQL*Plus delimiter cannot be NULL.', sqlerrm);
 	end;
 
@@ -798,8 +800,8 @@ begin
 	begin
 		v_statements:='select * from dual a';v_split_statements:=statement_splitter.split_by_sqlplus_delimiter(v_statements, ' ');
 		assert_equals('SQL*Plus Delimiter 2', 'Exception', 'No exception');
-	exception when custom_exception then
-		assert_equals('SQL*Plus Delimiter 2', 'ORA-20000: The SQL*Plus delimiter cannot be whitespace.', sqlerrm);
+	exception when custom_exception_20001 then
+		assert_equals('SQL*Plus Delimiter 2', 'ORA-20001: The SQL*Plus delimiter cannot contain whitespace.', sqlerrm);
 	end;
 
 	--NULL input returns NULL output.
