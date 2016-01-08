@@ -220,6 +220,18 @@ Results:
 	Command Name: Invalid
 	Warning     : Could not classify this statement, please check for a typo: udpate my_table set a = 2;
 
+## Roadmap
+
+Version 1.0.0 may be ready after these steps:
+
+1. Installer and uninstaller improvements.
+2. Finish statement_terminator unit tests.
+3. Add statement_feedback unit tests.
+4. Add statement (view) expander program?
+5. Add line number and column number to tokenizer?
+6. Fix/refactor statement splitter bug, more unit tests.
+7. Thoroughly test by using code in other project I'm trying to open source?
+
 
 ## License
 `plsql_lexer` is licensed under the LGPL.
