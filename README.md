@@ -80,20 +80,22 @@ See the individual packages for details on each procedure.
 
 ## How to Install
 
+Click the "Download ZIP" button, extract the files, CD to the directory with those files, connect to SQL*Plus, and run these commands:
+
 1. Create objects and packages on the desired schema:
 
         alter session set current_schema=&schema_name;
-        @install.sql
+        @install
 
 2. Install unit tests (optional):
 
         alter session set current_schema=&schema_name;
-        @install_unit_tests.sql
+        @install_unit_tests
 
 ## How to uninstall
 
         alter session set current_schema=&schema_name;
-        @uninstall.sql
+        @uninstall
 
 ## Example
 
