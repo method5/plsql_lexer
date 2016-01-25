@@ -81,8 +81,8 @@ procedure get_trigger_type_body_index (
 	p_trigger_type out number,
 	p_trigger_body_start_index out number
 ) is
-	v_previous_concrete_token_1 token := token(null, null, 0, null, null);
-	v_previous_concrete_token_2 token := token(null, null, 0, null, null);
+	v_previous_concrete_token_1 token := token(null, null, null, null, null, null, null, null);
+	v_previous_concrete_token_2 token := token(null, null, null, null, null, null, null, null);
 	v_when_condition_paren_counter number := 0;
 begin
 	--Loop through all the tokens until a type is found.
@@ -185,9 +185,9 @@ reserved words.  And the pattern "with" "function" can be found in 2 cases:the f
 	with function(a) as (select 1 a from dual) select * from function;
 */
 function has_plsql_declaration(p_tokens token_table, p_token_start_index in number) return boolean is
-	v_previous_concrete_token_1 token := token(null, null, 0, null, null);
-	v_previous_concrete_token_2 token := token(null, null, 0, null, null);
-	v_previous_concrete_token_3 token := token(null, null, 0, null, null);
+	v_previous_concrete_token_1 token := token(null, null, null, null, null, null, null, null);
+	v_previous_concrete_token_2 token := token(null, null, null, null, null, null, null, null);
+	v_previous_concrete_token_3 token := token(null, null, null, null, null, null, null, null);
 begin
 	for i in p_token_start_index .. p_tokens.count loop
 		--Return true if PL/SQL Declaration found.
@@ -238,8 +238,8 @@ the name "function" or "procedure".  Thanks, Oracle, for not reserving keywords.
 See the function has_plsql_declaration for some more information.
 */
 function has_another_plsql_declaration(p_tokens token_table, p_token_start_index in number) return boolean is
-	v_next_concrete_token_1 token := token(null, null, 0, null, null);
-	v_next_concrete_token_2 token := token(null, null, 0, null, null);
+	v_next_concrete_token_1 token := token(null, null, null, null, null, null, null, null);
+	v_next_concrete_token_2 token := token(null, null, null, null, null, null, null, null);
 begin
 	--Loop through the tokens and find concrete tokens.
 	for i in p_token_start_index .. p_tokens.count loop
@@ -280,8 +280,8 @@ end has_another_plsql_declaration;
 --
 --Example: create procedure test_procedure as external language c name "c_test" library somelib;
 function is_external_method(p_tokens in token_table, p_temp_token_index in number) return boolean is
-	v_previous_concrete_token_1 token := token(null, null, 0, null, null);
-	v_previous_concrete_token_2 token := token(null, null, 0, null, null);
+	v_previous_concrete_token_1 token := token(null, null, null, null, null, null, null, null);
+	v_previous_concrete_token_2 token := token(null, null, null, null, null, null, null, null);
 begin
 	for i in p_temp_token_index .. p_tokens.count loop
 		--Look for semicolon or a sequence of tokens that implies it's external.
@@ -608,11 +608,11 @@ procedure add_statement_consume_tokens(
 	p_command_name in varchar2,
 	p_trigger_body_start_index in number
 ) is
-	v_previous_concrete_token_1 token := token(null, null, 0, null, null);
-	v_previous_concrete_token_2 token := token(null, null, 0, null, null);
-	v_previous_concrete_token_3 token := token(null, null, 0, null, null);
-	v_previous_concrete_token_4 token := token(null, null, 0, null, null);
-	v_previous_concrete_token_5 token := token(null, null, 0, null, null);
+	v_previous_concrete_token_1 token := token(null, null, null, null, null, null, null, null);
+	v_previous_concrete_token_2 token := token(null, null, null, null, null, null, null, null);
+	v_previous_concrete_token_3 token := token(null, null, null, null, null, null, null, null);
+	v_previous_concrete_token_4 token := token(null, null, null, null, null, null, null, null);
+	v_previous_concrete_token_5 token := token(null, null, null, null, null, null, null, null);
 
 
 	---------------------------------------

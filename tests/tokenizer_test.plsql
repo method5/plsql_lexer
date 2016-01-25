@@ -30,8 +30,9 @@ c_test_unexpected              constant number := power(2, 12);
 c_test_utf8                    constant number := power(2, 13);
 c_test_row_pattern_matching    constant number := power(2, 14);
 c_test_other                   constant number := power(2, 15);
+c_line_col_start_end_position  constant number := power(2, 16);
 
-c_test_convert_to_text         constant number := power(2, 16);
+c_test_convert_to_text         constant number := power(2, 17);
 
 c_dynamic_tests             constant number := power(2, 30);
 
@@ -40,7 +41,7 @@ c_static_tests          constant number := c_test_whitespace+c_test_comment+
 	c_test_text+c_test_numeric+c_test_word+c_test_inquiry_directive+
 	c_test_preproc_control_token+c_test_3_character_punctuation+c_test_2_character_punctuation+
 	c_test_1_character_punctuation+c_test_unexpected+c_test_utf8+c_test_row_pattern_matching+
-	c_test_other+c_test_convert_to_text;
+	c_test_other+c_line_col_start_end_position+c_test_convert_to_text;
 
 --Run the unit tests and display the results in dbms output.
 procedure run(p_tests number default c_static_tests);
@@ -663,6 +664,30 @@ end test_other;
 
 
 --------------------------------------------------------------------------------
+procedure test_line_col_start_end_pos is
+	v_tokens token_table;
+
+	function concat_token(p_token token) return varchar2 is
+	begin
+		return
+			p_token.line_number||'-'||
+			p_token.column_number||'-'||
+			p_token.start_position||'-'||
+			p_token.end_position;
+	end concat_token;
+begin
+	--Test values with all different types.
+	v_tokens := tokenizer.tokenize(q'[
+		/*comment*/ 'text1' nq'!text2!' 1.2d asdf "asdf" $$asdf $asdf *.@`]'
+	);
+
+	assert_equals('Line Number 1.', '1-1-1-4', concat_token(v_tokens(1)));
+	assert_equals('Line Number 2.', '2-3-5-15', concat_token(v_tokens(2)));
+	--TODO - add more tests.
+end test_line_col_start_end_pos;
+
+
+--------------------------------------------------------------------------------
 procedure dynamic_tests is
 	type clob_table is table of clob;
 	type string_table is table of varchar2(100);
@@ -735,6 +760,8 @@ begin
 	if bitand(p_tests, c_test_utf8)                    > 0 then test_utf8; end if;
 	if bitand(p_tests, c_test_row_pattern_matching)    > 0 then test_row_pattern_matching; end if;
 	if bitand(p_tests, c_test_other)                   > 0 then test_other; end if;
+	if bitand(p_tests, c_line_col_start_end_position)  > 0 then test_line_col_start_end_pos; end if;
+
 	if bitand(p_tests, c_dynamic_tests)                > 0 then dynamic_tests; end if;
 	if bitand(p_tests, c_test_convert_to_text)         > 0 then test_convert_to_text; end if;
 

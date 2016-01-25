@@ -47,14 +47,14 @@ create or replace type nvarchar2_table is table of nvarchar2(2 char);
 /
 create or replace type token is object
 (
-      type     varchar2(4000),
-      value    nclob,
-      token_end_position number,
-      --Although called "SQL" code and errm, these may also apply to PL/SQL.
-      --They would not match the real PL/SQL error messages, but the information
-      --should still be helpful to parse broken code.
-      sqlcode  number,
-      sqlerrm  varchar2(4000)
+	type           varchar2(4000), --String to represent token type.  See the constants in TOKENIZER.
+	value          nclob,          --The text of the token.
+	line_number    number,         --The line number the token starts at - useful for printing user information.
+	column_number  number,         --The column number of the token in the line - useful for printing user information.
+	start_position number,         --First character position of token in the whole string - useful for inserting before a token.
+	end_position   number,         --Last character position of token in the whole string  - useful for inserting after a token.
+	sqlcode        number,         --Error code of serious parsing problem.
+	sqlerrm        varchar2(4000)  --Error message of serious parsing problem.
 );
 /
 --Use VARRAY because it is guaranteed to maintain order.
