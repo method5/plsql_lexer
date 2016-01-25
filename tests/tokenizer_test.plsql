@@ -672,8 +672,8 @@ procedure test_line_col_start_end_pos is
 		return
 			p_token.line_number||'-'||
 			p_token.column_number||'-'||
-			p_token.start_position||'-'||
-			p_token.end_position;
+			p_token.first_char_position||'-'||
+			p_token.last_char_position;
 	end concat_token;
 begin
 	--Test values with all different types.
