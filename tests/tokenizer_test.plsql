@@ -676,13 +676,31 @@ procedure test_line_col_start_end_pos is
 			p_token.last_char_position;
 	end concat_token;
 begin
+	--Simple strings.
+	v_tokens := tokenizer.tokenize('A C');
+	assert_equals('Line Number Simple 1.', '1-1-1-1', concat_token(v_tokens(1)));
+	assert_equals('Line Number Simple 2.', '1-2-2-2', concat_token(v_tokens(2)));
+	assert_equals('Line Number Simple 3.', '1-3-3-3', concat_token(v_tokens(3)));
+	assert_equals('Line Number Simple 4.', '1-4-4-4', concat_token(v_tokens(4)));
+
+	--Smallest possible string.
+	v_tokens := tokenizer.tokenize('A');
+	assert_equals('Line Number Simple 5.', '1-1-1-1', concat_token(v_tokens(1)));
+	assert_equals('Line Number Simple 6.', '1-2-2-2', concat_token(v_tokens(2)));
+
+	--Empty, just EOF.
+	v_tokens := null;
+	v_tokens := tokenizer.tokenize('');
+	assert_equals('Line Number EOF 1.', '1-1-1-1', concat_token(v_tokens(1)));
+
 	--Test values with all different types.
 	v_tokens := tokenizer.tokenize(q'[
 		/*comment*/ 'text1' nq'!text2!' 1.2d asdf "asdf" $$asdf $asdf *.@`]'
 	);
 
-	assert_equals('Line Number 1.', '1-1-1-4', concat_token(v_tokens(1)));
-	assert_equals('Line Number 2.', '2-3-5-15', concat_token(v_tokens(2)));
+	assert_equals('Line Number 2.', '1-1-1-3', concat_token(v_tokens(1)));
+	assert_equals('Line Number 3.', '2-3-4-14', concat_token(v_tokens(2)));
+
 	--TODO - add more tests.
 end test_line_col_start_end_pos;
 
