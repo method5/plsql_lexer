@@ -689,7 +689,6 @@ begin
 	assert_equals('Line Number Simple 6.', '1-2-2-2', concat_token(v_tokens(2)));
 
 	--Empty, just EOF.
-	v_tokens := null;
 	v_tokens := tokenizer.tokenize('');
 	assert_equals('Line Number EOF 1.', '1-1-1-1', concat_token(v_tokens(1)));
 
@@ -751,12 +750,12 @@ procedure dynamic_tests is
 	v_sql_fulltexts clob_table;
 	v_sql_ids string_table;
 	sql_cursor sys_refcursor;
-	v_throwaway nclob;
+	v_tokens token_table;
 begin
-	--This is a test against infinite loops.
+	--This tests that everything can be tokenized.
+	--There should not be any unexpected tokens for valid code.
 
-	--TODO: There should not be any unexpected tokens.
-
+	--Use dynamic SQL so the package doesn't need direct grants on GV$SQL.
 	open sql_cursor for '
 		--Select distinct SQL statements.
 		select sql_fulltext, sql_id
@@ -766,16 +765,29 @@ begin
 			from gv$sql
 		)
 		where rownumber = 1
+		--TODO: Add PL/SQL code.
 		order by sql_id
 	';
 	loop
 		fetch sql_cursor bulk collect into v_sql_fulltexts, v_sql_ids limit 100;
 		exit when v_sql_fulltexts.count = 0;
 
+		--Go through each SQL text.
 		for i in 1 .. v_sql_fulltexts.count loop
-			dbms_output.put_line('SQL_ID: '||v_sql_ids(i));
-			assert_equals('just incrementing counter', 'a', 'a');
-			v_throwaway := lex(v_sql_fulltexts(i));
+			--Tokenize.
+			v_tokens := tokenizer.tokenize(v_sql_fulltexts(i));
+
+			--Loop through the tokens.
+			for j in 1 .. v_tokens.count loop
+				--Fail if an unexpected is found.
+				if v_tokens(j).type = tokenizer.c_unexpected then
+					assert_equals('Dynamic test on '||v_sql_ids(i)||': ', '0 unexpected found', '>=1 unexpected found');
+					exit;
+				--Pass if last token and no unexpected are found.
+				elsif j = v_tokens.count then
+					assert_equals('Dynamic test on '||v_sql_ids(i)||': ', '0 unexpected found', '0 unexpected found');
+				end if;
+			end loop;
 		end loop;
 	end loop;
 end dynamic_tests;
