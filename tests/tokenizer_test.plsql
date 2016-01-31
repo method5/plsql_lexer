@@ -695,13 +695,52 @@ begin
 
 	--Test values with all different types.
 	v_tokens := tokenizer.tokenize(q'[
-		/*comment*/ 'text1' nq'!text2!' 1.2d asdf "asdf" $$asdf $asdf *.@`]'
+		/*comment*/ 'text1' nq'!text2!' 1.2d asdf "asdf" $$asdf $asdf *.`]'
 	);
 
-	assert_equals('Line Number 2.', '1-1-1-3', concat_token(v_tokens(1)));
-	assert_equals('Line Number 3.', '2-3-4-14', concat_token(v_tokens(2)));
+	assert_equals('Line Number 01.', '1-1-1-3', concat_token(v_tokens(1)));     --whitespace at beginning
+	assert_equals('Line Number 02.', '2-3-4-14', concat_token(v_tokens(2)));    --comment
+	assert_equals('Line Number 03.', '2-14-15-15', concat_token(v_tokens(3)));  --whitespace
+	assert_equals('Line Number 04.', '2-15-16-22', concat_token(v_tokens(4)));  --text
+	assert_equals('Line Number 05.', '2-22-23-23', concat_token(v_tokens(5)));  --whitespace
+	assert_equals('Line Number 06.', '2-23-24-34', concat_token(v_tokens(6)));  --nq text
+	assert_equals('Line Number 07.', '2-34-35-35', concat_token(v_tokens(7)));  --whitespace
+	assert_equals('Line Number 08.', '2-35-36-39', concat_token(v_tokens(8)));  --number
+	assert_equals('Line Number 09.', '2-39-40-40', concat_token(v_tokens(9)));  --whitespace
+	assert_equals('Line Number 10.', '2-40-41-44', concat_token(v_tokens(10))); --word
+	assert_equals('Line Number 11.', '2-44-45-45', concat_token(v_tokens(11))); --whitespace
+	assert_equals('Line Number 12.', '2-45-46-51', concat_token(v_tokens(12))); --word (in quotes)
+	assert_equals('Line Number 13.', '2-51-52-52', concat_token(v_tokens(13))); --whitespace
+	assert_equals('Line Number 14.', '2-52-53-58', concat_token(v_tokens(14))); --Inquiry directive
+	assert_equals('Line Number 15.', '2-58-59-59', concat_token(v_tokens(15))); --whitespace
+	assert_equals('Line Number 16.', '2-59-60-64', concat_token(v_tokens(16))); --preprocessor control token
+	assert_equals('Line Number 17.', '2-64-65-65', concat_token(v_tokens(17))); --whitespace
+	assert_equals('Line Number 18.', '2-65-66-66', concat_token(v_tokens(18))); --*
+	assert_equals('Line Number 19.', '2-66-67-67', concat_token(v_tokens(19))); --.
+	assert_equals('Line Number 20.', '2-67-68-68', concat_token(v_tokens(20))); --EOF
 
-	--TODO - add more tests.
+	--Test multiple new lines.
+	v_tokens := tokenizer.tokenize(q'[
+a
+
+
+b
+
+
+
+c]'
+	);
+
+	assert_equals('Line Number - Many Lines 01.', '1-1-1-1', concat_token(v_tokens(1)));   --whitespace.
+	assert_equals('Line Number - Many Lines 02.', '2-1-2-2', concat_token(v_tokens(2)));   --a
+	assert_equals('Line Number - Many Lines 03.', '2-2-3-5', concat_token(v_tokens(3)));   --whitespace
+	assert_equals('Line Number - Many Lines 04.', '5-1-6-6', concat_token(v_tokens(4)));   --b
+	assert_equals('Line Number - Many Lines 05.', '5-2-7-10', concat_token(v_tokens(5)));  --whitespace
+	assert_equals('Line Number - Many Lines 06.', '9-1-11-11', concat_token(v_tokens(6))); --c
+	assert_equals('Line Number - Many Lines 07.', '9-2-12-12', concat_token(v_tokens(7))); --eof
+
+	--TODO: Multi-byte character test.
+
 end test_line_col_start_end_pos;
 
 

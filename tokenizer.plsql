@@ -150,7 +150,6 @@ g_chars nvarchar2_table := nvarchar2_table();
 
 g_last_char nvarchar2(2 char);
 g_token_text nclob;
---TODO: POPULATE THESE VALUES
 g_line_number number;
 g_column_number number;
 g_last_char_position number;
@@ -518,6 +517,8 @@ begin
 		--Advance the characters.
 		--Regular "length" is fine here since numerics cannot be more than one code point.
 		g_last_char_position := g_last_char_position + length(g_token_text) - 1;
+		g_column_number := g_column_number + length(g_token_text) - 1;
+
 		g_last_char := get_char;
 		return token(c_numeric, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
 	end if;
@@ -584,7 +585,7 @@ begin
 		return token(c_inquiry_directive, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
 	end if;
 
-	--Inquiry Directive.
+	--Preprocessor Control Token.
 	--Starts with $ alpha (in any language!), may contain number, "_", "$", and "#".
 	if g_last_char = '$' and is_alpha(look_ahead(1)) then
 		g_token_text := g_last_char || get_char;
