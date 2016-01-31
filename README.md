@@ -8,7 +8,7 @@ PL/SQL Lexer is a toolkit for solving real-world language problems, in PL/SQL.
 See the individual packages for details on each procedure.
 
 
-- `tokenizer` - Converts statements into PL/SQL tokens, and tokens back into strings.
+- **TOKENIZER** - Converts statements into PL/SQL tokens, and tokens back into strings.
 
 	Create tokens for SQL and PL/SQL statements:
 
@@ -18,13 +18,7 @@ See the individual packages for details on each procedure.
 
 		function concatenate(p_tokens in token_table) return nclob;
 
-- `statement_splitter`  Split multiple statements into individual statements based on a terminator.
-
-	Split statements terminated by semicolons but keeps the final semicolon.  This is probably the most useful version:
-
-		function split_by_semicolon(
-			p_tokens in token_table
-		) return token_table_table;
+- **STATEMENT_SPLITTER**  Split multiple statements into individual statements based on a terminator.
 
 	Split statements like SQL*Plus and drops the delimiter.  Delimiters must be on a line with only whitespace.  Delimiters may be counted even if it's inside a string or comment:
 
@@ -33,14 +27,20 @@ See the individual packages for details on each procedure.
 			p_sqlplus_delimiter in nvarchar2 default '/'
 		) return nclob_table;
 		
-	Split statements like SQL*Plus and then also split by semicolon:
+	*[EXPERIMENTAL]* Split statements terminated by semicolons but keeps the final semicolon.  This is probably the most useful version:
+
+		function split_by_semicolon(
+			p_tokens in token_table
+		) return token_table_table;
+
+	*[EXPERIMENTAL]* Split statements like SQL*Plus and then also split by semicolon:
 
 		function split_by_sqlplus_del_and_semi(
 			p_statements        in nclob,
 			p_sqlplus_delimiter in nvarchar2 default '/'
 		) return token_table_table;
 
-- `statement_classifier` - Classify a statement as DDL, PL/SQL, SELECT, ALTER, etc.
+- **STATEMENT_CLASSIFIER** - Classify a statement as DDL, PL/SQL, SELECT, ALTER, etc.
 
 		procedure classify(
 			p_tokens          in token_table,
@@ -53,7 +53,7 @@ See the individual packages for details on each procedure.
 			p_start_index     in number default 1
 		);
 
-- `statement_feedback` - Get a message similar to SQL*Plus feedback messages.
+- **STATEMENT_FEEDBACK** - Get a message similar to SQL*Plus feedback messages.
 
 		procedure get_feedback_message(
 			p_tokens                   in token_table,
@@ -62,7 +62,7 @@ See the individual packages for details on each procedure.
 			p_compile_warning_message out varchar2
 		);
 
-- `statement_terminator` - Remove unnecessary terminating semicolon and SQL*Plus delimiters.  This prepares a statement to run as dynamic SQL.
+- **STATEMENT_TERMINATOR** - Remove unnecessary terminating semicolon and SQL*Plus delimiters.  This prepares a statement to run as dynamic SQL.
 
 		function remove_semicolon(
 			p_tokens in token_table
