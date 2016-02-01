@@ -63,6 +63,7 @@ function build_statement_wo_semicolon(p_abstract_tokens token_table)
 return token_table is
 	v_tokens token_table := token_table();
 	v_semicolon_index number := -1;
+	v_semicolon_line_number number;
 begin
 	--Find the index of the last semicolon token.
 	--Only count it if it's the last concrete token.
@@ -70,19 +71,42 @@ begin
 		--Record index if it's a semicolon.
 		if p_abstract_tokens(i).type = ';' then
 			v_semicolon_index := i;
+			v_semicolon_line_number := p_abstract_tokens(i).line_number;
 		--Quit the loop if another concrete token is found.
 		elsif p_abstract_tokens(i).type not in ('comment', 'whitespace', 'EOF') then
 			exit;
 		end if;
 	end loop;
 
-	--Put together string, excluding the semicolon;
+	--Put together string, excluding the semicolon.
 	for i in 1 .. p_abstract_tokens.count loop
-		if i <> v_semicolon_index then
+		--Concatenate two whitespaces if it was after the removed semicolon.
+		if i = v_semicolon_index + 1 and p_abstract_tokens(i).type = tokenizer.c_whitespace then
+			--Concatenate values.
+			v_tokens(i-2).value := v_tokens(i-2).value || p_abstract_tokens(i).value;
+			--Adjust metadata.
+			v_tokens(i-2).last_char_position := p_abstract_tokens(i).last_char_position - 1;
+		--Add token if it's not the semicolon.
+		elsif i <> v_semicolon_index then
 			v_tokens.extend;
 			v_tokens(v_tokens.count) := p_abstract_tokens(i);
 		end if;
 	end loop;
+
+	--Fix metadata by going through all tokens on or after it's old spot.
+	--LINE_NUMBER - nothing to fix
+	--COLUMN_NUMBER - Shrink by 1 if after semicolon but on same line.
+	--FIRST_CHAR_POSITION - Shrink by 1 if after semicolon.
+	--LAST_CHAR_POSITION - Shrink by 1 if after semicolon
+	if v_semicolon_index <> -1 then
+		for i in v_semicolon_index .. v_tokens.count loop
+			if v_tokens(i).line_number = v_semicolon_line_number then
+				v_tokens(i).column_number := v_tokens(i).column_number - 1;
+			end if;
+			v_tokens(i).first_char_position :=  v_tokens(i).first_char_position - 1;
+			v_tokens(i).last_char_position := v_tokens(i).last_char_position - 1;
+		end loop;
+	end if;
 
 	return v_tokens;
 end build_statement_wo_semicolon;

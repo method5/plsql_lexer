@@ -92,10 +92,9 @@ end get_wo_sqlplus_and_semi;
 -- =============================================================================
 
 --------------------------------------------------------------------------------
---NOTE: This test suite is very similar to the one in STATEMENT_CLASSIFIER_TEST.
---If you add a test case here you should probably add one there as well.
 procedure test_semicolon is
 	v_statement clob;
+	v_tokens token_table;
 begin
 	--Simple example.
 	v_statement := 'select * from dual;';
@@ -105,14 +104,33 @@ begin
 	v_statement := 'select * from dual;;';
 	assert_equals('Only remove one semi 1', 'select * from dual;', get_wo_semi(v_statement));
 
-	--TODO:
-	null;
+	--Smallest example.
+	v_tokens := statement_terminator.remove_semicolon(tokenizer.tokenize('commit'));
+	assert_equals('Small commit 1.', '2', v_tokens.count);
+	v_tokens := statement_terminator.remove_semicolon(tokenizer.tokenize('commit;'));
+	assert_equals('Small commit 1.', '2', v_tokens.count);
+
+	--Null.
+	v_tokens := statement_terminator.remove_semicolon(tokenizer.tokenize(null));
+	assert_equals('NULL 1.', '1', v_tokens.count);
+	assert_equals('NULL 2.', tokenizer.c_eof, v_tokens(1).type);
+
+	--line_number, column_number, first_char_position, last_char_position.
+	v_tokens := statement_terminator.remove_semicolon(tokenizer.tokenize('commit'||chr(10)||';'||chr(10)||'--asdf'));
+	assert_equals('Whitespace is concatenated 1.', '4', v_tokens.count);
+	assert_equals('Whitespace is concatenated 2.', tokenizer.c_comment, v_tokens(3).type);
+	assert_equals('Whitespace is concatenated 3.', '2', lengthc(v_tokens(2).value));
+	assert_equals('Line number stays the same 1.', 3, v_tokens(3).line_number);
+	assert_equals('Column number 1.', 1, v_tokens(3).column_number);
+	assert_equals('First char position 1.', 9, v_tokens(3).first_char_position);
+	assert_equals('Last char position 1.', 14, v_tokens(3).last_char_position);
+
+	v_tokens := statement_terminator.remove_semicolon(tokenizer.tokenize('commit;--asdf'));
+	assert_equals('Column number shrinks on same line 1.', 7, v_tokens(2).column_number);
 end test_semicolon;
 
 
 --------------------------------------------------------------------------------
---NOTE: This test suite is very similar to the one in STATEMENT_CLASSIFIER_TEST.
---If you add a test case here you should probably add one there as well.
 procedure test_semicolon_errors is
 	v_statement clob;
 begin
@@ -655,6 +673,8 @@ begin
 	--Test UTF8 characters delimiter.
 	v_statement := 'select * from dual'||chr(10)||unistr('\d841\df79');
 	assert_equals('Simple 1', 'select * from dual'||chr(10), get_wo_sqlplus(v_statement, unistr('\d841\df79')));
+
+	--TODO: Test line_number, column_number, first_char_position, and last_char_position.
 end test_sqlplus;
 
 
@@ -667,6 +687,8 @@ begin
 	assert_equals('Simple 1', 'select * from dual'||chr(10), get_wo_sqlplus_and_semi(v_statement));
 
 	--TODO: Add more here.
+
+	--TODO: Test line_number, column_number, first_char_position, and last_char_position.
 end test_sqlplus_and_semi;
 
 

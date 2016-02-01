@@ -1,10 +1,12 @@
 create or replace package statement_splitter is
 --Copyright (C) 2015 Jon Heller.  This program is licensed under the LGPLv3.
 
-function split_by_semicolon(p_tokens in token_table) return token_table_table;
-
 function split_by_sqlplus_delimiter(p_statements in nclob, p_sqlplus_delimiter in nvarchar2 default '/') return nclob_table;
 
+--DO NOT USE THE BELOW FUNCTION YET, IT HAS SOME SERIOUS PROBLEMS.
+function split_by_semicolon(p_tokens in token_table) return token_table_table;
+
+--DO NOT USE THE BELOW FUNCTION YET, IT HAS SOME SERIOUS PROBLEMS.
 function split_by_sqlplus_del_and_semi(p_statements in nclob, p_sqlplus_delimiter in nvarchar2 default '/') return token_table_table;
 
 /*
@@ -1429,6 +1431,8 @@ begin
 		--Quit when there are no more tokens.
 		exit when v_token_index > p_tokens.count;
 	end loop;
+
+	--TODO: Fix line_number, column_number, first_char_position and last_char_position.
 
 	return v_split_tokens;
 end split_by_semicolon;
