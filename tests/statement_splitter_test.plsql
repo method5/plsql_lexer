@@ -59,7 +59,7 @@ g_failed_count number := 0;
 -- =============================================================================
 
 --------------------------------------------------------------------------------
-procedure assert_equals(p_test nvarchar2, p_expected nvarchar2, p_actual nvarchar2) is
+procedure assert_equals(p_test varchar2, p_expected varchar2, p_actual varchar2) is
 begin
 	g_test_count := g_test_count + 1;
 
@@ -91,7 +91,7 @@ end test_errors;
 
 --------------------------------------------------------------------------------
 procedure test_simple is
-	v_statements nclob;
+	v_statements clob;
 	v_split_statements token_table_table := token_table_table();
 begin
 	v_statements:='select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
@@ -121,7 +121,7 @@ end test_simple;
 
 --------------------------------------------------------------------------------
 procedure test_plsql_declaration is
-	v_statements nclob;
+	v_statements clob;
 	v_split_statements token_table_table := token_table_table();
 begin
 	v_statements:='with function f return number is begin return 1; end; function g return number is begin return 2; end; select f from dual;select 1 from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
@@ -328,7 +328,7 @@ end test_plsql_declaration;
 
 --------------------------------------------------------------------------------
 procedure test_plsql_block is
-	v_statements nclob;
+	v_statements clob;
 	v_split_statements token_table_table := token_table_table();
 begin
 	v_statements:='declare v_test number; begin select begin begin into v_test from (select 1 begin from dual); end; select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
@@ -422,7 +422,7 @@ end test_plsql_block;
 
 --------------------------------------------------------------------------------
 procedure test_package is
-	v_statements nclob;
+	v_statements clob;
 	v_split_statements token_table_table := token_table_table();
 begin
 	--Empty package.
@@ -458,7 +458,7 @@ end test_package;
 
 --------------------------------------------------------------------------------
 procedure test_type_body is
-	v_statements nclob;
+	v_statements clob;
 	v_split_statements token_table_table := token_table_table();
 begin
 	--TODO:
@@ -488,7 +488,7 @@ end test_type_body;
 
 --------------------------------------------------------------------------------
 procedure test_trigger is
-	v_statements nclob;
+	v_statements clob;
 	v_split_statements token_table_table := token_table_table();
 begin
 	--Regular triggers have a matched begin/end.
@@ -631,7 +631,7 @@ end test_trigger;
 
 --------------------------------------------------------------------------------
 procedure test_proc_and_func is
-	v_statements nclob;
+	v_statements clob;
 	v_split_statements token_table_table := token_table_table();
 begin
 	--Regular procedure.
@@ -677,7 +677,7 @@ end test_proc_and_func;
 
 --------------------------------------------------------------------------------
 procedure test_package_body is
-	v_statements nclob;
+	v_statements clob;
 	v_split_statements token_table_table := token_table_table();
 begin
 	--#1: Extra END in an emtpy package body.
@@ -781,8 +781,8 @@ end test_package_body;
 
 --------------------------------------------------------------------------------
 procedure test_sqlplus_delim is
-	v_statements nclob;
-	v_split_statements nclob_table := nclob_table();
+	v_statements clob;
+	v_split_statements clob_table := clob_table();
 	custom_exception_20000 exception;
 	pragma exception_init(custom_exception_20000, -20000);
 	custom_exception_20001 exception;

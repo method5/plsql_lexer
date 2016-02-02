@@ -64,7 +64,7 @@ g_2_byte_utf8 varchar2(1 char) := unistr('\00d0');       --The "eth" character, 
 
 
 --------------------------------------------------------------------------------
-procedure assert_equals(p_test nvarchar2, p_expected nvarchar2, p_actual nvarchar2) is
+procedure assert_equals(p_test varchar2, p_expected varchar2, p_actual varchar2) is
 begin
 	g_test_count := g_test_count + 1;
 
@@ -80,7 +80,7 @@ end assert_equals;
 
 
 --------------------------------------------------------------------------------
-function get_value_n(p_source nclob, n number) return nvarchar2 is
+function get_value_n(p_source clob, n number) return varchar2 is
 	v_tokens token_table;
 begin
 	v_tokens := tokenizer.tokenize(p_source);
@@ -89,7 +89,7 @@ end get_value_n;
 
 
 --------------------------------------------------------------------------------
-function get_sqlcode_n(p_source nclob, n number) return nvarchar2 is
+function get_sqlcode_n(p_source clob, n number) return varchar2 is
 	v_tokens token_table;
 begin
 	v_tokens := tokenizer.tokenize(p_source);
@@ -98,7 +98,7 @@ end get_sqlcode_n;
 
 
 --------------------------------------------------------------------------------
-function get_sqlerrm_n(p_source nclob, n number) return nvarchar2 is
+function get_sqlerrm_n(p_source clob, n number) return varchar2 is
 	v_tokens token_table;
 begin
 	v_tokens := tokenizer.tokenize(p_source);
@@ -108,7 +108,7 @@ end get_sqlerrm_n;
 
 --------------------------------------------------------------------------------
 --Simplifies calls to tokenize and print_tokens.
-function lex(p_source nclob) return nclob is
+function lex(p_source clob) return clob is
 begin
 	return tokenizer.print_tokens(tokenizer.tokenize(p_source));
 end lex;

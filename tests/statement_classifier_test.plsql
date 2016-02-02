@@ -57,7 +57,7 @@ type output_rec is record
 -- =============================================================================
 
 --------------------------------------------------------------------------------
-procedure assert_equals(p_test nvarchar2, p_expected nvarchar2, p_actual nvarchar2) is
+procedure assert_equals(p_test varchar2, p_expected varchar2, p_actual varchar2) is
 begin
 	g_test_count := g_test_count + 1;
 
@@ -73,7 +73,7 @@ end assert_equals;
 
 
 --------------------------------------------------------------------------------
-procedure classify(p_statement nclob, p_output out output_rec, p_start_index in number default 1) is
+procedure classify(p_statement clob, p_output out output_rec, p_start_index in number default 1) is
 	v_category varchar2(100);
 	v_statement_type varchar2(100);
 	v_command_name varchar2(64);
@@ -97,7 +97,7 @@ end classify;
 
 
 --------------------------------------------------------------------------------
-function get_sqlerrm(p_statement nclob) return varchar2 is
+function get_sqlerrm(p_statement clob) return varchar2 is
 	v_category varchar2(100);
 	v_statement_type varchar2(100);
 	v_command_name varchar2(64);

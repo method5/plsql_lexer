@@ -7,12 +7,12 @@ function remove_semicolon(
 
 function remove_sqlplus_delimiter(
 	p_tokens in token_table,
-	p_sqlplus_delimiter in nvarchar2 default '/'
+	p_sqlplus_delimiter in varchar2 default '/'
 ) return token_table;
 
 function remove_sqlplus_del_and_semi(
 	p_tokens in token_table,
-	p_sqlplus_delimiter in nvarchar2 default '/'
+	p_sqlplus_delimiter in varchar2 default '/'
 ) return token_table;
 
 /*
@@ -198,7 +198,7 @@ end remove_semicolon;
 --------------------------------------------------------------------------------
 function remove_sqlplus_delimiter(
 	p_tokens in token_table,
-	p_sqlplus_delimiter in nvarchar2 default '/'
+	p_sqlplus_delimiter in varchar2 default '/'
 ) return token_table
 is
 	v_delimiter_begin_index number;
@@ -206,7 +206,7 @@ is
 
 	v_2_token_before_delimiter token;
 	v_1_token_before_delimiter token;
-	v_potential_delimiter nclob;
+	v_potential_delimiter clob;
 	v_1_token_after_delimiter token;
 	v_2_token_after_delimiter token;
 
@@ -307,7 +307,7 @@ end remove_sqlplus_delimiter;
 --------------------------------------------------------------------------------
 function remove_sqlplus_del_and_semi(
 	p_tokens in token_table,
-	p_sqlplus_delimiter in nvarchar2 default '/'
+	p_sqlplus_delimiter in varchar2 default '/'
 ) return token_table
 is
 begin

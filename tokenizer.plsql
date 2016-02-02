@@ -99,7 +99,7 @@ Tokens may be one of these types:
 
 The most important output is a Token type:
 	type     varchar2(4000),
-	value    nclob,
+	value    clob,
 	sqlcode  number,
 	sqlerrm  varchar2(4000)
 
@@ -129,13 +129,13 @@ Results:  word whitespace * whitespace word whitespace word ; EOF
 */
 
 --Main functions.
-function tokenize(p_source in nclob) return token_table;
-function concatenate(p_tokens in token_table) return nclob;
+function tokenize(p_source in clob) return token_table;
+function concatenate(p_tokens in token_table) return clob;
 
 --Helper functions useful for some tools.
-function is_lexical_whitespace(p_char nvarchar2) return boolean;
-function get_nvarchar2_table_from_nclob(p_nclob nclob) return nvarchar2_table;
-function print_tokens(p_tokens token_table) return nclob;
+function is_lexical_whitespace(p_char varchar2) return boolean;
+function get_varchar2_table_from_clob(p_clob clob) return varchar2_table;
+function print_tokens(p_tokens token_table) return clob;
 
 end;
 /
@@ -143,13 +143,9 @@ create or replace package body tokenizer is
 
 --Globals
 
---A logical character may contain 2 physical characters (or code points).
---For example, the 4-byte Unicode character unistr('\D841\DF79') is counted as
---2 characters when it's in a NCLOB.
-g_chars nvarchar2_table := nvarchar2_table();
-
-g_last_char nvarchar2(2 char);
-g_token_text nclob;
+g_chars varchar2_table := varchar2_table();
+g_last_char varchar2(1 char);
+g_token_text clob;
 g_line_number number;
 g_column_number number;
 g_last_char_position number;
@@ -165,7 +161,7 @@ g_pattern_paren_count number;
 
 --------------------------------------------------------------------------------
 --Get and consume one character.
-function get_char return nvarchar2 is
+function get_char return varchar2 is
 begin
 	--Increment last character counter.
 	g_last_char_position := g_last_char_position + 1;
@@ -189,7 +185,7 @@ end;
 
 --------------------------------------------------------------------------------
 --Get but do not consume next character.
-function look_ahead(p_offset number) return nvarchar2 is
+function look_ahead(p_offset number) return varchar2 is
 begin
 	if g_last_char_position + p_offset > g_chars.count then
 		return null;
@@ -204,8 +200,8 @@ end look_ahead;
 --characters.  The real parsing will be done by a regular expression, but we
 --can at least filter out anything that's not one of 0-9,+,-,.,e,E,f,F,d,D
 --'^([0-9]+\.[0-9]+|\.[0-9]+|[0-9]+)((e|E)(\+|-)?[0-9]+)?(f|F|d|D)?');
-function get_potential_numeric_string return nvarchar2 is
-	v_string nvarchar2(32767);
+function get_potential_numeric_string return varchar2 is
+	v_string varchar2(32767);
 	v_numeric_position number := g_last_char_position;
 begin
 	loop
@@ -226,7 +222,7 @@ end get_potential_numeric_string;
 
 --------------------------------------------------------------------------------
 --Is the character alphabetic, in any language.
-function is_alpha(p_char nvarchar2) return boolean is
+function is_alpha(p_char varchar2) return boolean is
 begin
 	return regexp_like(p_char, '[[:alpha:]]');
 end is_alpha;
@@ -234,7 +230,7 @@ end is_alpha;
 
 --------------------------------------------------------------------------------
 --Is the character alphabetic (in any language), numeric, or one of "_", "#", or "$".
-function is_alpha_numeric_or__#$(p_char nvarchar2) return boolean is
+function is_alpha_numeric_or__#$(p_char varchar2) return boolean is
 begin
 	return regexp_like(p_char, '[[:alpha:]]|[0-9]|\_|#|\$');
 end is_alpha_numeric_or__#$;
@@ -242,7 +238,7 @@ end is_alpha_numeric_or__#$;
 
 --------------------------------------------------------------------------------
 --Is the character alphabetic (in any language), numeric, or one of "_", or "#".
-function is_alpha_numeric_or__#(p_char nvarchar2) return boolean is
+function is_alpha_numeric_or__#(p_char varchar2) return boolean is
 begin
 	return regexp_like(p_char, '[[:alpha:]]|[0-9]|\_|#');
 end is_alpha_numeric_or__#;
@@ -284,7 +280,7 @@ end track_row_pattern_matching;
 --Type is one of: EOF, whitespace, comment, text, numeric, word, or special characters.
 --See the package specification for some information on the tokenizer.
 function get_token return token is
-	v_quote_delimiter nvarchar2(1 char);
+	v_quote_delimiter varchar2(1 char);
 
 	v_line_number number;
 	v_column_number number;
@@ -504,7 +500,7 @@ begin
 	--http://docs.oracle.com/database/121/SQLRF/img/number.gif
 	if g_last_char between '0' and '9' or (g_last_char = '.' and look_ahead(1) between '0' and '9') then
 		declare
-			v_substring nvarchar2(32767) := get_potential_numeric_string();
+			v_substring varchar2(32767) := get_potential_numeric_string();
 		begin
 			--Note: Combining classes, anchors, and regexp_substr positions other than 1 do not always work.
 			--Note: This won't work with numbers larger than 1K characters,
@@ -645,12 +641,12 @@ end get_token;
 
 --------------------------------------------------------------------------------
 --Convert a string into a VARRAY of tokens.
-function tokenize(p_source nclob) return token_table is
+function tokenize(p_source clob) return token_table is
 	v_token token;
 	v_tokens token_table := token_table();
 begin
 	--Initialize globals.
-	g_chars := get_nvarchar2_table_from_nclob(p_source);
+	g_chars := get_varchar2_table_from_clob(p_source);
 	--set_g_chars(p_source);
 	g_last_char_position := 0;
 	g_line_number := 1;
@@ -677,23 +673,23 @@ end tokenize;
 
 
 --------------------------------------------------------------------------------
---Convert the tokens into an NCLOB.
-function concatenate(p_tokens in token_table) return nclob
+--Convert the tokens into an CLOB.
+function concatenate(p_tokens in token_table) return clob
 is
-	v_nclob nclob;
+	v_clob clob;
 begin
 	for i in 1 .. p_tokens.count loop
-		v_nclob := v_nclob || p_tokens(i).value;
+		v_clob := v_clob || p_tokens(i).value;
 	end loop;
 
-	return v_nclob;
+	return v_clob;
 end concatenate;
 
 
 --------------------------------------------------------------------------------
 --Print tokens for debugging.
-function print_tokens(p_tokens token_table) return nclob is
-	v_output nclob;
+function print_tokens(p_tokens token_table) return clob is
+	v_output clob;
 begin
 	for i in 1 .. p_tokens.count loop
 		v_output := v_output||' '||p_tokens(i).type;
@@ -705,7 +701,7 @@ end print_tokens;
 
 --------------------------------------------------------------------------------
 --Is the character white space.
-function is_lexical_whitespace(p_char nvarchar2) return boolean is
+function is_lexical_whitespace(p_char varchar2) return boolean is
 begin
 	/*
 	--Find single-byte whitespaces.
@@ -749,60 +745,74 @@ end is_lexical_whitespace;
 --This extra step takes care of non-trivial Unicode processing up front.
 --This cannot be simplified with SUBSTRC, that will not work for large CLOBs.
 --TODO: Is there an easier way to do this?
-function get_nvarchar2_table_from_nclob(p_nclob nclob) return nvarchar2_table
+function get_varchar2_table_from_clob(p_clob clob) return varchar2_table
 is
-	v_chars nvarchar2_table := nvarchar2_table();
+	v_varchar2 varchar2(32767 byte);
+
+	v_chars varchar2_table := varchar2_table();
 
 	v_position number := 1;
-	v_clob_length number := nvl(dbms_lob.getlength(p_nclob), 0);
-	v_char nvarchar2(2 char);
+	v_clob_length number := nvl(dbms_lob.getlength(p_clob), 0);
+	v_char varchar2(2 char);
 
 	v_amount_of_lob_data_0 exception;
 	pragma exception_init(v_amount_of_lob_data_0, -22923);
 
 	v_offset_not_on_char_boundary exception;
 	pragma exception_init(v_offset_not_on_char_boundary, -22831);
+
 begin
-	--Loop through each code point, which is not necessarily one character.
-	loop
-		exit when v_position > v_clob_length;
+	--Convert CLOB to VARCHAR2 the easy way if it's small enough.
+	if dbms_lob.getLength(p_clob) <= 8191 then
+		v_varchar2 := p_clob;
+		for i in 1 .. lengthc(v_varchar2) loop
+			v_chars.extend();
+			v_chars(v_chars.count) := substrc(v_varchar2, i, 1);
+		end loop;
 
-		--When starting from the beginning (offset = 1), substr will warn if 0 characters are read.
-		--This means only 2 of the 4 bytes were retrieved and we need to increase the amount.
-		if v_position = 1 then
-			begin
-				v_char := dbms_lob.substr(lob_loc => p_nclob, amount => 1, offset => v_position);
-				v_position := v_position + 1;
-			exception when v_amount_of_lob_data_0 then
-				v_char := dbms_lob.substr(lob_loc => p_nclob, amount => 2, offset => v_position);
-				v_position := v_position + 2;
-			end;
-		--When starting anywhere else in the CLOB, Oracle will only throw an error if you *start*
-		--from a bad position and not if you *stop* in a bad position.
-		--To detect if the next character is 1 or 2 code points, first read starting one character
-		--ahead.  If it works, get one code point, if it fails, get two.
-		else
-			begin
-				--Jump ahead to next position just to see if it throws an error.
-				v_char := dbms_lob.substr(lob_loc => p_nclob, amount => 1, offset => v_position + 1);
-				--If it didn't, then grab one code point.
-				v_char := dbms_lob.substr(lob_loc => p_nclob, amount => 1, offset => v_position);
-				v_position := v_position + 1;
-			--If there's an exception, grab 2 code points.
-			exception when v_offset_not_on_char_boundary then
-				v_char := dbms_lob.substr(lob_loc => p_nclob, amount => 2, offset => v_position);
-				v_position := v_position + 2;
-			end;
-		end if;
+	--Convert CLOB to VARCHAR2 the hard way if it's too large.
+	else
+		--Loop through each code point, which is not necessarily one character.
+		loop
+			exit when v_position > v_clob_length;
 
-		v_chars.extend();
-		v_chars(v_chars.count) := v_char;
+			--When starting from the beginning (offset = 1), substr will warn if 0 characters are read.
+			--This means only 2 of the 4 bytes were retrieved and we need to increase the amount.
+			if v_position = 1 then
+				begin
+					v_char := dbms_lob.substr(lob_loc => p_clob, amount => 1, offset => v_position);
+					v_position := v_position + 1;
+				exception when v_amount_of_lob_data_0 then
+					v_char := dbms_lob.substr(lob_loc => p_clob, amount => 2, offset => v_position);
+					v_position := v_position + 2;
+				end;
+			--When starting anywhere else in the CLOB, Oracle will only throw an error if you *start*
+			--from a bad position and not if you *stop* in a bad position.
+			--To detect if the next character is 1 or 2 code points, first read starting one character
+			--ahead.  If it works, get one code point, if it fails, get two.
+			else
+				begin
+					--Jump ahead to next position just to see if it throws an error.
+					v_char := dbms_lob.substr(lob_loc => p_clob, amount => 1, offset => v_position + 1);
+					--If it didn't, then grab one code point.
+					v_char := dbms_lob.substr(lob_loc => p_clob, amount => 1, offset => v_position);
+					v_position := v_position + 1;
+				--If there's an exception, grab 2 code points.
+				exception when v_offset_not_on_char_boundary then
+					v_char := dbms_lob.substr(lob_loc => p_clob, amount => 2, offset => v_position);
+					v_position := v_position + 2;
+				end;
+			end if;
 
-	end loop;
+			v_chars.extend();
+			v_chars(v_chars.count) := v_char;
+
+		end loop;
+	end if;
 
 	return v_chars;
 
-end get_nvarchar2_table_from_nclob;
+end get_varchar2_table_from_clob;
 
 
 end;

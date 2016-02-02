@@ -47,7 +47,7 @@ g_failed_count number := 0;
 -- =============================================================================
 
 --------------------------------------------------------------------------------
-procedure assert_equals(p_test nvarchar2, p_expected nvarchar2, p_actual nvarchar2) is
+procedure assert_equals(p_test varchar2, p_expected varchar2, p_actual varchar2) is
 begin
 	g_test_count := g_test_count + 1;
 

@@ -26,7 +26,7 @@ begin
 	select listagg(type_name, ',') within group (order by type_name)
 	into v_installed_types
 	from all_types
-	where type_name in ('NCLOB_TABLE', 'NVARCHAR2_TABLE',
+	where type_name in ('CLOB_TABLE', 'VARCHAR2_TABLE',
 		'TOKEN', 'TOKEN_TABLE', 'TOKEN_TABLE_TABLE')
 		and owner = sys_context('userenv', 'current_schema');
 
@@ -41,14 +41,14 @@ end;
 
 --#4: Install types.
 prompt Installing types...
-create or replace type nclob_table is table of nclob;
+create or replace type clob_table is table of clob;
 /
-create or replace type nvarchar2_table is table of nvarchar2(2 char);
+create or replace type varchar2_table is table of varchar2(1 char);
 /
 create or replace type token is object
 (
 	type                varchar2(4000), --String to represent token type.  See the constants in TOKENIZER.
-	value               nclob,          --The text of the token.
+	value               clob,           --The text of the token.
 	line_number         number,         --The line number the token starts at - useful for printing warning and error information.
 	column_number       number,         --The column number the token starts at - useful for printing warning and error information.
 	first_char_position number,         --First character position of token in the whole string - useful for inserting before a token.

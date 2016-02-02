@@ -31,8 +31,8 @@ declare
 	end drop_object_ignore_dne_error;
 begin
 	--Drop objects, in reverse order so dependent objects are dropped first.
-	drop_object_ignore_dne_error('drop type nclob_table');
-	drop_object_ignore_dne_error('drop type nvarchar2_table');
+	drop_object_ignore_dne_error('drop type clob_table');
+	drop_object_ignore_dne_error('drop type varchar2_table');
 	drop_object_ignore_dne_error('drop type token_table_table');
 	drop_object_ignore_dne_error('drop type token_table');
 	drop_object_ignore_dne_error('drop type token');

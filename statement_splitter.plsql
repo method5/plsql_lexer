@@ -1,13 +1,13 @@
 create or replace package statement_splitter is
 --Copyright (C) 2015 Jon Heller.  This program is licensed under the LGPLv3.
 
-function split_by_sqlplus_delimiter(p_statements in nclob, p_sqlplus_delimiter in nvarchar2 default '/') return nclob_table;
+function split_by_sqlplus_delimiter(p_statements in clob, p_sqlplus_delimiter in varchar2 default '/') return clob_table;
 
 --DO NOT USE THE BELOW FUNCTION YET, IT HAS SOME SERIOUS PROBLEMS.
 function split_by_semicolon(p_tokens in token_table) return token_table_table;
 
 --DO NOT USE THE BELOW FUNCTION YET, IT HAS SOME SERIOUS PROBLEMS.
-function split_by_sqlplus_del_and_semi(p_statements in nclob, p_sqlplus_delimiter in nvarchar2 default '/') return token_table_table;
+function split_by_sqlplus_del_and_semi(p_statements in clob, p_sqlplus_delimiter in varchar2 default '/') return token_table_table;
 
 /*
 
@@ -334,7 +334,7 @@ end only_ws_comments_eof_remain;
 
 --------------------------------------------------------------------------------
 --Return the next concrete token, or NULL if there are no more.
-function get_next_concrete_value_n(p_tokens in token_table, p_token_index in number, p_n in number) return nvarchar2 is
+function get_next_concrete_value_n(p_tokens in token_table, p_token_index in number, p_n in number) return varchar2 is
 	v_concrete_token_counter number := 0;
 begin
 	--Loop through the tokens.
@@ -710,9 +710,9 @@ procedure add_statement_consume_tokens(
 			--Return when empty package.
 			--Special case where the next concrete token is END.
 			declare
-				v_next_concrete_value1 nvarchar2(32767);
-				v_next_concrete_value2 nvarchar2(32767);
-				v_next_concrete_value3 nvarchar2(32767);
+				v_next_concrete_value1 varchar2(32767);
+				v_next_concrete_value2 varchar2(32767);
+				v_next_concrete_value3 varchar2(32767);
 			begin
 				v_next_concrete_value1 := get_next_concrete_value_n(p_old_tokens, p_token_index, 1);
 				v_next_concrete_value2 := get_next_concrete_value_n(p_old_tokens, p_token_index, 2);
@@ -1192,18 +1192,18 @@ end add_statement_consume_tokens;
 --This follows the SQL*Plus rules - the delimiter must be on a line by itself,
 --although the line may contain whitespace before and after the delimiter.
 --The delimiter and whitespace on the same line are included with the first statement.
-function split_by_sqlplus_delimiter(p_statements in nclob, p_sqlplus_delimiter in nvarchar2 default '/') return nclob_table is
-	v_chars nvarchar2_table := tokenizer.get_nvarchar2_table_from_nclob(p_statements);
+function split_by_sqlplus_delimiter(p_statements in clob, p_sqlplus_delimiter in varchar2 default '/') return clob_table is
+	v_chars varchar2_table := tokenizer.get_varchar2_table_from_clob(p_statements);
 	v_delimiter_size number := nvl(lengthc(p_sqlplus_delimiter), 0);
 	v_char_index number := 0;
-	v_string nclob;
+	v_string clob;
 	v_is_empty_line boolean := true;
 
-	v_strings nclob_table := nclob_table();
+	v_strings clob_table := clob_table();
 
 	--Get N chars for comparing with multi-character delimiter.
-	function get_next_n_chars(p_n number) return nvarchar2 is
-		v_next_n_chars nvarchar2(32767);
+	function get_next_n_chars(p_n number) return varchar2 is
+		v_next_n_chars varchar2(32767);
 	begin
 		for i in v_char_index .. least(v_char_index + p_n - 1, v_chars.count) loop
 			v_next_n_chars := v_next_n_chars || v_chars(i);
@@ -1441,9 +1441,9 @@ end split_by_semicolon;
 --------------------------------------------------------------------------------
 --Split a string of separate SQL and PL/SQL statements terminated by ";" and
 --some secondary terminator, usually "/".
-function split_by_sqlplus_del_and_semi(p_statements in nclob, p_sqlplus_delimiter in nvarchar2 default '/')
+function split_by_sqlplus_del_and_semi(p_statements in clob, p_sqlplus_delimiter in varchar2 default '/')
 return token_table_table is
-	v_split_statements nclob_table := nclob_table();
+	v_split_statements clob_table := clob_table();
 	v_split_token_tables token_table_table := token_table_table();
 begin
 	--First split by SQL*Plus delimiter.

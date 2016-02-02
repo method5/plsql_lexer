@@ -12,20 +12,20 @@ See the individual packages for details on each procedure.
 
 	Create tokens for SQL and PL/SQL statements:
 
-		function tokenize(p_source nclob) return token_table;
+		function tokenize(p_source clob) return token_table;
 
-	Create an NCLOB from tokens:
+	Create a CLOB from tokens:
 
-		function concatenate(p_tokens in token_table) return nclob;
+		function concatenate(p_tokens in token_table) return clob;
 
 - **STATEMENT_SPLITTER**  Split multiple statements into individual statements based on a terminator.
 
 	Split statements like SQL*Plus and drops the delimiter.  Delimiters must be on a line with only whitespace.  Delimiters may be counted even if it's inside a string or comment:
 
 		function split_by_sqlplus_delimiter(
-			p_statements        in nclob,
-			p_sqlplus_delimiter in nvarchar2 default '/'
-		) return nclob_table;
+			p_statements        in clob,
+			p_sqlplus_delimiter in varchar2 default '/'
+		) return clob_table;
 		
 	*[EXPERIMENTAL]* Split statements terminated by semicolons but keeps the final semicolon.  This is probably the most useful version:
 
@@ -36,8 +36,8 @@ See the individual packages for details on each procedure.
 	*[EXPERIMENTAL]* Split statements like SQL*Plus and then also split by semicolon:
 
 		function split_by_sqlplus_del_and_semi(
-			p_statements        in nclob,
-			p_sqlplus_delimiter in nvarchar2 default '/'
+			p_statements        in clob,
+			p_sqlplus_delimiter in varchar2 default '/'
 		) return token_table_table;
 
 - **STATEMENT_CLASSIFIER** - Classify a statement as DDL, PL/SQL, SELECT, ALTER, etc.
@@ -70,12 +70,12 @@ See the individual packages for details on each procedure.
 
 		function remove_sqlplus_delimiter(
 			p_tokens in token_table,
-			p_sqlplus_delimiter in nvarchar2 default '/'
+			p_sqlplus_delimiter in varchar2 default '/'
 		) return token_table;
 
 		function remove_sqlplus_del_and_semi(
 			p_tokens in token_table,
-			p_sqlplus_delimiter in nvarchar2 default '/'
+			p_sqlplus_delimiter in varchar2 default '/'
 		) return token_table;
 
 ## How to Install
@@ -117,7 +117,7 @@ After following the installation steps above this code should be runnable:
 	declare
 		--A collection of statements separated by semicolons.
 		--These may come from a website, text file, etc.
-		v_statements nclob := q'<
+		v_statements clob := q'<
 			create table my_table(a number);
 			insert into my_table values(1);
 			begin null; end;
