@@ -751,62 +751,52 @@ is
 
 	v_chars varchar2_table := varchar2_table();
 
-	v_position number := 1;
-	v_clob_length number := nvl(dbms_lob.getlength(p_clob), 0);
-	v_char varchar2(2 char);
-
-	v_amount_of_lob_data_0 exception;
-	pragma exception_init(v_amount_of_lob_data_0, -22923);
-
 	v_offset_not_on_char_boundary exception;
 	pragma exception_init(v_offset_not_on_char_boundary, -22831);
 
+	v_next_char_boundary number := 1;
+	v_amount_to_read constant number := 8000;
 begin
+	--Return empty collection is there's nothing.
+	if p_clob is null then
+		return v_chars;
 	--Convert CLOB to VARCHAR2 the easy way if it's small enough.
-	if dbms_lob.getLength(p_clob) <= 8191 then
+	elsif dbms_lob.getLength(p_clob) <= 8191 then
 		v_varchar2 := p_clob;
 		for i in 1 .. lengthc(v_varchar2) loop
 			v_chars.extend();
 			v_chars(v_chars.count) := substrc(v_varchar2, i, 1);
 		end loop;
-
 	--Convert CLOB to VARCHAR2 the hard way if it's too large.
 	else
-		--Loop through each code point, which is not necessarily one character.
-		loop
-			exit when v_position > v_clob_length;
+		--Convert multiple characters from CLOB to VARCHAR2 at once.
+		--This is tricky because CLOBs use UCS and VARCHARs use UTF8.
+		--Some single-characters in VARCHAR2 use 2 UCS code points.
+		--They can be treated as 2 separate characters but must be selected together.
+		--Oracle will not throw an error if SUBSTR reads half a character at the end.
+		--But it does error if it starts at a bad character.
+		--The code below finds the valid character boundary first, and then reads up to it.
+		for i in 1 .. ceil(dbms_lob.getLength(p_clob)/v_amount_to_read) loop
+			begin
+				--Check if the next boundary is OK by trying to read a small amount.
+				--TODO: Checking 2 bytes is as expensive as retrieving all data.  Pre-fetch and use later if valid?
+				v_varchar2 := dbms_lob.substr(lob_loc => p_clob, offset => v_next_char_boundary + v_amount_to_read, amount => 2);
 
-			--When starting from the beginning (offset = 1), substr will warn if 0 characters are read.
-			--This means only 2 of the 4 bytes were retrieved and we need to increase the amount.
-			if v_position = 1 then
-				begin
-					v_char := dbms_lob.substr(lob_loc => p_clob, amount => 1, offset => v_position);
-					v_position := v_position + 1;
-				exception when v_amount_of_lob_data_0 then
-					v_char := dbms_lob.substr(lob_loc => p_clob, amount => 2, offset => v_position);
-					v_position := v_position + 2;
-				end;
-			--When starting anywhere else in the CLOB, Oracle will only throw an error if you *start*
-			--from a bad position and not if you *stop* in a bad position.
-			--To detect if the next character is 1 or 2 code points, first read starting one character
-			--ahead.  If it works, get one code point, if it fails, get two.
-			else
-				begin
-					--Jump ahead to next position just to see if it throws an error.
-					v_char := dbms_lob.substr(lob_loc => p_clob, amount => 1, offset => v_position + 1);
-					--If it didn't, then grab one code point.
-					v_char := dbms_lob.substr(lob_loc => p_clob, amount => 1, offset => v_position);
-					v_position := v_position + 1;
-				--If there's an exception, grab 2 code points.
-				exception when v_offset_not_on_char_boundary then
-					v_char := dbms_lob.substr(lob_loc => p_clob, amount => 2, offset => v_position);
-					v_position := v_position + 2;
-				end;
-			end if;
+				--If it's ok, grab the data and increment the character boundary.
+				v_varchar2 := dbms_lob.substr(lob_loc => p_clob, offset => v_next_char_boundary, amount => v_amount_to_read);
+				v_next_char_boundary := v_next_char_boundary + v_amount_to_read;
 
-			v_chars.extend();
-			v_chars(v_chars.count) := v_char;
+			--If it wasn't successful, grab one less character and set character boundary to one less.
+			exception when v_offset_not_on_char_boundary then
+				v_varchar2 := dbms_lob.substr(lob_loc => p_clob, offset => v_next_char_boundary, amount => v_amount_to_read - 1);
+				v_next_char_boundary := v_next_char_boundary + v_amount_to_read - 1;
+			end;
 
+			--Loop through VARCHAR2 and convert it to array.
+			for i in 1 .. lengthc(v_varchar2) loop
+				v_chars.extend();
+				v_chars(v_chars.count) := substrc(v_varchar2, i, 1);
+			end loop;
 		end loop;
 	end if;
 
