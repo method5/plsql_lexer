@@ -1,6 +1,6 @@
 create or replace package tokenizer is
 --Copyright (C) 2015 Jon Heller.  This program is licensed under the LGPLv3.
-C_VERSION constant varchar2(10) := '0.4.0';
+C_VERSION constant varchar2(10) := '0.5.0';
 
 --Constants for token types.
 C_WHITESPACE                 constant varchar2(10) := 'whitespace';
@@ -145,7 +145,9 @@ create or replace package body tokenizer is
 
 g_chars varchar2_table := varchar2_table();
 g_last_char varchar2(1 char);
-g_token_text clob;
+--Ideally this would be a CLOB but VARCHAR2 performs much better.
+--It's extemely unlikely, but possible, for whitespace or text to be more than 32K.
+g_token_text varchar2(32767);
 g_line_number number;
 g_column_number number;
 g_last_char_position number;
@@ -728,10 +730,11 @@ begin
 	--These results are not the same as the regular expression "\s".
 	--There are dozens of Unicode white space characters, but only these
 	--are considered whitespace in PL/SQL or SQL.
+	--For performance, list characters in order of popularity, and only use
+	--UNISTR when necessary.
 	if p_char in
 	(
-		unistr('\0000'),unistr('\0009'),unistr('\000A'),unistr('\000B'),
-		unistr('\000C'),unistr('\000D'),unistr('\0020'),unistr('\3000')
+		chr(32),chr(10),chr(9),chr(13),chr(0),chr(11),chr(12),unistr('\3000')
 	) then
 		return true;
 	else
