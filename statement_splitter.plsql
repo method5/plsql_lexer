@@ -154,79 +154,6 @@ end get_trigger_type_body_index;
 
 --------------------------------------------------------------------------------
 /*
-Purpose: Detect PLSQL_DECLARATION, a new 12c feature that allows PL/SQL in SQL.
-
-Description:
-A PL/SQL Declaration must have this pattern before the first ";":
-
-	(null or not "START") "WITH" ("FUNCTION"|"PROCEDURE") (not "(" or "AS")
-
-This was discovered by analyzing all "with" strings in the Oracle documentation
-text descriptions.  That is, download the library and run a command like this:
-
-	C:\E11882_01\E11882_01\server.112\e26088\img_text>findstr /s /i "with" *.*
-
-There are a lot of potential ambiguities as SQL does not have many fully
-reserved words.  And the pattern "with" "function" can be found in 2 cases:the following:
-
-	1. Hierarchical queries.  Exclude them by looking for "start" before "with".
-	select *
-	from
-	(
-		select 1 function from dual
-	)
-	connect by function = 1
-	start with function = 1;
-
-	Note: "start" cannot be the name of a table, no need to worry about DML
-	statements like `insert into start with ...`.
-
-	2. Subquery factoring that uses "function" as a name.  Stupid, but possible.
-
-	with function as (select 1 a from dual) select * from function;
-	with function(a) as (select 1 a from dual) select * from function;
-*/
-function has_plsql_declaration(p_tokens token_table, p_token_start_index in number) return boolean is
-	v_previous_concrete_token_1 token := token(null, null, null, null, null, null, null, null);
-	v_previous_concrete_token_2 token := token(null, null, null, null, null, null, null, null);
-	v_previous_concrete_token_3 token := token(null, null, null, null, null, null, null, null);
-begin
-	for i in p_token_start_index .. p_tokens.count loop
-		--Return true if PL/SQL Declaration found.
-		if
-		--For performance, check types first, instead of potentially large values.
-		(
-			p_tokens(i).type = 'word' and
-			v_previous_concrete_token_1.type = 'word' and
-			v_previous_concrete_token_2.type = 'word' and
-			(v_previous_concrete_token_3.type = 'word' or v_previous_concrete_token_3.type is null)
-		)
-		and
-		(
-			lower(p_tokens(i).value) <> 'as' and
-			lower(v_previous_concrete_token_1.value) in ('function', 'procedure') and
-			lower(v_previous_concrete_token_2.value) = 'with' and
-			(lower(v_previous_concrete_token_3.value) <> 'start' or v_previous_concrete_token_3.value is null)
-		) then
-			return true;
-		--Return false if ';' is found.
-		elsif p_tokens(i).type = ';' then
-			return false;
-		--Shift tokens if it is not a whitespace, comment, or EOF.
-		elsif p_tokens(i).type not in ('whitespace', 'comment', 'EOF') then
-			v_previous_concrete_token_3 := v_previous_concrete_token_2;
-			v_previous_concrete_token_2 := v_previous_concrete_token_1;
-			v_previous_concrete_token_1 := p_tokens(i);
-		end if;
-	end loop;
-
-	--Return false is nothing found.
-	return false;
-end has_plsql_declaration;
-
-
---------------------------------------------------------------------------------
-/*
 Purpose: Detect if there is another PLSQL_DECLARATION.  This is only valid if
 called immediately at the end of another PLSQL_DECLARATION.
 
@@ -1057,7 +984,7 @@ begin
 							--What about a second CTE named "function as (select 1 a from dual)"?
 							lower(p_old_tokens(p_token_index).value) in ('cursor')
 							and
-							has_plsql_declaration(p_old_tokens, p_token_index)
+							tokenizer.has_plsql_declaration(p_old_tokens, p_token_index)
 						)
 					)
 					then
@@ -1346,6 +1273,8 @@ begin
 
 		--Find a terminating token based on the classification.
 		--
+		--TODO: CREATE OUTLINE, CREATE SCHEMA, and some others may also differ depending on presence of PLSQL_DECLARATION.
+		--
 		--#1: Return everything with no splitting if the statement is Invalid or Nothing.
 		--    These are probably errors but the application must decide how to handle them.
 		if v_command_name in ('Invalid', 'Nothing') then
@@ -1380,7 +1309,7 @@ begin
 		(
 			v_command_name in ('CREATE MATERIALIZED VIEW ', 'CREATE SCHEMA', 'CREATE TABLE', 'CREATE VIEW', 'DELETE', 'EXPLAIN', 'INSERT', 'SELECT', 'UPDATE', 'UPSERT')
 			and
-			has_plsql_declaration(p_tokens, v_token_index)
+			tokenizer.has_plsql_declaration(p_tokens, v_token_index)
 		)
 		then
 			add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_PLSQL_DECLARE_END, v_temp_new_tokens, v_token_index, v_command_name, null);

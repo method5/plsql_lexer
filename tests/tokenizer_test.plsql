@@ -34,6 +34,7 @@ c_test_line_col_start_end_pos  constant number := power(2, 16);
 
 c_test_convert_to_text         constant number := power(2, 17);
 c_test_get_varchar2_table      constant number := power(2, 18);
+c_test_has_plsql_declaration   constant number := power(2, 19);
 
 c_dynamic_tests                constant number := power(2, 30);
 
@@ -42,7 +43,8 @@ c_static_tests                 constant number := c_test_whitespace+c_test_comme
 	c_test_text+c_test_numeric+c_test_word+c_test_inquiry_directive+
 	c_test_preproc_control_token+c_test_3_character_punctuation+c_test_2_character_punctuation+
 	c_test_1_character_punctuation+c_test_unexpected+c_test_utf8+c_test_row_pattern_matching+
-	c_test_other+c_test_line_col_start_end_pos+c_test_convert_to_text;
+	c_test_other+c_test_line_col_start_end_pos+c_test_convert_to_text+c_test_get_varchar2_table+
+	c_test_has_plsql_declaration;
 
 --Run the unit tests and display the results in dbms output.
 procedure run(p_tests number default c_static_tests);
@@ -761,6 +763,43 @@ end test_get_varchar2_table;
 
 
 --------------------------------------------------------------------------------
+procedure test_has_plsql_declaration is
+
+	function has_declaration(p_statement clob, p_token_start_index number default 1) return varchar2 is
+	begin
+		if tokenizer.has_plsql_declaration(tokenizer.tokenize(p_statement), p_token_start_index) then
+			return 'TRUE';
+		else
+			return 'FALSE';
+		end if;
+	end;
+begin
+	assert_equals('PLSQL Declaration, null tokens.', has_declaration('', 1), 'FALSE');
+	assert_equals('PLSQL Declaration, simple 1.', has_declaration('commit;', 1), 'FALSE');
+	assert_equals('PLSQL Declaration, function 1.', has_declaration('with function f return number is begin return 1; end; select f from dual;', 1), 'TRUE');
+	assert_equals('PLSQL Declaration, procedure 1.', has_declaration('with procedure p is begin null; end; function f return number is begin return 1; end; select f from dual;', 1), 'TRUE');
+	assert_equals('PLSQL Declaration, hierarchical look-a-like.', has_declaration('
+		select *
+		from
+		(
+			select 1 function from dual
+		)
+		connect by function = 1
+		start with function = 1;')
+		,'FALSE');
+	assert_equals('PLSQL Declaration, function look-a-like 1.', has_declaration('
+		with function as (select 1 a from dual) select * from function;'),
+		'FALSE');
+	assert_equals('PLSQL Declaration, function look-a-like 2.', has_declaration('
+		with function(a) as (select 1 a from dual) select * from function;'),
+		'FALSE');
+	assert_equals('PLSQL Declaration, unsupported by may work some day.', has_declaration('
+		/* asdf */ insert into test1 with function f return number is begin return 1; end; select f from dual'),
+		'TRUE');
+end test_has_plsql_declaration;
+
+
+--------------------------------------------------------------------------------
 procedure dynamic_tests is
 	type clob_table is table of clob;
 	type string_table is table of varchar2(100);
@@ -843,6 +882,7 @@ begin
 
 	if bitand(p_tests, c_test_convert_to_text)         > 0 then test_convert_to_text; end if;
 	if bitand(p_tests, c_test_get_varchar2_table)      > 0 then test_get_varchar2_table; end if;
+	if bitand(p_tests, c_test_has_plsql_declaration)   > 0 then test_has_plsql_declaration; end if;
 
 	if bitand(p_tests, c_dynamic_tests)                > 0 then dynamic_tests; end if;
 

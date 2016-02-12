@@ -73,7 +73,7 @@ begin
 			v_semicolon_index := i;
 			v_semicolon_line_number := p_abstract_tokens(i).line_number;
 		--Quit the loop if another concrete token is found.
-		elsif p_abstract_tokens(i).type not in ('comment', 'whitespace', 'EOF') then
+		elsif p_abstract_tokens(i).type not in (tokenizer.c_comment, tokenizer.c_whitespace, tokenizer.c_eof) then
 			exit;
 		end if;
 	end loop;
