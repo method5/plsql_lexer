@@ -49,107 +49,8 @@ C_TERMINATOR_PLSQL_EXTRA_END   constant number := 4;
 C_TERMINATOR_EOF               constant number := 5;
 C_TERMINATOR_PACKAGE_BODY      constant number := 6;
 
-C_REGULAR_TRIGGER              constant number := 1;
-C_COMPOUND_TRIGGER             constant number := 2;
-C_CALL_TRIGGER                 constant number := 3;
 
 
-
-
-
---------------------------------------------------------------------------------
-/*
-Purpose: Get the trigger type and the token index for the beginning of the trigger_body.
-	The trigger_body token index helps identify when to start counting BEGINs and ENDs.
-	Before that point, it's easier to exclude than to include because this is the only
-	PL/SQL BEGIN that can start after many different keywords.
-
-For lexing and parsing there are 3 important different types of triggers:
-regular triggers, compound triggers, and CALL triggers.
-
-Trigger type is determined by which keywords are found first:
-	1. Regular - DECLARE, <<, or BEGIN (e.g. something that begins a PL/SQL body.)
-	2. Compound - COMPOUND TRIGGER
-	3. Call - CALL
-
-The tricky part with 1 and 3 is that DECLARE, BEGIN, or CALL can be used as
-names for other objects.  Based on the trigger syntax diagrams, the "real"
-keywords are found when these conditions are true:
-	1. It is not found after ('trigger', '.', 'of', ',', 'on', 'as', 'follows', 'precedes', 'table')
-	2. It is not inside 'when ( condition )'
-*/
-procedure get_trigger_type_body_index (
-	p_tokens in token_table,
-	p_trigger_type out number,
-	p_trigger_body_start_index out number
-) is
-	v_previous_concrete_token_1 token := token(null, null, null, null, null, null, null, null);
-	v_previous_concrete_token_2 token := token(null, null, null, null, null, null, null, null);
-	v_when_condition_paren_counter number := 0;
-begin
-	--Loop through all the tokens until a type is found.
-	for i in 1 .. p_tokens.count loop
-		--Check for new WHEN ( condition ).
-		if
-		(
-			v_when_condition_paren_counter = 0
-			and
-			p_tokens(i).type = '('
-			and
-			lower(v_previous_concrete_token_1.value) = 'when'
-		) then
-			v_when_condition_paren_counter := 1;
-		--Only count parenthese if inside WHEN (condition).
-		elsif v_when_condition_paren_counter >= 1 then
-			if p_tokens(i).type = '(' then
-				v_when_condition_paren_counter := v_when_condition_paren_counter + 1;
-			elsif p_tokens(i).type = ')' then
-				v_when_condition_paren_counter := v_when_condition_paren_counter - 1;
-			end if;
-		--Compound Trigger check.
-		elsif
-		(
-			lower(p_tokens(i).value) = 'trigger'
-			and
-			lower(v_previous_concrete_token_1.value) = 'compound'
-		) then
-			p_trigger_type := C_COMPOUND_TRIGGER;
-			p_trigger_body_start_index := i;
-			return;
-		end if;
-
-		--Ignore some "regular" tokens if they are found in the wrong context.
-		if
-		(
-			lower(v_previous_concrete_token_1.value) in ('trigger', '.', 'of', ',', 'on', 'as', 'follows', 'precedes', 'table')
-			or
-			v_when_condition_paren_counter >= 1
-		) then
-			null;
-		--Regular token found.
-		elsif p_tokens(i).type = 'word' and lower(p_tokens(i).value) in ('declare', '<<', 'begin') then
-			p_trigger_type := C_REGULAR_TRIGGER;
-			p_trigger_body_start_index := i;
-			return;
-		--CALL token found.
-		elsif lower(p_tokens(i).value) = 'call' then
-			p_trigger_type := C_CALL_TRIGGER;
-			p_trigger_body_start_index := null;
-			return;
-		end if;
-
-		--Shift tokens if it is not a whitespace, comment, or EOF.
-		if p_tokens(i).type not in ('whitespace', 'comment', 'EOF') then
-			v_previous_concrete_token_2 := v_previous_concrete_token_1;
-			v_previous_concrete_token_1 := p_tokens(i);
-		end if;
-	end loop;
-
-	--Return regular type if none was found.
-	p_trigger_type := C_REGULAR_TRIGGER;
-	p_trigger_body_start_index := null;
-
-end get_trigger_type_body_index;
 
 
 --------------------------------------------------------------------------------
@@ -984,7 +885,7 @@ begin
 							--What about a second CTE named "function as (select 1 a from dual)"?
 							lower(p_old_tokens(p_token_index).value) in ('cursor')
 							and
-							tokenizer.has_plsql_declaration(p_old_tokens, p_token_index)
+							statement_classifier.has_plsql_declaration(p_old_tokens, p_token_index)
 						)
 					)
 					then
@@ -1309,7 +1210,7 @@ begin
 		(
 			v_command_name in ('CREATE MATERIALIZED VIEW ', 'CREATE SCHEMA', 'CREATE TABLE', 'CREATE VIEW', 'DELETE', 'EXPLAIN', 'INSERT', 'SELECT', 'UPDATE', 'UPSERT')
 			and
-			tokenizer.has_plsql_declaration(p_tokens, v_token_index)
+			statement_classifier.has_plsql_declaration(p_tokens, v_token_index)
 		)
 		then
 			add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_PLSQL_DECLARE_END, v_temp_new_tokens, v_token_index, v_command_name, null);
@@ -1342,13 +1243,13 @@ begin
 
 		--#7: Triggers may terminate with a matching END, an extra END, or a semicolon.
 		elsif v_command_name in ('CREATE TRIGGER') then
-			get_trigger_type_body_index(p_tokens, v_trigger_type, v_trigger_body_start_index);
+			statement_classifier.get_trigger_type_body_index(p_tokens, v_trigger_type, v_trigger_body_start_index);
 
-			if v_trigger_type = C_REGULAR_TRIGGER then
+			if v_trigger_type = statement_classifier.C_TRIGGER_TYPE_REGULAR then
 				add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_PLSQL_MATCHED_END, v_temp_new_tokens, v_token_index, v_command_name, v_trigger_body_start_index);
-			elsif v_trigger_type = C_COMPOUND_TRIGGER then
+			elsif v_trigger_type = statement_classifier.C_TRIGGER_TYPE_COMPOUND then
 				add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_PLSQL_EXTRA_END, v_temp_new_tokens, v_token_index, v_command_name, v_trigger_body_start_index);
-			elsif v_trigger_type = C_CALL_TRIGGER then
+			elsif v_trigger_type = statement_classifier.C_TRIGGER_TYPE_CALL then
 				add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_SEMI, v_temp_new_tokens, v_token_index, v_command_name, v_trigger_body_start_index);
 			end if;
 

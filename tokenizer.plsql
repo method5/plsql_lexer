@@ -1,6 +1,6 @@
 create or replace package tokenizer is
 --Copyright (C) 2015 Jon Heller.  This program is licensed under the LGPLv3.
-C_VERSION constant varchar2(10) := '0.5.0';
+C_VERSION constant varchar2(10) := '0.6.0';
 
 --Constants for token types.
 C_WHITESPACE                 constant varchar2(10) := 'whitespace';
@@ -136,7 +136,6 @@ function concatenate(p_tokens in token_table) return clob;
 function print_tokens(p_tokens token_table) return clob;
 function is_lexical_whitespace(p_char varchar2) return boolean;
 function get_varchar2_table_from_clob(p_clob clob) return varchar2_table;
-function has_plsql_declaration(p_tokens token_table, p_token_start_index in number default 1) return boolean;
 
 end;
 /
@@ -807,86 +806,6 @@ begin
 	return v_chars;
 
 end get_varchar2_table_from_clob;
-
-
---------------------------------------------------------------------------------
-/*
-Purpose: Detect PLSQL_DECLARATION, a new 12c feature that allows PL/SQL in SQL.
-
-Description:
-A PL/SQL Declaration must have this pattern before the first ";":
-
-	(null or not "START") "WITH" ("FUNCTION"|"PROCEDURE") (neither "(" nor "AS")
-
-This was discovered by analyzing all "with" strings in the Oracle documentation
-text descriptions.  That is, download the library and run a command like this:
-
-	C:\E11882_01\E11882_01\server.112\e26088\img_text>findstr /s /i "with" *.*
-
-There are a lot of potential ambiguities as SQL does not have many fully
-reserved words.  And the pattern "with" "function" can be found in 2 cases:the following:
-
-	1. Hierarchical queries.  Exclude them by looking for "start" before "with".
-	select *
-	from
-	(
-		select 1 function from dual
-	)
-	connect by function = 1
-	start with function = 1;
-
-	Note: "start" cannot be the name of a table, no need to worry about DML
-	statements like `insert into start with ...`.
-
-	2. Subquery factoring that uses "function" as a name.  Stupid, but possible.
-
-	with function as (select 1 a from dual) select * from function;
-	with function(a) as (select 1 a from dual) select * from function;
-*/
-function has_plsql_declaration(p_tokens token_table, p_token_start_index in number default 1) return boolean is
-	v_previous_concrete_token_1 token := token(null, null, null, null, null, null, null, null);
-	v_previous_concrete_token_2 token := token(null, null, null, null, null, null, null, null);
-	v_previous_concrete_token_3 token := token(null, null, null, null, null, null, null, null);
-begin
-	--Return false if there are no tokens.
-	if p_tokens is null or p_tokens.count = 0 then
-		return false;
-	--Else loop through tokens.
-	else
-		for i in p_token_start_index .. p_tokens.count loop
-			--Return true if PL/SQL Declaration found.
-			if
-			--For performance, check types first, instead of potentially large values.
-			(
-				p_tokens(i).type = c_word and
-				v_previous_concrete_token_1.type = c_word and
-				v_previous_concrete_token_2.type = c_word and
-				(v_previous_concrete_token_3.type = c_word or v_previous_concrete_token_3.type is null)
-			)
-			and
-			(
-				lower(p_tokens(i).value) <> 'as' and
-				lower(v_previous_concrete_token_1.value) in ('function', 'procedure') and
-				lower(v_previous_concrete_token_2.value) = 'with' and
-				(lower(v_previous_concrete_token_3.value) <> 'start' or v_previous_concrete_token_3.value is null)
-			) then
-				return true;
-			--Return false if ';' is found.
-			elsif p_tokens(i).type = ';' then
-				return false;
-			--Shift tokens if it is not a whitespace, comment, or EOF.
-			elsif p_tokens(i).type not in (c_whitespace, c_comment, c_eof) then
-				v_previous_concrete_token_3 := v_previous_concrete_token_2;
-				v_previous_concrete_token_2 := v_previous_concrete_token_1;
-				v_previous_concrete_token_1 := p_tokens(i);
-			end if;
-		end loop;
-	end if;
-
-	--Return false is nothing found.
-	return false;
-end has_plsql_declaration;
-
 
 end;
 /

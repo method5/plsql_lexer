@@ -12,6 +12,18 @@ procedure classify(
 	p_start_index      in number default 1
 );
 
+--Helper functions useful for further classifying statements.
+function has_plsql_declaration(p_tokens token_table, p_token_start_index in number default 1) return boolean;
+procedure get_trigger_type_body_index (
+	p_tokens                    in token_table,
+	p_trigger_type             out number,
+	p_trigger_body_start_index out number);
+
+--Constants useful for classifying triggers.
+C_TRIGGER_TYPE_REGULAR  constant number := 1;
+C_TRIGGER_TYPE_COMPOUND constant number := 2;
+C_TRIGGER_TYPE_CALL     constant number := 3;
+
 /*
 
 == Purpose ==
@@ -747,6 +759,182 @@ begin
 		p_category := C_Invalid; p_statement_type := C_Invalid; p_command_name := C_Invalid; p_command_type := -1;
 	end if;
 end classify;
+
+
+--------------------------------------------------------------------------------
+/*
+Purpose: Detect PLSQL_DECLARATION, a new 12c feature that allows PL/SQL in SQL.
+
+Description:
+A PL/SQL Declaration must have this pattern before the first ";":
+
+	(null or not "START") "WITH" ("FUNCTION"|"PROCEDURE") (neither "(" nor "AS")
+
+This was discovered by analyzing all "with" strings in the Oracle documentation
+text descriptions.  That is, download the library and run a command like this:
+
+	C:\E11882_01\E11882_01\server.112\e26088\img_text>findstr /s /i "with" *.*
+
+There are a lot of potential ambiguities as SQL does not have many fully
+reserved words.  And the pattern "with" "function" can be found in 2 cases:the following:
+
+	1. Hierarchical queries.  Exclude them by looking for "start" before "with".
+	select *
+	from
+	(
+		select 1 function from dual
+	)
+	connect by function = 1
+	start with function = 1;
+
+	Note: "start" cannot be the name of a table, no need to worry about DML
+	statements like `insert into start with ...`.
+
+	2. Subquery factoring that uses "function" as a name.  Stupid, but possible.
+
+	with function as (select 1 a from dual) select * from function;
+	with function(a) as (select 1 a from dual) select * from function;
+*/
+function has_plsql_declaration(p_tokens token_table, p_token_start_index in number default 1) return boolean is
+	v_previous_concrete_token_1 token := token(null, null, null, null, null, null, null, null);
+	v_previous_concrete_token_2 token := token(null, null, null, null, null, null, null, null);
+	v_previous_concrete_token_3 token := token(null, null, null, null, null, null, null, null);
+begin
+	--Return false if there are no tokens.
+	if p_tokens is null or p_tokens.count = 0 then
+		return false;
+	--Else loop through tokens.
+	else
+		for i in p_token_start_index .. p_tokens.count loop
+			--Return true if PL/SQL Declaration found.
+			if
+			--For performance, check types first, instead of potentially large values.
+			(
+				p_tokens(i).type = tokenizer.c_word and
+				v_previous_concrete_token_1.type = tokenizer.c_word and
+				v_previous_concrete_token_2.type = tokenizer.c_word and
+				(v_previous_concrete_token_3.type = tokenizer.c_word or v_previous_concrete_token_3.type is null)
+			)
+			and
+			(
+				lower(p_tokens(i).value) <> 'as' and
+				lower(v_previous_concrete_token_1.value) in ('function', 'procedure') and
+				lower(v_previous_concrete_token_2.value) = 'with' and
+				(lower(v_previous_concrete_token_3.value) <> 'start' or v_previous_concrete_token_3.value is null)
+			) then
+				return true;
+			--Return false if ';' is found.
+			elsif p_tokens(i).type = ';' then
+				return false;
+			--Shift tokens if it is not a whitespace, comment, or EOF.
+			elsif p_tokens(i).type not in (tokenizer.c_whitespace, tokenizer.c_comment, tokenizer.c_eof) then
+				v_previous_concrete_token_3 := v_previous_concrete_token_2;
+				v_previous_concrete_token_2 := v_previous_concrete_token_1;
+				v_previous_concrete_token_1 := p_tokens(i);
+			end if;
+		end loop;
+	end if;
+
+	--Return false is nothing found.
+	return false;
+end has_plsql_declaration;
+
+
+--------------------------------------------------------------------------------
+/*
+Purpose: Get the trigger type and the token index for the beginning of the trigger_body.
+	The trigger_body token index helps identify when to start counting BEGINs and ENDs.
+	Before that point, it's easier to exclude than to include because this is the only
+	PL/SQL BEGIN that can start after many different keywords.
+
+For lexing and parsing there are 3 important different types of triggers:
+regular triggers, compound triggers, and CALL triggers.
+
+Trigger type is determined by which keywords are found first:
+	1. Regular - DECLARE, <<, or BEGIN (e.g. something that begins a PL/SQL body.)
+	2. Compound - COMPOUND TRIGGER
+	3. Call - CALL
+
+The tricky part with 1 and 3 is that DECLARE, BEGIN, or CALL can be used as
+names for other objects.  Based on the trigger syntax diagrams, the "real"
+keywords are found when these conditions are true:
+	1. It is not found after ('trigger', '.', 'of', ',', 'on', 'as', 'follows', 'precedes', 'table')
+	2. It is not inside 'when ( condition )'
+*/
+procedure get_trigger_type_body_index (
+	p_tokens in token_table,
+	p_trigger_type out number,
+	p_trigger_body_start_index out number
+) is
+	v_previous_concrete_token_1 token := token(null, null, null, null, null, null, null, null);
+	v_previous_concrete_token_2 token := token(null, null, null, null, null, null, null, null);
+	v_when_condition_paren_counter number := 0;
+begin
+	--Loop through all the tokens until a type is found.
+	for i in 1 .. p_tokens.count loop
+		--Check for new WHEN ( condition ).
+		if
+		(
+			v_when_condition_paren_counter = 0
+			and
+			p_tokens(i).type = '('
+			and
+			lower(v_previous_concrete_token_1.value) = 'when'
+		) then
+			v_when_condition_paren_counter := 1;
+		--Only count parenthese if inside WHEN (condition).
+		elsif v_when_condition_paren_counter >= 1 then
+			if p_tokens(i).type = '(' then
+				v_when_condition_paren_counter := v_when_condition_paren_counter + 1;
+			elsif p_tokens(i).type = ')' then
+				v_when_condition_paren_counter := v_when_condition_paren_counter - 1;
+			end if;
+		--Compound Trigger check.
+		elsif
+		(
+			lower(p_tokens(i).value) = 'trigger'
+			and
+			lower(v_previous_concrete_token_1.value) = 'compound'
+		) then
+			p_trigger_type := C_TRIGGER_TYPE_COMPOUND;
+
+			p_trigger_body_start_index := i;
+			return;
+		end if;
+
+		--Ignore some "regular" tokens if they are found in the wrong context.
+		if
+		(
+			lower(v_previous_concrete_token_1.value) in ('trigger', '.', 'of', ',', 'on', 'as', 'follows', 'precedes', 'table')
+			or
+			v_when_condition_paren_counter >= 1
+		) then
+			null;
+		--Regular token found.
+		elsif p_tokens(i).type = 'word' and lower(p_tokens(i).value) in ('declare', '<<', 'begin') then
+			p_trigger_type := C_TRIGGER_TYPE_REGULAR;
+			p_trigger_body_start_index := i;
+			return;
+		--CALL token found.
+		elsif lower(p_tokens(i).value) = 'call' then
+			p_trigger_type := C_TRIGGER_TYPE_CALL;
+			p_trigger_body_start_index := null;
+			return;
+		end if;
+
+		--Shift tokens if it is not a whitespace, comment, or EOF.
+		if p_tokens(i).type not in (tokenizer.c_whitespace, tokenizer.c_comment, tokenizer.c_eof) then
+			v_previous_concrete_token_2 := v_previous_concrete_token_1;
+			v_previous_concrete_token_1 := p_tokens(i);
+		end if;
+	end loop;
+
+	--Return regular type if none was found.
+	p_trigger_type := C_TRIGGER_TYPE_REGULAR;
+	p_trigger_body_start_index := null;
+
+end get_trigger_type_body_index;
+
 
 end;
 /
