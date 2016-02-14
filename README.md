@@ -1,4 +1,4 @@
-`PLSQL_LEXER` 0.2.0
+`PLSQL_LEXER` 0.2.1
 ============
 
 PL/SQL Lexer is a toolkit for solving real-world language problems, in PL/SQL.
@@ -226,11 +226,10 @@ Results:
 
 Version 1.0.0 may be ready after these steps:
 
-1. Finish statement_terminator unit tests.
-2. Add statement_feedback unit tests.
-3. Add statement (view) expander program?
-4. Fix/refactor statement splitter bug, more unit tests.
-5. Thoroughly test by using code in other project I'm trying to open source?
+1. Add statement_feedback unit tests.
+2. Add statement (view) expander program?
+3. Fix/refactor statement splitter bug, more unit tests.
+4. Thoroughly test by using code in other project I'm trying to open source?
 
 
 ## License

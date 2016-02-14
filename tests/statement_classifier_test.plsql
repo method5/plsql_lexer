@@ -688,7 +688,8 @@ begin
 	--classify(q'[Do not use 185]', v_output); assert_equals('Do not use 185', 'DDL|ALTER|Do not use 185|185', concat(v_output));
 	--classify(q'[Do not use 186]', v_output); assert_equals('Do not use 186', 'DDL|ALTER|Do not use 186|186', concat(v_output));
 
-	classify(q'[EXPLAIN plan set statement_id='asdf' for select * from dual]', v_output); assert_equals('EXPLAIN', 'DML|EXPLAIN PLAN|EXPLAIN|50', concat(v_output));
+	classify(q'[EXPLAIN plan set statement_id='asdf' for select * from dual]', v_output); assert_equals('EXPLAIN 1', 'DML|EXPLAIN PLAN|EXPLAIN|50', concat(v_output));
+	classify(q'[explain plan for with function f return number is begin return 1; end; select f from dual;]', v_output); assert_equals('EXPLAIN 2', 'DML|EXPLAIN PLAN|EXPLAIN|50', concat(v_output));
 
 	classify(q'[FLASHBACK DATABASE to restore point my_restore_point]', v_output); assert_equals('FLASHBACK DATABASE', 'DDL|FLASHBACK|FLASHBACK DATABASE|204', concat(v_output));
 	classify(q'[FLASHBACK standby DATABASE to restore point my_restore_point]', v_output); assert_equals('FLASHBACK DATABASE', 'DDL|FLASHBACK|FLASHBACK DATABASE|204', concat(v_output));
@@ -699,8 +700,9 @@ begin
 	classify(q'[GRANT select on my_table to some_other_user with grant option]', v_output); assert_equals('GRANT OBJECT 2', 'DDL|GRANT|GRANT OBJECT|17', concat(v_output));
 	classify(q'[GRANT dba to my_package]', v_output); assert_equals('GRANT OBJECT 3', 'DDL|GRANT|GRANT OBJECT|17', concat(v_output));
 
-	classify(q'[INSERT /*+ append */ into my_table select * from other_table]', v_output); assert_equals('INSERT', 'DML|INSERT|INSERT|2', concat(v_output));
-	classify(q'[INSERT all into table1(a) values(b) into table2(a) values(b) select b from another_table;]', v_output); assert_equals('INSERT', 'DML|INSERT|INSERT|2', concat(v_output));
+	classify(q'[INSERT /*+ append */ into my_table select * from other_table]', v_output); assert_equals('INSERT 1', 'DML|INSERT|INSERT|2', concat(v_output));
+	classify(q'[INSERT all into table1(a) values(b) into table2(a) values(b) select b from another_table;]', v_output); assert_equals('INSERT 2', 'DML|INSERT|INSERT|2', concat(v_output));
+	classify(q'[insert into test1 with function f return number is begin return 1; end; select f from dual;]', v_output); assert_equals('INSERT 3', 'DML|INSERT|INSERT|2', concat(v_output));
 
 	classify(q'[LOCK TABLE my_schema.my_table in exclsive mode]', v_output); assert_equals('LOCK TABLE', 'DML|LOCK TABLE|LOCK TABLE|26', concat(v_output));
 
@@ -710,9 +712,9 @@ begin
 	classify(q'[NOAUDIT insert any table]', v_output); assert_equals('NOAUDIT OBJECT', 'DDL|NOAUDIT|NOAUDIT OBJECT|31', concat(v_output));
 	classify(q'[NOAUDIT policy my_policy by some_user]', v_output); assert_equals('NOAUDIT OBJECT', 'DDL|NOAUDIT|NOAUDIT OBJECT|31', concat(v_output));
 
-	classify(q'[ <<my_label>>begin null; end;]', v_output); assert_equals('PL/SQL EXECUTE', 'PL/SQL|BLOCK|PL/SQL EXECUTE|47', concat(v_output));
-	classify(q'[/*asdf*/declare v_test number; begin null; end; /]', v_output); assert_equals('PL/SQL EXECUTE', 'PL/SQL|BLOCK|PL/SQL EXECUTE|47', concat(v_output));
-	classify(q'[  begin null; end; /]', v_output); assert_equals('PL/SQL EXECUTE', 'PL/SQL|BLOCK|PL/SQL EXECUTE|47', concat(v_output));
+	classify(q'[ <<my_label>>begin null; end;]', v_output); assert_equals('PL/SQL EXECUTE 1', 'PL/SQL|BLOCK|PL/SQL EXECUTE|47', concat(v_output));
+	classify(q'[/*asdf*/declare v_test number; begin null; end; /]', v_output); assert_equals('PL/SQL EXECUTE 2', 'PL/SQL|BLOCK|PL/SQL EXECUTE|47', concat(v_output));
+	classify(q'[  begin null; end; /]', v_output); assert_equals('PL/SQL EXECUTE 3', 'PL/SQL|BLOCK|PL/SQL EXECUTE|47', concat(v_output));
 
 	--Command name has space instead of underscore.
  	classify(q'[PURGE DBA_RECYCLEBIN;]', v_output); assert_equals('PURGE DBA RECYCLEBIN', 'DDL|PURGE|PURGE DBA RECYCLEBIN|198', concat(v_output));
@@ -760,14 +762,16 @@ begin
 	--Not a real command.
 	--classify(q'[UNDROP OBJECT]', v_output); assert_equals('UNDROP OBJECT', 'DDL|ALTER|UNDROP OBJECT|202', concat(v_output));
 
-	classify(q'[UPDATE my_tables set a = 1]', v_output); assert_equals('UPDATE', 'DML|UPDATE|UPDATE|6', concat(v_output));
+	classify(q'[UPDATE my_tables set a = 1]', v_output); assert_equals('UPDATE 1', 'DML|UPDATE|UPDATE|6', concat(v_output));
+	classify(q'[UPDATE my_tables set a = (with function f return number is begin return 1; end; select f from dual);]', v_output); assert_equals('UPDATE 2', 'DML|UPDATE|UPDATE|6', concat(v_output));
 
 	--These are not real commands (they are part of alter table) and they could be ambiguous with an UPDATE statement
 	--if there was a table named "INDEXES" or "JOIN".
 	--classify(q'[UPDATE INDEXES]', v_output); assert_equals('UPDATE INDEXES', '?|?|UPDATE INDEXES|182', concat(v_output));
 	--classify(q'[UPDATE JOIN INDEX]', v_output); assert_equals('UPDATE JOIN INDEX', '?|?|UPDATE JOIN INDEX|191', concat(v_output));
 
-	classify(q'[merge into table1 using table2 on (table1.a = table2.a) when not matched then update set table1.a = 1;]', v_output); assert_equals('UPSERT', 'DML|MERGE|UPSERT|189', concat(v_output));
+	classify(q'[merge into table1 using table2 on (table1.a = table2.a) when matched then update set table1.b = 1;]', v_output); assert_equals('UPSERT 1', 'DML|MERGE|UPSERT|189', concat(v_output));
+	classify(q'[merge into table1 using table2 on (table1.a = table2.a) when matched then update set table1.b = (with function test_function return number is begin return 1; end; select test_function from dual);]', v_output); assert_equals('UPSERT 2', 'DML|MERGE|UPSERT|189', concat(v_output));
 
 	--Not a real command, this is part of ANALYZE.
 	--classify(q'[VALIDATE INDEX]', v_output); assert_equals('VALIDATE INDEX', '?|?|VALIDATE INDEX|23', concat(v_output));

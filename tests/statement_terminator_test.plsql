@@ -588,7 +588,7 @@ begin
 	v_statement := q'[CREATE or replace noneditionable TYPE BODY my_type is member function my_function return number is begin return 1; end; end; ]'; assert_equals('CREATE TYPE BODY', v_statement, get_wo_semi(v_statement));
 
 	v_statement := q'[CREATE USER my_user identified by "asdf";]'; assert_equals('CREATE USER', replace(v_statement, ';'), get_wo_semi(v_statement));
-/*
+
 	v_statement := q'[CREATE VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 1', replace(v_statement, ';'), get_wo_semi(v_statement));
 	v_statement := q'[CREATE editioning VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 2', replace(v_statement, ';'), get_wo_semi(v_statement));
 	v_statement := q'[CREATE editionable VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 3', replace(v_statement, ';'), get_wo_semi(v_statement));
@@ -619,23 +619,26 @@ begin
 	v_statement := q'[CREATE or replace no force editionable VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 28', replace(v_statement, ';'), get_wo_semi(v_statement));
 	v_statement := q'[CREATE or replace no force editionable editioning VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 29', replace(v_statement, ';'), get_wo_semi(v_statement));
 	v_statement := q'[CREATE or replace no force noneditionable VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 30', replace(v_statement, ';'), get_wo_semi(v_statement));
+	--Must remove last semicolon on PLSQL_DECLARATION or an ORA-600 error is generated.
+	v_statement := q'[create or replace view test_view as with function f return number is begin return 1; end; select f from dual;]'; assert_equals('CREATE VIEW 30', replace(v_statement, 'dual;', 'dual'), get_wo_semi(v_statement));
 
 	--Not a real command.
 	--v_statement := q'[DECLARE REWRITE EQUIVALENCE]'; assert_equals('DECLARE REWRITE EQUIVALENCE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[DELETE my_schema.my_table@my_link]'; assert_equals('DELETE', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[DELETE FROM my_schema.my_table@my_link]'; assert_equals('DELETE', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[DELETE my_schema.my_table@my_link;]'; assert_equals('DELETE', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[DELETE FROM my_schema.my_table@my_link;]'; assert_equals('DELETE', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[delete from test1 where a in (with function f return number is begin return 1; end; select f from dual);]'; assert_equals('DELETE', replace(v_statement, 'dual);', 'dual)'), get_wo_semi(v_statement));
 
 	v_statement := q'[DISASSOCIATE STATISTICS from columns mytable.a force;]'; assert_equals('DISASSOCIATE STATISTICS', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[DROP ASSEMBLY my_assembly]'; assert_equals('DROP ASSEMBLY', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[DROP ASSEMBLY my_assembly;]'; assert_equals('DROP ASSEMBLY', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	v_statement := q'[DROP AUDIT POLICY my_policy;]'; assert_equals('DROP AUDIT POLICY', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	--This isn't a real command as far as I can tell.
 	--v_statement := q'[DROP BITMAPFILE]'; assert_equals('DROP BITMAPFILE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[DROP CLUSTER my_cluster]'; assert_equals('DROP CLUSTER', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[DROP CLUSTER my_cluster;]'; assert_equals('DROP CLUSTER', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	v_statement := q'[DROP CONTEXT my_context;]'; assert_equals('DROP CONTEXT', replace(v_statement, ';'), get_wo_semi(v_statement));
 
@@ -663,60 +666,60 @@ begin
 
 	v_statement := q'[DROP JAVA resourse some_resource;]'; assert_equals('DROP JAVA', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[DROP LIBRARY my_library]'; assert_equals('DROP LIBRARY', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[DROP LIBRARY my_library;]'; assert_equals('DROP LIBRARY', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	--Commands have an extra space in them.
-	v_statement := q'[DROP MATERIALIZED VIEW my_mv preserve table]'; assert_equals('DROP MATERIALIZED VIEW', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[DROP SNAPSHOT my_mv preserve table]'; assert_equals('DROP MATERIALIZED VIEW', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[DROP MATERIALIZED VIEW my_mv preserve table;]'; assert_equals('DROP MATERIALIZED VIEW', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[DROP SNAPSHOT my_mv preserve table;]'; assert_equals('DROP MATERIALIZED VIEW', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	v_statement := q'[DROP MATERIALIZED VIEW LOG on some_table;]'; assert_equals('DROP MATERIALIZED VIEW LOG', replace(v_statement, ';'), get_wo_semi(v_statement));
 	v_statement := q'[DROP snapshot LOG on some_table;]'; assert_equals('DROP MATERIALIZED VIEW LOG', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[DROP MATERIALIZED ZONEMAP my_schema.my_zonemap]'; assert_equals('DROP MATERIALIZED ZONEMAP', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[DROP MATERIALIZED ZONEMAP my_schema.my_zonemap;]'; assert_equals('DROP MATERIALIZED ZONEMAP', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	v_statement := q'[DROP OPERATOR my_operator force;]'; assert_equals('DROP OPERATOR', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	v_statement := q'[DROP OUTLINE my_outline;]'; assert_equals('DROP OUTLINE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[DROP PACKAGE my_package]'; assert_equals('DROP PACKAGE', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[DROP PACKAGE my_package;]'; assert_equals('DROP PACKAGE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	v_statement := q'[DROP PACKAGE BODY my_package;]'; assert_equals('DROP PACKAGE BODY', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[DROP PLUGGABLE DATABASE my_pdb]'; assert_equals('DROP PLUGGABLE DATABASE', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[DROP PLUGGABLE DATABASE my_pdb;]'; assert_equals('DROP PLUGGABLE DATABASE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[DROP PROCEDURE my_proc]'; assert_equals('DROP PROCEDURE', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[DROP PROCEDURE my_proc;]'; assert_equals('DROP PROCEDURE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	v_statement := q'[DROP PROFILE my_profile cascade;]'; assert_equals('DROP PROFILE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[DROP RESTORE POINT my_restore_point]'; assert_equals('DROP RESTORE POINT', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[DROP RESTORE POINT my_restore_point;]'; assert_equals('DROP RESTORE POINT', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	--This is not a real command.
 	--v_statement := q'[DROP REWRITE EQUIVALENCE]'; assert_equals('DROP REWRITE EQUIVALENCE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[DROP ROLE my_role]'; assert_equals('DROP ROLE', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[DROP ROLE my_role;]'; assert_equals('DROP ROLE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[DROP ROLLBACK SEGMENT my_rbs]'; assert_equals('DROP ROLLBACK SEGMENT', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[DROP ROLLBACK SEGMENT my_rbs;]'; assert_equals('DROP ROLLBACK SEGMENT', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	--Undocumented feature.
-	v_statement := q'[DROP SCHEMA SYNONYM a_schema_synonym]'; assert_equals('DROP SCHEMA SYNONYM', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[DROP SCHEMA SYNONYM a_schema_synonym;]'; assert_equals('DROP SCHEMA SYNONYM', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	v_statement := q'[DROP SEQUENCE my_sequence;]'; assert_equals('DROP SEQUENCE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	--An old version of "DROP SNAPSHOT"?  This is not supported in 11gR2+.
 	--v_statement := q'[DROP SUMMARY]'; assert_equals('DROP SUMMARY', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[DROP SYNONYM my_synonym]'; assert_equals('DROP SYNONYM', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[DROP public SYNONYM my_synonym]'; assert_equals('DROP SYNONYM', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[DROP SYNONYM my_synonym;]'; assert_equals('DROP SYNONYM', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[DROP public SYNONYM my_synonym;]'; assert_equals('DROP SYNONYM', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[DROP TABLE my_schema.my_table cascade constraints purge]'; assert_equals('DROP TABLE', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[DROP TABLE my_schema.my_table cascade constraints purge;]'; assert_equals('DROP TABLE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	v_statement := q'[DROP TABLESPACE my_tbs including contents and datafiles cascade constraints;]'; assert_equals('DROP TABLESPACE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[DROP TRIGGER my_trigger]'; assert_equals('DROP TRIGGER', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[DROP TRIGGER my_trigger;]'; assert_equals('DROP TRIGGER', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[DROP TYPE my_type validate]'; assert_equals('DROP TYPE', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[DROP TYPE my_type validate;]'; assert_equals('DROP TYPE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[DROP TYPE BODY my_type]'; assert_equals('DROP TYPE BODY', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[DROP TYPE BODY my_type;]'; assert_equals('DROP TYPE BODY', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	v_statement := q'[DROP USER my_user cascde;]'; assert_equals('DROP USER', replace(v_statement, ';'), get_wo_semi(v_statement));
 
@@ -726,90 +729,93 @@ begin
 	--v_statement := q'[Do not use 185]'; assert_equals('Do not use 185', replace(v_statement, ';'), get_wo_semi(v_statement));
 	--v_statement := q'[Do not use 186]'; assert_equals('Do not use 186', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[EXPLAIN plan set statement_id='asdf' for select * from dual]'; assert_equals('EXPLAIN', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[EXPLAIN plan set statement_id='asdf' for select * from dual]'; assert_equals('EXPLAIN 1', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[explain plan for with function f return number is begin return 1; end; select f from dual;]'; assert_equals('EXPLAIN 2', replace(v_statement, 'dual;', 'dual'), get_wo_semi(v_statement));
 
 	v_statement := q'[FLASHBACK DATABASE to restore point my_restore_point]'; assert_equals('FLASHBACK DATABASE', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[FLASHBACK standby DATABASE to restore point my_restore_point]'; assert_equals('FLASHBACK DATABASE', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[FLASHBACK standby DATABASE to restore point my_restore_point;]'; assert_equals('FLASHBACK DATABASE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[FLASHBACK TABLE my_schema.my_table to timestamp timestamp '2015-01-01 12:00:00']'; assert_equals('FLASHBACK TABLE', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[FLASHBACK TABLE my_schema.my_table to timestamp timestamp '2015-01-01 12:00:00';]'; assert_equals('FLASHBACK TABLE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[GRANT dba my_user]'; assert_equals('GRANT OBJECT 1', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[GRANT select on my_table to some_other_user with grant option]'; assert_equals('GRANT OBJECT 2', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[GRANT dba to my_package]'; assert_equals('GRANT OBJECT 3', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[GRANT dba my_user;]'; assert_equals('GRANT OBJECT 1', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[GRANT select on my_table to some_other_user with grant option;]'; assert_equals('GRANT OBJECT 2', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[GRANT dba to my_package;]'; assert_equals('GRANT OBJECT 3', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[INSERT \*+ append *\ into my_table select * from other_table]'; assert_equals('INSERT', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[INSERT all into table1(a) values(b) into table2(a) values(b) select b from another_table;]'; assert_equals('INSERT', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[INSERT /*+ append */ into my_table select * from other_table;]'; assert_equals('INSERT 1', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[INSERT all into table1(a) values(b) into table2(a) values(b) select b from another_table;]'; assert_equals('INSERT 2', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[insert into test1 with function f return number is begin return 1; end; select f from dual;]'; assert_equals('INSERT 3', replace(v_statement, 'dual;', 'dual'), get_wo_semi(v_statement));
 
-	v_statement := q'[LOCK TABLE my_schema.my_table in exclsive mode]'; assert_equals('LOCK TABLE', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[LOCK TABLE my_schema.my_table in exclsive mode;]'; assert_equals('LOCK TABLE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	--See "UPSERT" for "MERGE".
 	--v_statement := q'[NO-OP]'; assert_equals('NO-OP', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[NOAUDIT insert any table]'; assert_equals('NOAUDIT OBJECT', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[NOAUDIT policy my_policy by some_user]'; assert_equals('NOAUDIT OBJECT', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[NOAUDIT insert any table;]'; assert_equals('NOAUDIT OBJECT', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[NOAUDIT policy my_policy by some_user;]'; assert_equals('NOAUDIT OBJECT', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[ <<my_label>>begin null; end;]'; assert_equals('PL/SQL EXECUTE', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[\*asdf*\declare v_test number; begin null; end; /]'; assert_equals('PL/SQL EXECUTE', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[  begin null; end; /]'; assert_equals('PL/SQL EXECUTE', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[ <<my_label>>begin null; end;]'; assert_equals('PL/SQL EXECUTE 1', v_statement, get_wo_semi(v_statement));
+	v_statement := q'[/*asdf*/declare v_test number; begin null; end;]'; assert_equals('PL/SQL EXECUTE 2', v_statement, get_wo_semi(v_statement));
+	v_statement := q'[  begin null; end;]'; assert_equals('PL/SQL EXECUTE 3', v_statement, get_wo_semi(v_statement));
 
 	--Command name has space instead of underscore.
  	v_statement := q'[PURGE DBA_RECYCLEBIN;]'; assert_equals('PURGE DBA RECYCLEBIN', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[PURGE INDEX my_index]'; assert_equals('PURGE INDEX', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[PURGE INDEX my_index;]'; assert_equals('PURGE INDEX', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[PURGE TABLE my_table]'; assert_equals('PURGE TABLE', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[PURGE TABLE my_table;]'; assert_equals('PURGE TABLE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[PURGE TABLESPACE my_tbs user my_user]'; assert_equals('PURGE TABLESPACE', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[PURGE TABLESPACE my_tbs user my_user;]'; assert_equals('PURGE TABLESPACE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	--Command name has extra "USER".
 	v_statement := q'[PURGE RECYCLEBIN;]'; assert_equals('PURGE USER RECYCLEBIN', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[RENAME old_table to new_table]'; assert_equals('RENAME', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[RENAME old_table to new_table;]'; assert_equals('RENAME', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[REVOKE select any table from my_user]'; assert_equals('REVOKE OBJECT 1', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[REVOKE select on my_tables from user2]'; assert_equals('REVOKE OBJECT 2', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[REVOKE dba from my_package]'; assert_equals('REVOKE OBJECT 3', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[REVOKE select any table from my_user;]'; assert_equals('REVOKE OBJECT 1', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[REVOKE select on my_tables from user2;]'; assert_equals('REVOKE OBJECT 2', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[REVOKE dba from my_package;]'; assert_equals('REVOKE OBJECT 3', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	v_statement := q'[ROLLBACK;]'; assert_equals('ROLLBACK 1', replace(v_statement, ';'), get_wo_semi(v_statement));
 	v_statement := q'[ROLLBACK work;]'; assert_equals('ROLLBACK 2', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[ROLLBACK to savepoint savepoint1]'; assert_equals('ROLLBACK 3', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[ROLLBACK to savepoint savepoint1;]'; assert_equals('ROLLBACK 3', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	v_statement := q'[SAVEPOINT my_savepoint;]'; assert_equals('SAVEPOINT', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	v_statement := q'[select * from dual;]'; assert_equals('SELECT 1', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[\*asdf*\select * from dual;]'; assert_equals('SELECT 2', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[/*asdf*/select * from dual;]'; assert_equals('SELECT 2', replace(v_statement, ';'), get_wo_semi(v_statement));
 	v_statement := q'[((((select * from dual))));]'; assert_equals('SELECT 3', replace(v_statement, ';'), get_wo_semi(v_statement));
 	v_statement := q'[with test1 as (select 1 a from dual) select * from test1;]'; assert_equals('SELECT 4', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[with function test_function return number is begin return 1; end; select test_function from dual;
-	/]'; assert_equals('SELECT 4', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[with function test_function return number is begin return 1; end; select test_function from dual;]'; assert_equals('SELECT 4', replace(v_statement, 'dual;', 'dual'), get_wo_semi(v_statement));
 
 	--There are two versions of CONSTRAINT[S].
-	v_statement := q'[SET CONSTRAINTS all deferred]'; assert_equals('SET CONSTRAINT', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[SET CONSTRAINT all immediate]'; assert_equals('SET CONSTRAINT', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[SET CONSTRAINTS all deferred;]'; assert_equals('SET CONSTRAINT', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[SET CONSTRAINT all immediate;]'; assert_equals('SET CONSTRAINT', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[SET ROLE none]'; assert_equals('SET ROLE', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[SET ROLE none;]'; assert_equals('SET ROLE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[SET TRANSACTION read only]'; assert_equals('SET TRANSACTION', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[SET TRANSACTION read only;]'; assert_equals('SET TRANSACTION', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	v_statement := q'[TRUNCATE CLUSTER my_schema.my_cluster drop storage;]'; assert_equals('TRUNCATE CLUSTER', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[TRUNCATE TABLE my_schema.my_table purge materialized view log]'; assert_equals('TRUNCATE TABLE', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[TRUNCATE TABLE my_schema.my_table purge materialized view log;]'; assert_equals('TRUNCATE TABLE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	--Not a real command.
 	--v_statement := q'[UNDROP OBJECT]'; assert_equals('UNDROP OBJECT', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[UPDATE my_tables set a = 1]'; assert_equals('UPDATE', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[UPDATE my_tables set a = 1;]'; assert_equals('UPDATE 1', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[UPDATE my_tables set a = (with function f return number is begin return 1; end; select f from dual);]'; assert_equals('UPDATE 2', replace(v_statement, 'dual);', 'dual)'), get_wo_semi(v_statement));
 
 	--These are not real commands (they are part of alter table) and they could be ambiguous with an UPDATE statement
 	--if there was a table named "INDEXES" or "JOIN".
 	--v_statement := q'[UPDATE INDEXES]'; assert_equals('UPDATE INDEXES', replace(v_statement, ';'), get_wo_semi(v_statement));
 	--v_statement := q'[UPDATE JOIN INDEX]'; assert_equals('UPDATE JOIN INDEX', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[merge into table1 using table2 on (table1.a = table2.a) when not matched then update set table1.a = 1;]'; assert_equals('UPSERT', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[merge into table1 using table2 on (table1.a = table2.a) when matched then update set table1.b = 1;]'; assert_equals('UPSERT', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[merge into table1 using table2 on (table1.a = table2.a) when matched then update set table1.b = (with function test_function return number is begin return 1; end; select test_function from dual);]'; assert_equals('UPSERT', replace(v_statement, 'dual);', 'dual)'), get_wo_semi(v_statement));
 
 	--Not a real command, this is part of ANALYZE.
 	--v_statement := q'[VALIDATE INDEX]'; assert_equals('VALIDATE INDEX', replace(v_statement, ';'), get_wo_semi(v_statement));
-*/
+
 end test_semicolon_commands;
 
 
