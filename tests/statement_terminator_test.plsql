@@ -550,13 +550,28 @@ begin
 	v_statement := q'[CREATE undo bigfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]'; assert_equals('CREATE TABLESPACE', replace(v_statement, ';'), get_wo_semi(v_statement));
 	v_statement := q'[CREATE undo smallfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]'; assert_equals('CREATE TABLESPACE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	--TODO: Are there some unusual trigger types?
+	--Simple triggers, keep semicolon.
 	v_statement := q'[CREATE TRIGGER my_trigger before insert on my_table begin null; end;]'; assert_equals('CREATE TRIGGER', v_statement, get_wo_semi(v_statement));
 	v_statement := q'[CREATE editionable TRIGGER my_trigger before insert on my_table begin null; end;]'; assert_equals('CREATE TRIGGER', v_statement, get_wo_semi(v_statement));
 	v_statement := q'[CREATE noneditionable TRIGGER my_trigger before insert on my_table begin null; end;]'; assert_equals('CREATE TRIGGER', v_statement, get_wo_semi(v_statement));
 	v_statement := q'[CREATE or replace TRIGGER my_trigger before insert on my_table begin null; end;]'; assert_equals('CREATE TRIGGER', v_statement, get_wo_semi(v_statement));
 	v_statement := q'[CREATE or replace editionable TRIGGER my_trigger before insert on my_table begin null; end;]'; assert_equals('CREATE TRIGGER', v_statement, get_wo_semi(v_statement));
 	v_statement := q'[CREATE or replace noneditionable TRIGGER my_trigger before insert on my_table begin null; end;]'; assert_equals('CREATE TRIGGER', v_statement, get_wo_semi(v_statement));
+	--Compound triggers, keep semicolon.
+	v_statement := q'[
+		create or replace trigger test1_trigger2
+		for update of a on test1
+		compound trigger
+			test_variable number;
+			procedure nested_procedure is begin null; end nested_procedure;
+			before statement is begin null; end before statement;
+			before each row is begin null; end before each row;
+			after statement is begin null; end after statement;
+			after each row is begin null; end after each row;
+		end test1_trigger2;]';
+	 assert_equals('CREATE TRIGGER - COMPOUND', v_statement, get_wo_semi(v_statement));
+	--CALL trigger, remove semicolon.
+	v_statement := q'[create or replace trigger test1_trigger1 before delete on test1 for each row call test_procedure;]'; assert_equals('CREATE TRIGGER - CALL', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	v_statement := q'[CREATE TYPE my_type as object(a number);]'; assert_equals('CREATE TYPE', v_statement, get_wo_semi(v_statement));
 	v_statement := q'[CREATE editionable TYPE my_type as object(a number);]'; assert_equals('CREATE TYPE', v_statement, get_wo_semi(v_statement));
@@ -574,36 +589,36 @@ begin
 
 	v_statement := q'[CREATE USER my_user identified by "asdf";]'; assert_equals('CREATE USER', replace(v_statement, ';'), get_wo_semi(v_statement));
 /*
-	v_statement := q'[CREATE VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 1', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE editioning VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 2', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE editionable VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 3', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE editionable editioning VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 4', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE noneditionable VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 5', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE force VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 6', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE force editioning VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 7', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE force editionable VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 8', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE force editionable editioning VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 9', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE force noneditionable VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 10', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE no force VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 11', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE no force editioning VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 12', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE no force editionable VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 13', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE no force editionable editioning VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 14', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE no force noneditionable VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 15', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE or replace VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 16', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE or replace editioning VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 17', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE or replace editionable VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 18', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE or replace editionable editioning VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 19', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE or replace noneditionable VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 20', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE or replace force VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 21', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE or replace force editioning VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 22', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE or replace force editionable VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 23', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE or replace force editionable editioning VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 24', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE or replace force noneditionable VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 25', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE or replace no force VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 26', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE or replace no force editioning VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 27', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE or replace no force editionable VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 28', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE or replace no force editionable editioning VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 29', replace(v_statement, ';'), get_wo_semi(v_statement));
-	v_statement := q'[CREATE or replace no force noneditionable VIEW my_view is select 1 a from dual;]'; assert_equals('CREATE VIEW 30', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 1', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE editioning VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 2', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE editionable VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 3', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE editionable editioning VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 4', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE noneditionable VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 5', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE force VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 6', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE force editioning VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 7', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE force editionable VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 8', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE force editionable editioning VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 9', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE force noneditionable VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 10', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE no force VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 11', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE no force editioning VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 12', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE no force editionable VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 13', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE no force editionable editioning VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 14', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE no force noneditionable VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 15', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE or replace VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 16', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE or replace editioning VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 17', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE or replace editionable VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 18', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE or replace editionable editioning VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 19', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE or replace noneditionable VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 20', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE or replace force VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 21', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE or replace force editioning VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 22', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE or replace force editionable VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 23', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE or replace force editionable editioning VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 24', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE or replace force noneditionable VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 25', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE or replace no force VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 26', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE or replace no force editioning VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 27', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE or replace no force editionable VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 28', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE or replace no force editionable editioning VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 29', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE or replace no force noneditionable VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 30', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	--Not a real command.
 	--v_statement := q'[DECLARE REWRITE EQUIVALENCE]'; assert_equals('DECLARE REWRITE EQUIVALENCE', replace(v_statement, ';'), get_wo_semi(v_statement));

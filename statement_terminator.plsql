@@ -134,6 +134,22 @@ begin
 	--Do nothing if there's a serious parsing error:
 	if v_lex_sqlcode is not null or v_lex_sqlerrm is not null then
 		return p_tokens;
+	--Triggers sometimes need semicolons and sometimes do not.
+	elsif v_command_name = 'CREATE TRIGGER' then
+		declare
+			v_not_needed number;
+			v_trigger_type number;
+		begin
+			--Get trigger type.
+			statement_classifier.get_trigger_type_body_index(p_tokens, p_trigger_type => v_trigger_type, p_trigger_body_start_index => v_not_needed);
+			--CALL triggers need semicolons removed.
+			if v_trigger_type = statement_classifier.C_TRIGGER_TYPE_CALL then
+				return build_statement_wo_semicolon(p_tokens);
+			--All other triggers need to keep the semicolon.
+			else
+				return p_tokens;
+			end if;
+		end;
 	--Remove semicolons from these:
 	elsif v_command_name in (
 		'ADMINISTER KEY MANAGEMENT','ALTER ASSEMBLY','ALTER AUDIT POLICY','ALTER CLUSTER','ALTER DATABASE',
@@ -180,7 +196,6 @@ begin
 		'CREATE PACKAGE',
 		'CREATE PACKAGE BODY',
 		'CREATE PROCEDURE',
-		'CREATE TRIGGER',
 		'CREATE TYPE',
 		'CREATE TYPE BODY',
 		'PL/SQL EXECUTE',
