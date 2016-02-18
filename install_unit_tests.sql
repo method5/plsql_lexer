@@ -20,6 +20,7 @@ prompt
 prompt Installing packages...
 start tests/plsql_lexer_test.spc
 start tests/statement_classifier_test.plsql
+start tests/statement_feedback_test.plsql
 start tests/statement_splitter_test.plsql
 start tests/statement_terminator_test.plsql
 start tests/tokenizer_test.plsql
@@ -37,7 +38,7 @@ column object_type format a13;
 
 select owner, object_name, object_type
 from all_objects
-where object_name in ('TOKENIZER_TEST', 'STATEMENT_CLASSIFIER_TEST',
+where object_name in ('TOKENIZER_TEST', 'STATEMENT_CLASSIFIER_TEST', 'STATEMENT_FEEDBACK_TEST',
 		'STATEMENT_SPLITTER_TEST', 'STATEMENT_TERMINATOR_TEST', 'PLSQL_LEXER_TEST')
 	and owner = sys_context('userenv', 'current_schema')
 	and status <> 'VALID';
@@ -50,7 +51,7 @@ begin
 	select count(*)
 	into v_count
 	from all_objects
-	where object_name in ('TOKENIZER_TEST', 'STATEMENT_CLASSIFIER_TEST',
+	where object_name in ('TOKENIZER_TEST', 'STATEMENT_CLASSIFIER_TEST', 'STATEMENT_CLASSIFIER_TEST',
 			'STATEMENT_SPLITTER_TEST', 'STATEMENT_TERMINATOR_TEST', 'PLSQL_LEXER_TEST')
 		and owner = sys_context('userenv', 'current_schema')
 		and status <> 'VALID';

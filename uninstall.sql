@@ -47,6 +47,7 @@ begin
 	--Drop unit test packages.
 	drop_object_ignore_dne_error('drop package plsql_lexer_test');
 	drop_object_ignore_dne_error('drop package statement_classifier_test');
+	drop_object_ignore_dne_error('drop package statement_feedback_test');
 	drop_object_ignore_dne_error('drop package statement_splitter_test');
 	drop_object_ignore_dne_error('drop package statement_terminator_test');
 	drop_object_ignore_dne_error('drop package tokenizer_test');
