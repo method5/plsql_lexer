@@ -19,7 +19,8 @@ end;
 procedure run_dynamic_tests is
 begin
 	statement_classifier_test.run(p_tests => statement_classifier_test.c_dynamic_tests);
-	statement_feedback_test.run(p_tests => statement_feedback_test.c_dynamic_tests);
+	--Statement feedback does not have any dynamic tests.
+	--statement_feedback_test.run(p_tests => statement_feedback_test.c_dynamic_tests);
 	statement_splitter_test.run(p_tests => statement_splitter_test.c_dynamic_tests);
 	statement_terminator_test.run(p_tests => statement_terminator_test.c_dynamic_tests);
 	tokenizer_test.run(p_tests => tokenizer_test.c_dynamic_tests);

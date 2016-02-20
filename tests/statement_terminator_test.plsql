@@ -187,7 +187,7 @@ end test_semicolon_errors;
 
 
 --------------------------------------------------------------------------------
---NOTE: This test suite is very similar to the one in STATEMENT_CLASSIFIER_TEST.
+--NOTE: This test suite is similar in structure to the one in STATEMENT_CLASSIFIER_TEST and STATEMENT_FEEDBACK_TEST.
 --If you add a test case here you should probably add one there as well.
 procedure test_semicolon_commands is
 	v_statement clob;

@@ -188,6 +188,8 @@ end test_errors;
 
 
 --------------------------------------------------------------------------------
+--NOTE: This test suite is similar in structure to the one in STATEMENT_TERMINATOR_TEST and STATEMENT_FEEDBACK_TEST.
+--If you add a test case here you should probably add one there as well.
 procedure test_commands is
 	v_output output_rec;
 

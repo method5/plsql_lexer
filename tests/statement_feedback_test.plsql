@@ -20,9 +20,7 @@ c_commands                constant number := power(2, 2);
 
 c_static_tests  constant number := c_errors+c_commands;
 
-c_dynamic_tests constant number := power(2, 30);
-
-c_all_tests constant number := c_static_tests+c_dynamic_tests;
+c_all_tests constant number := c_static_tests;
 
 --Run the unit tests and display the results in dbms output.
 procedure run(p_tests number default c_static_tests);
@@ -106,37 +104,12 @@ begin
 end feedback;
 
 
---------------------------------------------------------------------------------
-function get_sqlerrm(p_statement clob) return varchar2 is
-	v_category varchar2(100);
-	v_statement_type varchar2(100);
-	v_command_name varchar2(64);
-	v_command_type number;
-	v_lex_sqlcode number;
-	v_lex_sqlerrm varchar2(4000);
-begin
-	statement_classifier.classify(tokenizer.tokenize(p_statement),
-		v_category,v_statement_type,v_command_name,v_command_type,v_lex_sqlcode,v_lex_sqlerrm);
-	return null;
-exception when others then
-	return sqlerrm;
-end get_sqlerrm;
-
-
 -- =============================================================================
 -- Test Suites
 -- =============================================================================
 
 --------------------------------------------------------------------------------
 procedure test_errors is
-	v_output output_rec;
-
-	--Helper function that concatenates results for easy string comparison.
-	function concat(p_output output_rec) return varchar2 is
-	begin
-		return nvl(p_output.fatal_error,
-			p_output.category||'|'||p_output.statement_type||'|'||p_output.command_name||'|'||p_output.command_type);
-	end;
 begin
 	--TODO:
 	null;
@@ -198,18 +171,12 @@ begin
 
 
 --------------------------------------------------------------------------------
+--NOTE: This test suite is similar in structure to the one in STATEMENT_CLASSIFIER_TEST and STATEMENT_TERMINATOR_TEST.
+--If you add a test case here you should probably add one there as well.
 procedure test_commands is
 	v_success varchar2(32767);
 	v_warning varchar2(32767);
 
-	v_output output_rec;
-
-	--Helper function that concatenates results for easy string comparison.
-	function concat(p_output output_rec) return varchar2 is
-	begin
-		return nvl(p_output.fatal_error,
-			p_output.category||'|'||p_output.statement_type||'|'||p_output.command_name||'|'||p_output.command_type);
-	end;
 begin
 	/*
 	DDL
@@ -229,633 +196,571 @@ begin
 	*/
 
 
-	feedback(q'[/*comment*/ adMINister /*asdf*/ kEy manaGEment create keystore 'asdf' identified by qwer]', v_success, v_warning); assert_equals('ADMINISTER KEY MANAGEMENT', 'keystore altered.|', v_success||'|'||v_warning);
-
-/*
 	--These tests are based on `select * from v$sqlcommand order by command_name;`,
 	--and comparing syntx with the manual.
-	classify(q'[\*comment*\ adMINister \*asdf*\ kEy manaGEment create keystore 'asdf' identified by qwer]', v_output); assert_equals('ADMINISTER KEY MANAGEMENT', 'DDL|ADMINISTER KEY MANAGEMENT|ADMINISTER KEY MANAGEMENT|238', concat(v_output));
+	--The results come from running commands in SQL*Plus.
+	feedback(q'[/*comment*/ adMINister /*asdf*/ kEy manaGEment create keystore 'asdf' identified by qwer]', v_success, v_warning); assert_equals('ADMINISTER KEY MANAGEMENT', 'keystore altered.|', v_success||'|'||v_warning);
 
-	classify(q'[ alter assemBLY \*I don't think this is a real command but whatever*\]', v_output); assert_equals('ALTER ASSEMBLY', 'DDL|ALTER|ALTER ASSEMBLY|217', concat(v_output));
+	--I can't find a single real "alter assembly" command on Google so I'm guessing at the success message.
+	--It's possible to create the warning with "alter assembly some_assembly compile;".
+	feedback(q'[ alter assemBLY /*I don't think this is a real command but whatever*/]', v_success, v_warning); assert_equals('ALTER ASSEMBLY', 'Assembly altered.|Warning: Assembly altered with compilation errors.', v_success||'|'||v_warning);
 
-	classify(q'[ ALTEr AUDIt POLICY myPOLICY drop roles myRole; --comment]', v_output); assert_equals('ALTER AUDIT POLICY', 'DDL|ALTER|ALTER AUDIT POLICY|230', concat(v_output));
+	feedback(q'[ ALTEr AUDIt POLICY myPOLICY drop roles myRole; --comment]', v_success, v_warning); assert_equals('ALTER AUDIT POLICY', 'Audit policy altered.|', v_success||'|'||v_warning);
 
-	classify(q'[	alter	cluster	schema.my_cluster parallel 8]', v_output); assert_equals('ALTER CLUSTER', 'DDL|ALTER|ALTER CLUSTER|5', concat(v_output));
+	feedback(q'[	alter	cluster	schema.my_cluster parallel 8]', v_success, v_warning); assert_equals('ALTER CLUSTER', 'Cluster altered.|', v_success||'|'||v_warning);
 
-	classify(q'[alter database cdb1 mount]', v_output); assert_equals('ALTER DATABASE', 'DDL|ALTER|ALTER DATABASE|35', concat(v_output));
+	feedback(q'[alter database cdb1 mount]', v_success, v_warning); assert_equals('ALTER DATABASE', 'Database altered.|', v_success||'|'||v_warning);
 
-	classify(q'[alter shared public database link my_link connect to me identified by "password";]', v_output); assert_equals('ALTER DATABASE LINK', 'DDL|ALTER|ALTER DATABASE LINK|225', concat(v_output));
+	feedback(q'[alter shared public database link my_link connect to me identified by "password";]', v_success, v_warning); assert_equals('ALTER DATABASE LINK', 'Database link altered.|', v_success||'|'||v_warning);
 
-	classify(q'[ alter dimENSION my_dimension#12 compile;]', v_output); assert_equals('ALTER DIMENSION', 'DDL|ALTER|ALTER DIMENSION|175', concat(v_output));
+	feedback(q'[ alter dimENSION my_dimension#12 compile;]', v_success, v_warning); assert_equals('ALTER DIMENSION', 'Dimension altered.|Warning: Dimension altered with compilation errors.', v_success||'|'||v_warning);
 
 	--Command name has extra space, real command is "DISKGROUP".
-	classify(q'[\*+useless comment*\ alter diskgroup +orcl13 resize disk '/emcpowersomething/' size 500m;]', v_output); assert_equals('ALTER DISKGROUP', 'DDL|ALTER|ALTER DISK GROUP|193', concat(v_output));
+	feedback(q'[/*+useless comment*/ alter diskgroup +orcl13 resize disk '/emcpowersomething/' size 500m;]', v_success, v_warning); assert_equals('ALTER DISKGROUP', 'Diskgroup altered.|', v_success||'|'||v_warning);
 
-	--Undocumented feature:
-	classify(q'[ alter EDITION my_edition unusable]', v_output); assert_equals('ALTER EDITION', 'DDL|ALTER|ALTER EDITION|213', concat(v_output));
+	--Undocumented feature, the feedback message is a guess.
+	feedback(q'[ alter EDITION my_edition unusable]', v_success, v_warning); assert_equals('ALTER EDITION', 'Edition altered.|', v_success||'|'||v_warning);
 
-	classify(q'[ alter  flashback  archive myarchive set default;]', v_output); assert_equals('ALTER FLASHBACK ARCHIVE', 'DDL|ALTER|ALTER FLASHBACK ARCHIVE|219', concat(v_output));
+	feedback(q'[ alter  flashback  archive myarchive set default;]', v_success, v_warning); assert_equals('ALTER FLASHBACK ARCHIVE', 'Flashback archive altered.|', v_success||'|'||v_warning);
 
-	classify(q'[ALTER FUNCTION myschema.myfunction compile;]', v_output); assert_equals('ALTER FUNCTION', 'DDL|ALTER|ALTER FUNCTION|92', concat(v_output));
+	feedback(q'[ALTER FUNCTION myschema.myfunction compile;]', v_success, v_warning); assert_equals('ALTER FUNCTION', 'Function altered.|Warning: Function altered with compilation errors.', v_success||'|'||v_warning);
 
-	classify(q'[ alter index asdf rebuild parallel 8]', v_output); assert_equals('ALTER INDEX', 'DDL|ALTER|ALTER INDEX|11', concat(v_output));
+	feedback(q'[ alter index asdf rebuild parallel 8]', v_success, v_warning); assert_equals('ALTER INDEX', 'Index altered.|', v_success||'|'||v_warning);
 
-	classify(q'[ALTER INDEXTYPE  my_schema.my_indextype compile;]', v_output); assert_equals('ALTER INDEXTYPE', 'DDL|ALTER|ALTER INDEXTYPE|166', concat(v_output));
+	feedback(q'[ALTER INDEXTYPE  my_schema.my_indextype compile;]', v_success, v_warning); assert_equals('ALTER INDEXTYPE', 'Indextype altered.|Warning: Indextype altered with compilation errors.', v_success||'|'||v_warning);
 
-	classify(q'[ALTER java  source my_schema.some_object compile;]', v_output); assert_equals('ALTER JAVA', 'DDL|ALTER|ALTER JAVA|161', concat(v_output));
+	feedback(q'[ALTER java  source my_schema.some_object compile;]', v_success, v_warning); assert_equals('ALTER JAVA', 'Java altered.|Warning: Java altered with compilation errors.', v_success||'|'||v_warning);
 
-	classify(q'[alter library test_library editionable compile;]', v_output); assert_equals('ALTER LIBRARY', 'DDL|ALTER|ALTER LIBRARY|196', concat(v_output));
+	feedback(q'[alter library test_library editionable compile;]', v_success, v_warning); assert_equals('ALTER LIBRARY', 'Library altered.|Warning: Library altered with compilation errors.', v_success||'|'||v_warning);
 
-	classify(q'[ALTER  MATERIALIZED  VIEW a_schema.mv_name cache consider fresh;]', v_output); assert_equals('ALTER MATERIALIZED VIEW ', 'DDL|ALTER|ALTER MATERIALIZED VIEW |75', concat(v_output));
-	classify(q'[ALTER  SNAPSHOT a_schema.mv_name cache consider fresh;]', v_output); assert_equals('ALTER MATERIALIZED VIEW ', 'DDL|ALTER|ALTER MATERIALIZED VIEW |75', concat(v_output));
+	--Unlike most ALTERS with a COMPILE option, MATERIALIZED VIEWS will not display a warning if it is invalid.
+	feedback(q'[ALTER  MATERIALIZED  VIEW a_schema.mv_name cache consider fresh;]', v_success, v_warning); assert_equals('ALTER MATERIALIZED VIEW ', 'Materialized view altered.|', v_success||'|'||v_warning);
+	feedback(q'[ALTER  SNAPSHOT a_schema.mv_name cache consider fresh;]', v_success, v_warning); assert_equals('ALTER MATERIALIZED VIEW ', 'Materialized view altered.|', v_success||'|'||v_warning);
 
-	classify(q'[ALTER \*a*\ MATERIALIZED \*b*\ VIEW \*c*\LOG force on my_table parallel 10]', v_output); assert_equals('ALTER MATERIALIZED VIEW LOG', 'DDL|ALTER|ALTER MATERIALIZED VIEW LOG|72', concat(v_output));
-	classify(q'[ALTER \*a*\ SNAPSHOT \*c*\LOG force on my_table parallel 10]', v_output); assert_equals('ALTER MATERIALIZED VIEW LOG', 'DDL|ALTER|ALTER MATERIALIZED VIEW LOG|72', concat(v_output));
+	feedback(q'[ALTER /*a*/ MATERIALIZED /*b*/ VIEW /*c*/LOG force on my_table parallel 10]', v_success, v_warning); assert_equals('ALTER MATERIALIZED VIEW LOG', 'Materialized view log altered.|', v_success||'|'||v_warning);
+	feedback(q'[ALTER /*a*/ SNAPSHOT /*c*/LOG force on my_table parallel 10]', v_success, v_warning); assert_equals('ALTER MATERIALIZED VIEW LOG', 'Materialized view log altered.|', v_success||'|'||v_warning);
 
-	classify(q'[ alter  materialized	zonemap my_schema.my_zone enable pruning]', v_output); assert_equals('ALTER MATERIALIZED ZONEMAP', 'DDL|ALTER|ALTER MATERIALIZED ZONEMAP|240', concat(v_output));
+	feedback(q'[ alter  materialized	zonemap my_schema.my_zone enable pruning]', v_success, v_warning); assert_equals('ALTER MATERIALIZED ZONEMAP', 'Materialized zonemap altered.|', v_success||'|'||v_warning);
 
-	classify(q'[alter operator my_operator add binding (number) return (number) using my_function]', v_output); assert_equals('ALTER OPERATOR', 'DDL|ALTER|ALTER OPERATOR|183', concat(v_output));
+	feedback(q'[alter operator my_operator add binding (number) return (number) using my_function]', v_success, v_warning); assert_equals('ALTER OPERATOR', '|', v_success||'|'||v_warning);
 
-	classify(q'[alter outline public my_outline disable;]', v_output); assert_equals('ALTER OUTLINE', 'DDL|ALTER|ALTER OUTLINE|179', concat(v_output));
+	feedback(q'[alter outline public my_outline disable;]', v_success, v_warning); assert_equals('ALTER OUTLINE', '|', v_success||'|'||v_warning);
 
 	--ALTER PACKAGE gets complicated - may need to read up to 8 tokens.
-	classify(q'[alter package test_package compile package]', v_output); assert_equals('ALTER PACKAGE 1', 'DDL|ALTER|ALTER PACKAGE|95', concat(v_output));
-	classify(q'[alter package jheller.test_package compile package]', v_output); assert_equals('ALTER PACKAGE 2', 'DDL|ALTER|ALTER PACKAGE|95', concat(v_output));
-	classify(q'[alter package test_package compile specification]', v_output); assert_equals('ALTER PACKAGE 3', 'DDL|ALTER|ALTER PACKAGE|95', concat(v_output));
-	classify(q'[alter package jheller.test_package compile specification]', v_output); assert_equals('ALTER PACKAGE 4', 'DDL|ALTER|ALTER PACKAGE|95', concat(v_output));
-	classify(q'[alter package test_package compile]', v_output); assert_equals('ALTER PACKAGE 5', 'DDL|ALTER|ALTER PACKAGE|95', concat(v_output));
-	classify(q'[alter package jheller.test_package compile]', v_output); assert_equals('ALTER PACKAGE 6', 'DDL|ALTER|ALTER PACKAGE|95', concat(v_output));
-	classify(q'[alter package test_package compile debug]', v_output); assert_equals('ALTER PACKAGE 7', 'DDL|ALTER|ALTER PACKAGE|95', concat(v_output));
-	classify(q'[alter package jheller.test_package compile debug]', v_output); assert_equals('ALTER PACKAGE 8', 'DDL|ALTER|ALTER PACKAGE|95', concat(v_output));
-	classify(q'[alter package test_package noneditionable]', v_output); assert_equals('ALTER PACKAGE 9', 'DDL|ALTER|ALTER PACKAGE|95', concat(v_output));
-	classify(q'[alter package test_package editionable]', v_output); assert_equals('ALTER PACKAGE 10', 'DDL|ALTER|ALTER PACKAGE|95', concat(v_output));
-	classify(q'[alter package jheller.test_package editionable]', v_output); assert_equals('ALTER PACKAGE 11', 'DDL|ALTER|ALTER PACKAGE|95', concat(v_output));
+	feedback(q'[alter package test_package compile package]', v_success, v_warning); assert_equals('ALTER PACKAGE 1', '|', v_success||'|'||v_warning);
+	feedback(q'[alter package jheller.test_package compile package]', v_success, v_warning); assert_equals('ALTER PACKAGE 2', '|', v_success||'|'||v_warning);
+	feedback(q'[alter package test_package compile specification]', v_success, v_warning); assert_equals('ALTER PACKAGE 3', '|', v_success||'|'||v_warning);
+	feedback(q'[alter package jheller.test_package compile specification]', v_success, v_warning); assert_equals('ALTER PACKAGE 4', '|', v_success||'|'||v_warning);
+	feedback(q'[alter package test_package compile]', v_success, v_warning); assert_equals('ALTER PACKAGE 5', '|', v_success||'|'||v_warning);
+	feedback(q'[alter package jheller.test_package compile]', v_success, v_warning); assert_equals('ALTER PACKAGE 6', '|', v_success||'|'||v_warning);
+	feedback(q'[alter package test_package compile debug]', v_success, v_warning); assert_equals('ALTER PACKAGE 7', '|', v_success||'|'||v_warning);
+	feedback(q'[alter package jheller.test_package compile debug]', v_success, v_warning); assert_equals('ALTER PACKAGE 8', '|', v_success||'|'||v_warning);
+	feedback(q'[alter package test_package noneditionable]', v_success, v_warning); assert_equals('ALTER PACKAGE 9', '|', v_success||'|'||v_warning);
+	feedback(q'[alter package test_package editionable]', v_success, v_warning); assert_equals('ALTER PACKAGE 10', '|', v_success||'|'||v_warning);
+	feedback(q'[alter package jheller.test_package editionable]', v_success, v_warning); assert_equals('ALTER PACKAGE 11', '|', v_success||'|'||v_warning);
 
 	--ALTER PACKAGE BODY is also complicated
-	classify(q'[alter package test_package compile body]', v_output); assert_equals('ALTER PACKAGE BODY 1', 'DDL|ALTER|ALTER PACKAGE BODY|98', concat(v_output));
-	classify(q'[alter package jheller.test_package compile body]', v_output); assert_equals('ALTER PACKAGE BODY 2', 'DDL|ALTER|ALTER PACKAGE BODY|98', concat(v_output));
-	classify(q'[alter package test_package compile debug body]', v_output); assert_equals('ALTER PACKAGE BODY 3', 'DDL|ALTER|ALTER PACKAGE BODY|98', concat(v_output));
-	classify(q'[alter package jheller.test_package compile debug body]', v_output); assert_equals('ALTER PACKAGE BODY 4', 'DDL|ALTER|ALTER PACKAGE BODY|98', concat(v_output));
+	feedback(q'[alter package test_package compile body]', v_success, v_warning); assert_equals('ALTER PACKAGE BODY 1', '|', v_success||'|'||v_warning);
+	feedback(q'[alter package jheller.test_package compile body]', v_success, v_warning); assert_equals('ALTER PACKAGE BODY 2', '|', v_success||'|'||v_warning);
+	feedback(q'[alter package test_package compile debug body]', v_success, v_warning); assert_equals('ALTER PACKAGE BODY 3', '|', v_success||'|'||v_warning);
+	feedback(q'[alter package jheller.test_package compile debug body]', v_success, v_warning); assert_equals('ALTER PACKAGE BODY 4', '|', v_success||'|'||v_warning);
 
-	classify(q'[ALTER PLUGGABLE DATABASE my_pdb default tablespace some_tbs]', v_output); assert_equals('ALTER PLUGGABLE DATABASE', 'DDL|ALTER|ALTER PLUGGABLE DATABASE|227', concat(v_output));
+	feedback(q'[ALTER PLUGGABLE DATABASE my_pdb default tablespace some_tbs]', v_success, v_warning); assert_equals('ALTER PLUGGABLE DATABASE', '|', v_success||'|'||v_warning);
 
-	classify(q'[ALTER PROCEDURE my_proc compile]', v_output); assert_equals('ALTER PROCEDURE', 'DDL|ALTER|ALTER PROCEDURE|25', concat(v_output));
+	feedback(q'[ALTER PROCEDURE my_proc compile]', v_success, v_warning); assert_equals('ALTER PROCEDURE', '|', v_success||'|'||v_warning);
 
-	classify(q'[ alter profile default limit password_max_time unlimited;]', v_output); assert_equals('ALTER PROFILE', 'DDL|ALTER|ALTER PROFILE|67', concat(v_output));
+	feedback(q'[ alter profile default limit password_max_time unlimited;]', v_success, v_warning); assert_equals('ALTER PROFILE', '|', v_success||'|'||v_warning);
 
-	classify(q'[ALTER RESOURCE COST privat_sga 1000;]', v_output); assert_equals('ALTER RESOURCE COST', 'DDL|ALTER|ALTER RESOURCE COST|70', concat(v_output));
+	feedback(q'[ALTER RESOURCE COST privat_sga 1000;]', v_success, v_warning); assert_equals('ALTER RESOURCE COST', '|', v_success||'|'||v_warning);
 
 	--I don't think this is a real command.
-	--classify(q'[ALTER REWRITE EQUIVALENCE]', v_output); assert_equals('ALTER REWRITE EQUIVALENCE', 'DDL|ALTER|ALTER REWRITE EQUIVALENCE|210', concat(v_output));
+	--feedback(q'[ALTER REWRITE EQUIVALENCE]', v_success, v_warning); assert_equals('ALTER REWRITE EQUIVALENCE', '|', v_success||'|'||v_warning);
 
-	classify(q'[alter role some_role# identified externally]', v_output); assert_equals('ALTER ROLE', 'DDL|ALTER|ALTER ROLE|79', concat(v_output));
+	feedback(q'[alter role some_role# identified externally]', v_success, v_warning); assert_equals('ALTER ROLE', '|', v_success||'|'||v_warning);
 
-	classify(q'[ALTER ROLLBACK SEGMENT my_rbs offline]', v_output); assert_equals('ALTER ROLLBACK SEGMENT', 'DDL|ALTER|ALTER ROLLBACK SEGMENT|37', concat(v_output));
+	feedback(q'[ALTER ROLLBACK SEGMENT my_rbs offline]', v_success, v_warning); assert_equals('ALTER ROLLBACK SEGMENT', '|', v_success||'|'||v_warning);
 
-	classify(q'[alter sequence my_seq cache 100]', v_output); assert_equals('ALTER SEQUENCE', 'DDL|ALTER|ALTER SEQUENCE|14', concat(v_output));
+	feedback(q'[alter sequence my_seq cache 100]', v_success, v_warning); assert_equals('ALTER SEQUENCE', '|', v_success||'|'||v_warning);
 
-	classify(q'[alter session set OPTIMIZER_DYNAMIC_SAMPLING=5;]', v_output); assert_equals('ALTER SESSION', 'Session Control|ALTER SESSION|ALTER SESSION|42', concat(v_output));
+	feedback(q'[alter session set OPTIMIZER_DYNAMIC_SAMPLING=5;]', v_success, v_warning); assert_equals('ALTER SESSION', '|', v_success||'|'||v_warning);
 
-	classify(q'[ALTER SESSION set current_schema=my_schema]', v_output); assert_equals('ALTER SESSION', 'Session Control|ALTER SESSION|ALTER SESSION|42', concat(v_output));
+	feedback(q'[ALTER SESSION set current_schema=my_schema]', v_success, v_warning); assert_equals('ALTER SESSION', '|', v_success||'|'||v_warning);
 
 	--An old version of "ALTER SNAPSHOT"?  This is not supported in 11gR2+.
-	--classify(q'[ALTER SUMMARY a_schema.mv_name cache;]', v_output); assert_equals('ALTER SUMMARY', 'DDL|ALTER|ALTER SUMMARY|172', concat(v_output));
+	--feedback(q'[ALTER SUMMARY a_schema.mv_name cache;]', v_success, v_warning); assert_equals('ALTER SUMMARY', '|', v_success||'|'||v_warning);
 
-	classify(q'[ALTER \**\public\**\ SYNONYM my_synonym compile]', v_output); assert_equals('ALTER SYNONYM', 'DDL|ALTER|ALTER SYNONYM|192', concat(v_output));
-	classify(q'[ALTER SYNONYM  my_synonym compile]', v_output); assert_equals('ALTER SYNONYM', 'DDL|ALTER|ALTER SYNONYM|192', concat(v_output));
+	feedback(q'[ALTER /**/public/**/ SYNONYM my_synonym compile]', v_success, v_warning); assert_equals('ALTER SYNONYM', '|', v_success||'|'||v_warning);
+	feedback(q'[ALTER SYNONYM  my_synonym compile]', v_success, v_warning); assert_equals('ALTER SYNONYM', '|', v_success||'|'||v_warning);
 
-	classify(q'[alter system set memory_target=5m]', v_output); assert_equals('ALTER SYSTEM', 'System Control|ALTER SYSTEM|ALTER SYSTEM|49', concat(v_output));
-	classify(q'[alter system reset "_stupid_hidden_parameter"]', v_output); assert_equals('ALTER SYSTEM', 'System Control|ALTER SYSTEM|ALTER SYSTEM|49', concat(v_output));
+	feedback(q'[alter system set memory_target=5m]', v_success, v_warning); assert_equals('ALTER SYSTEM', '|', v_success||'|'||v_warning);
+	feedback(q'[alter system reset "_stupid_hidden_parameter"]', v_success, v_warning); assert_equals('ALTER SYSTEM', '|', v_success||'|'||v_warning);
 
-	classify(q'[ ALTER  TABLE my_schema.my_table rename to new_name;]', v_output); assert_equals('ALTER TABLE', 'DDL|ALTER|ALTER TABLE|15', concat(v_output));
+	feedback(q'[ ALTER  TABLE my_schema.my_table rename to new_name;]', v_success, v_warning); assert_equals('ALTER TABLE', '|', v_success||'|'||v_warning);
 
-	classify(q'[ALTER TABLESPACE some_tbs coalesce]', v_output); assert_equals('ALTER TABLESPACE', 'DDL|ALTER|ALTER TABLESPACE|40', concat(v_output));
+	feedback(q'[ALTER TABLESPACE some_tbs coalesce]', v_success, v_warning); assert_equals('ALTER TABLESPACE', '|', v_success||'|'||v_warning);
 
 	--Undocumented by still runs in 12.1.0.2.
-	classify(q'[ALTER TRACING enable;]', v_output); assert_equals('ALTER TRACING', 'DDL|ALTER|ALTER TRACING|58', concat(v_output));
+	feedback(q'[ALTER TRACING enable;]', v_success, v_warning); assert_equals('ALTER TRACING', '|', v_success||'|'||v_warning);
 
-	classify(q'[alter trigger my_schema.my_trigger enable;]', v_output); assert_equals('ALTER TRIGGER', 'DDL|ALTER|ALTER TRIGGER|60', concat(v_output));
+	feedback(q'[alter trigger my_schema.my_trigger enable;]', v_success, v_warning); assert_equals('ALTER TRIGGER', '|', v_success||'|'||v_warning);
 
 	--ALTER TYPE gets complicated - may need to read up to 8 tokens.
-	classify(q'[alter type test_type compile type]', v_output); assert_equals('ALTER TYPE 1', 'DDL|ALTER|ALTER TYPE|80', concat(v_output));
-	classify(q'[alter type jheller.test_type compile type]', v_output); assert_equals('ALTER TYPE 2', 'DDL|ALTER|ALTER TYPE|80', concat(v_output));
-	classify(q'[alter type test_type compile specification]', v_output); assert_equals('ALTER TYPE 3', 'DDL|ALTER|ALTER TYPE|80', concat(v_output));
-	classify(q'[alter type jheller.test_type compile specification]', v_output); assert_equals('ALTER TYPE 4', 'DDL|ALTER|ALTER TYPE|80', concat(v_output));
-	classify(q'[alter type test_type compile]', v_output); assert_equals('ALTER TYPE 5', 'DDL|ALTER|ALTER TYPE|80', concat(v_output));
-	classify(q'[alter type jheller.test_type compile]', v_output); assert_equals('ALTER TYPE 6', 'DDL|ALTER|ALTER TYPE|80', concat(v_output));
-	classify(q'[alter type test_type compile debug]', v_output); assert_equals('ALTER TYPE 7', 'DDL|ALTER|ALTER TYPE|80', concat(v_output));
-	classify(q'[alter type jheller.test_type compile debug]', v_output); assert_equals('ALTER TYPE 8', 'DDL|ALTER|ALTER TYPE|80', concat(v_output));
-	classify(q'[alter type test_type noneditionable]', v_output); assert_equals('ALTER TYPE 9', 'DDL|ALTER|ALTER TYPE|80', concat(v_output));
-	classify(q'[alter type test_type editionable]', v_output); assert_equals('ALTER TYPE 10', 'DDL|ALTER|ALTER TYPE|80', concat(v_output));
-	classify(q'[alter type jheller.test_type editionable]', v_output); assert_equals('ALTER TYPE 11', 'DDL|ALTER|ALTER TYPE|80', concat(v_output));
+	feedback(q'[alter type test_type compile type]', v_success, v_warning); assert_equals('ALTER TYPE 1', '|', v_success||'|'||v_warning);
+	feedback(q'[alter type jheller.test_type compile type]', v_success, v_warning); assert_equals('ALTER TYPE 2', '|', v_success||'|'||v_warning);
+	feedback(q'[alter type test_type compile specification]', v_success, v_warning); assert_equals('ALTER TYPE 3', '|', v_success||'|'||v_warning);
+	feedback(q'[alter type jheller.test_type compile specification]', v_success, v_warning); assert_equals('ALTER TYPE 4', '|', v_success||'|'||v_warning);
+	feedback(q'[alter type test_type compile]', v_success, v_warning); assert_equals('ALTER TYPE 5', '|', v_success||'|'||v_warning);
+	feedback(q'[alter type jheller.test_type compile]', v_success, v_warning); assert_equals('ALTER TYPE 6', '|', v_success||'|'||v_warning);
+	feedback(q'[alter type test_type compile debug]', v_success, v_warning); assert_equals('ALTER TYPE 7', '|', v_success||'|'||v_warning);
+	feedback(q'[alter type jheller.test_type compile debug]', v_success, v_warning); assert_equals('ALTER TYPE 8', '|', v_success||'|'||v_warning);
+	feedback(q'[alter type test_type noneditionable]', v_success, v_warning); assert_equals('ALTER TYPE 9', '|', v_success||'|'||v_warning);
+	feedback(q'[alter type test_type editionable]', v_success, v_warning); assert_equals('ALTER TYPE 10', '|', v_success||'|'||v_warning);
+	feedback(q'[alter type jheller.test_type editionable]', v_success, v_warning); assert_equals('ALTER TYPE 11', '|', v_success||'|'||v_warning);
 
 	--ALTER TYPE BODY is also complicated
-	classify(q'[alter type test_type compile body]', v_output); assert_equals('ALTER TYPE BODY 1', 'DDL|ALTER|ALTER TYPE BODY|82', concat(v_output));
-	classify(q'[alter type jheller.test_type compile body]', v_output); assert_equals('ALTER TYPE BODY 2', 'DDL|ALTER|ALTER TYPE BODY|82', concat(v_output));
-	classify(q'[alter type test_type compile debug body]', v_output); assert_equals('ALTER TYPE BODY 3', 'DDL|ALTER|ALTER TYPE BODY|82', concat(v_output));
-	classify(q'[alter type jheller.test_type compile debug body]', v_output); assert_equals('ALTER TYPE BODY 4', 'DDL|ALTER|ALTER TYPE BODY|82', concat(v_output));
+	feedback(q'[alter type test_type compile body]', v_success, v_warning); assert_equals('ALTER TYPE BODY 1', '|', v_success||'|'||v_warning);
+	feedback(q'[alter type jheller.test_type compile body]', v_success, v_warning); assert_equals('ALTER TYPE BODY 2', '|', v_success||'|'||v_warning);
+	feedback(q'[alter type test_type compile debug body]', v_success, v_warning); assert_equals('ALTER TYPE BODY 3', '|', v_success||'|'||v_warning);
+	feedback(q'[alter type jheller.test_type compile debug body]', v_success, v_warning); assert_equals('ALTER TYPE BODY 4', '|', v_success||'|'||v_warning);
 
-	classify(q'[ALTER USER my_user profile default]', v_output); assert_equals('ALTER USER', 'DDL|ALTER|ALTER USER|43', concat(v_output));
+	feedback(q'[ALTER USER my_user profile default]', v_success, v_warning); assert_equals('ALTER USER', '|', v_success||'|'||v_warning);
 
-	classify(q'[ALTER VIEW my_schema.my_view read only;]', v_output); assert_equals('ALTER VIEW', 'DDL|ALTER|ALTER VIEW|88', concat(v_output));
+	feedback(q'[ALTER VIEW my_schema.my_view read only;]', v_success, v_warning); assert_equals('ALTER VIEW', '|', v_success||'|'||v_warning);
 
 	--The syntax diagram in manual is wrong, it's "ANALYZE CLUSTER", not "CLUSTER ...".
-	classify(q'[ ANALYZE CLUSTER my_cluster validate structure]', v_output); assert_equals('ANALYZE CLUSTER', 'DDL|ANALYZE|ANALYZE CLUSTER|64', concat(v_output));
+	feedback(q'[ ANALYZE CLUSTER my_cluster validate structure]', v_success, v_warning); assert_equals('ANALYZE CLUSTER', '|', v_success||'|'||v_warning);
 
-	classify(q'[ ANALYZE INDEX my_index validate structure]', v_output); assert_equals('ANALYZE INDEX', 'DDL|ANALYZE|ANALYZE INDEX|63', concat(v_output));
+	feedback(q'[ ANALYZE INDEX my_index validate structure]', v_success, v_warning); assert_equals('ANALYZE INDEX', '|', v_success||'|'||v_warning);
 
-	classify(q'[ ANALYZE TABLE my_table validate structure;]', v_output); assert_equals('ANALYZE TABLE', 'DDL|ANALYZE|ANALYZE TABLE|62', concat(v_output));
+	feedback(q'[ ANALYZE TABLE my_table validate structure;]', v_success, v_warning); assert_equals('ANALYZE TABLE', '|', v_success||'|'||v_warning);
 
-	classify(q'[associate statistics with columns my_schema.my_table using null;]', v_output); assert_equals('ASSOCIATE STATISTICS', 'DDL|ASSOCIATE STATISTICS|ASSOCIATE STATISTICS|168', concat(v_output));
+	feedback(q'[associate statistics with columns my_schema.my_table using null;]', v_success, v_warning); assert_equals('ASSOCIATE STATISTICS', '|', v_success||'|'||v_warning);
 
-	classify(q'[audit all on my_schema.my_table whenever not successful]', v_output); assert_equals('AUDIT OBJECT', 'DDL|AUDIT|AUDIT OBJECT|30', concat(v_output));
-	classify(q'[audit policy some_policy;]', v_output); assert_equals('AUDIT OBJECT', 'DDL|AUDIT|AUDIT OBJECT|30', concat(v_output));
+	feedback(q'[audit all on my_schema.my_table whenever not successful]', v_success, v_warning); assert_equals('AUDIT OBJECT', '|', v_success||'|'||v_warning);
+	feedback(q'[audit policy some_policy;]', v_success, v_warning); assert_equals('AUDIT OBJECT', '|', v_success||'|'||v_warning);
 
-	classify(q'[CALL my_procedure(1,2)]', v_output); assert_equals('CALL METHOD', 'DML|CALL|CALL METHOD|170', concat(v_output));
-	classify(q'[ call my_procedure(3,4);]', v_output); assert_equals('CALL METHOD', 'DML|CALL|CALL METHOD|170', concat(v_output));
-	classify(q'[ call my_schema.my_type.my_method('asdf', 'qwer') into :variable;]', v_output); assert_equals('CALL METHOD', 'DML|CALL|CALL METHOD|170', concat(v_output));
-	classify(q'[ call my_type(3,4).my_method() into :x;]', v_output); assert_equals('CALL METHOD', 'DML|CALL|CALL METHOD|170', concat(v_output));
+	feedback(q'[CALL my_procedure(1,2)]', v_success, v_warning); assert_equals('CALL METHOD', '|', v_success||'|'||v_warning);
+	feedback(q'[ call my_procedure(3,4);]', v_success, v_warning); assert_equals('CALL METHOD', '|', v_success||'|'||v_warning);
+	feedback(q'[ call my_schema.my_type.my_method('asdf', 'qwer') into :variable;]', v_success, v_warning); assert_equals('CALL METHOD', '|', v_success||'|'||v_warning);
+	feedback(q'[ call my_type(3,4).my_method() into :x;]', v_success, v_warning); assert_equals('CALL METHOD', '|', v_success||'|'||v_warning);
 
 	--I don't think this is a real command.
-	--classify(q'[CHANGE PASSWORD]', v_output); assert_equals('CHANGE PASSWORD', 'DDL|ALTER|CHANGE PASSWORD|190', concat(v_output));
+	--feedback(q'[CHANGE PASSWORD]', v_success, v_warning); assert_equals('CHANGE PASSWORD', '|', v_success||'|'||v_warning);
 
-	classify(q'[comment on audit policy my_policy is 'asdf']', v_output); assert_equals('COMMENT', 'DDL|COMMENT|COMMENT|29', concat(v_output));
-	classify(q'[comment on column my_schema.my_mv is q'!as'!';]', v_output); assert_equals('COMMENT', 'DDL|COMMENT|COMMENT|29', concat(v_output));
-	classify(q'[comment on table some_table is 'asdfasdf']', v_output); assert_equals('COMMENT', 'DDL|COMMENT|COMMENT|29', concat(v_output));
+	feedback(q'[comment on audit policy my_policy is 'asdf']', v_success, v_warning); assert_equals('COMMENT', '|', v_success||'|'||v_warning);
+	feedback(q'[comment on column my_schema.my_mv is q'!as'!';]', v_success, v_warning); assert_equals('COMMENT', '|', v_success||'|'||v_warning);
+	feedback(q'[comment on table some_table is 'asdfasdf']', v_success, v_warning); assert_equals('COMMENT', '|', v_success||'|'||v_warning);
 
-	classify(q'[ commit work comment 'some comment' write wait batch]', v_output); assert_equals('COMMIT', 'Transaction Control|COMMIT|COMMIT|44', concat(v_output));
-	classify(q'[COMMIT force corrupt_xid_all]', v_output); assert_equals('COMMIT', 'Transaction Control|COMMIT|COMMIT|44', concat(v_output));
+	feedback(q'[ commit work comment 'some comment' write wait batch]', v_success, v_warning); assert_equals('COMMIT', '|', v_success||'|'||v_warning);
+	feedback(q'[COMMIT force corrupt_xid_all]', v_success, v_warning); assert_equals('COMMIT', '|', v_success||'|'||v_warning);
 
 	--Is this a real command?  http://dba.stackexchange.com/questions/96002/what-is-an-oracle-assembly/
-	classify(q'[create or replace assembly some_assembly is 'some string';
-	/]', v_output); assert_equals('CREATE ASSEMBLY', 'DDL|CREATE|CREATE ASSEMBLY|216', concat(v_output));
+	feedback(q'[create or replace assembly some_assembly is 'some string';
+	/]', v_success, v_warning); assert_equals('CREATE ASSEMBLY', '|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE AUDIT POLICY my_policy actions update on oe.orders]', v_output); assert_equals('CREATE AUDIT POLICY', 'DDL|CREATE|CREATE AUDIT POLICY|229', concat(v_output));
+	feedback(q'[CREATE AUDIT POLICY my_policy actions update on oe.orders]', v_success, v_warning); assert_equals('CREATE AUDIT POLICY', 'Audit policy created.|', v_success||'|'||v_warning);
 
 	--This is not a real command as far as I can tell.
-	--classify(q'[CREATE BITMAPFILE]', v_output); assert_equals('CREATE BITMAPFILE', 'DDL|CREATE|CREATE BITMAPFILE|87', concat(v_output));
+	--feedback(q'[CREATE BITMAPFILE]', v_success, v_warning); assert_equals('CREATE BITMAPFILE', '|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE CLUSTER my_schema.my_cluster(a number sort);]', v_output); assert_equals('CREATE CLUSTER', 'DDL|CREATE|CREATE CLUSTER|4', concat(v_output));
+	feedback(q'[CREATE CLUSTER my_schema.my_cluster(a number sort);]', v_success, v_warning); assert_equals('CREATE CLUSTER', 'Cluster created.|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE CONTEXT my_context using my_package;]', v_output); assert_equals('CREATE CONTEXT', 'DDL|CREATE|CREATE CONTEXT|177', concat(v_output));
-	classify(q'[CREATE or  REplace  CONTEXT my_context using my_package;]', v_output); assert_equals('CREATE CONTEXT', 'DDL|CREATE|CREATE CONTEXT|177', concat(v_output));
+	feedback(q'[CREATE CONTEXT my_context using my_package;]', v_success, v_warning); assert_equals('CREATE CONTEXT', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or  REplace  CONTEXT my_context using my_package;]', v_success, v_warning); assert_equals('CREATE CONTEXT', '|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE CONTROLFILE database my_db resetlogs]', v_output); assert_equals('CREATE CONTROL FILE', 'DDL|CREATE|CREATE CONTROL FILE|57', concat(v_output));
+	feedback(q'[CREATE CONTROLFILE database my_db resetlogs]', v_success, v_warning); assert_equals('CREATE CONTROL FILE', '|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE DATABASE my_database controlfile reuse;]', v_output); assert_equals('CREATE DATABASE', 'DDL|CREATE|CREATE DATABASE|34', concat(v_output));
+	feedback(q'[CREATE DATABASE my_database controlfile reuse;]', v_success, v_warning); assert_equals('CREATE DATABASE', '|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE DATABASE LINK my_link connect to my_user identified by "some_password*#&$@" using 'orcl1234';]', v_output); assert_equals('CREATE DATABASE LINK', 'DDL|CREATE|CREATE DATABASE LINK|32', concat(v_output));
-	classify(q'[CREATE shared DATABASE LINK my_link connect to my_user identified by "some_password*#&$@" using 'orcl1234';]', v_output); assert_equals('CREATE DATABASE LINK', 'DDL|CREATE|CREATE DATABASE LINK|32', concat(v_output));
-	classify(q'[CREATE public DATABASE LINK my_link connect to my_user identified by "some_password*#&$@" using 'orcl1234';]', v_output); assert_equals('CREATE DATABASE LINK', 'DDL|CREATE|CREATE DATABASE LINK|32', concat(v_output));
-	classify(q'[CREATE shared public DATABASE LINK my_link connect to my_user identified by "some_password*#&$@" using 'orcl1234';]', v_output); assert_equals('CREATE DATABASE LINK', 'DDL|CREATE|CREATE DATABASE LINK|32', concat(v_output));
+	feedback(q'[CREATE DATABASE LINK my_link connect to my_user identified by "some_password*#&$@" using 'orcl1234';]', v_success, v_warning); assert_equals('CREATE DATABASE LINK', 'Database link created.|', v_success||'|'||v_warning);
+	feedback(q'[CREATE shared DATABASE LINK my_link connect to my_user identified by "some_password*#&$@" using 'orcl1234';]', v_success, v_warning); assert_equals('CREATE DATABASE LINK', 'Database link created.|', v_success||'|'||v_warning);
+	feedback(q'[CREATE public DATABASE LINK my_link connect to my_user identified by "some_password*#&$@" using 'orcl1234';]', v_success, v_warning); assert_equals('CREATE DATABASE LINK', 'Database link created.|', v_success||'|'||v_warning);
+	feedback(q'[CREATE shared public DATABASE LINK my_link connect to my_user identified by "some_password*#&$@" using 'orcl1234';]', v_success, v_warning); assert_equals('CREATE DATABASE LINK', 'Database link created.|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE DIMENSION my_schema.my_dimension level l1 is t1.a;]', v_output); assert_equals('CREATE DIMENSION', 'DDL|CREATE|CREATE DIMENSION|174', concat(v_output));
+	feedback(q'[CREATE DIMENSION my_schema.my_dimension level l1 is t1.a;]', v_success, v_warning); assert_equals('CREATE DIMENSION', 'Dimension created.|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE DIRECTORY my_directory#$1 as '/load/blah/']', v_output); assert_equals('CREATE DIRECTORY', 'DDL|CREATE|CREATE DIRECTORY|157', concat(v_output));
-	classify(q'[CREATE or replace DIRECTORY my_directory#$1 as '/load/blah/']', v_output); assert_equals('CREATE DIRECTORY', 'DDL|CREATE|CREATE DIRECTORY|157', concat(v_output));
+	feedback(q'[CREATE DIRECTORY my_directory#$1 as '/load/blah/']', v_success, v_warning); assert_equals('CREATE DIRECTORY', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace DIRECTORY my_directory#$1 as '/load/blah/']', v_success, v_warning); assert_equals('CREATE DIRECTORY', '|', v_success||'|'||v_warning);
 
 	--Command name has extra space, real command is "DISKGROUP".
-	classify(q'[CREATE DISKGROUP my_diskgroup disk '/emc/powersomething/' size 555m;]', v_output); assert_equals('CREATE DISK GROUP', 'DDL|CREATE|CREATE DISK GROUP|194', concat(v_output));
+	feedback(q'[CREATE DISKGROUP my_diskgroup disk '/emc/powersomething/' size 555m;]', v_success, v_warning); assert_equals('CREATE DISK GROUP', '|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE EDITION my_edition as child of my_parent;]', v_output); assert_equals('CREATE EDITION', 'DDL|CREATE|CREATE EDITION|212', concat(v_output));
+	feedback(q'[CREATE EDITION my_edition as child of my_parent;]', v_success, v_warning); assert_equals('CREATE EDITION', 'Edition created.|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE FLASHBACK ARCHIVE default my_fba tablespace my_ts quota 5g;]', v_output); assert_equals('CREATE FLASHBACK ARCHIVE', 'DDL|CREATE|CREATE FLASHBACK ARCHIVE|218', concat(v_output));
+	feedback(q'[CREATE FLASHBACK ARCHIVE default my_fba tablespace my_ts quota 5g;]', v_success, v_warning); assert_equals('CREATE FLASHBACK ARCHIVE', 'Flashback archive created.|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE FUNCTION my_schema.my_function() return number is begin return 1; end; /]', v_output); assert_equals('CREATE FUNCTION', 'DDL|CREATE|CREATE FUNCTION|91', concat(v_output));
-	classify(q'[CREATE or replace FUNCTION my_schema.my_function() return number is begin return 1; end; /]', v_output); assert_equals('CREATE FUNCTION', 'DDL|CREATE|CREATE FUNCTION|91', concat(v_output));
-	classify(q'[CREATE or replace editionable FUNCTION my_schema.my_function() return number is begin return 1; end; /]', v_output); assert_equals('CREATE FUNCTION', 'DDL|CREATE|CREATE FUNCTION|91', concat(v_output));
-	classify(q'[CREATE or replace noneditionable FUNCTION my_schema.my_function() return number is begin return 1; end; /]', v_output); assert_equals('CREATE FUNCTION', 'DDL|CREATE|CREATE FUNCTION|91', concat(v_output));
-	classify(q'[CREATE editionable FUNCTION my_schema.my_function() return number is begin return 1; end; /]', v_output); assert_equals('CREATE FUNCTION', 'DDL|CREATE|CREATE FUNCTION|91', concat(v_output));
-	classify(q'[CREATE noneditionable FUNCTION my_schema.my_function() return number is begin return 1; end; /]', v_output); assert_equals('CREATE FUNCTION', 'DDL|CREATE|CREATE FUNCTION|91', concat(v_output));
+	feedback(q'[CREATE FUNCTION my_schema.my_function() return number is begin return 1; end; /]', v_success, v_warning); assert_equals('CREATE FUNCTION', '|', v_success||'Function created.|Warning: Function created with compilation errors.'||v_warning);
+	feedback(q'[CREATE or replace FUNCTION my_schema.my_function() return number is begin return 1; end; /]', v_success, v_warning); assert_equals('CREATE FUNCTION', 'Function created.|Warning: Function created with compilation errors.', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace editionable FUNCTION my_schema.my_function() return number is begin return 1; end; /]', v_success, v_warning); assert_equals('CREATE FUNCTION', 'Function created.|Warning: Function created with compilation errors.', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace noneditionable FUNCTION my_schema.my_function() return number is begin return 1; end; /]', v_success, v_warning); assert_equals('CREATE FUNCTION', 'Function created.|Warning: Function created with compilation errors.', v_success||'|'||v_warning);
+	feedback(q'[CREATE editionable FUNCTION my_schema.my_function() return number is begin return 1; end; /]', v_success, v_warning); assert_equals('CREATE FUNCTION', 'Function created.|Warning: Function created with compilation errors.', v_success||'|'||v_warning);
+	feedback(q'[CREATE noneditionable FUNCTION my_schema.my_function() return number is begin return 1; end; /]', v_success, v_warning); assert_equals('CREATE FUNCTION', 'Function created.|Warning: Function created with compilation errors.', v_success||'|'||v_warning);
 
-	classify(q'[CREATE INDEX on table1(a);]', v_output); assert_equals('CREATE INDEX', 'DDL|CREATE|CREATE INDEX|9', concat(v_output));
-	classify(q'[CREATE unique INDEX on table1(a);]', v_output); assert_equals('CREATE INDEX', 'DDL|CREATE|CREATE INDEX|9', concat(v_output));
-	classify(q'[CREATE bitmap INDEX on table1(a);]', v_output); assert_equals('CREATE INDEX', 'DDL|CREATE|CREATE INDEX|9', concat(v_output));
+	feedback(q'[CREATE INDEX on table1(a);]', v_success, v_warning); assert_equals('CREATE INDEX', 'Index created.|', v_success||'|'||v_warning);
+	feedback(q'[CREATE unique INDEX on table1(a);]', v_success, v_warning); assert_equals('CREATE INDEX', 'Index created.|', v_success||'|'||v_warning);
+	feedback(q'[CREATE bitmap INDEX on table1(a);]', v_success, v_warning); assert_equals('CREATE INDEX', 'Index created.|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE INDEXTYPE my_schema.my_indextype for indtype(a number) using my_type;]', v_output); assert_equals('CREATE INDEXTYPE', 'DDL|CREATE|CREATE INDEXTYPE|164', concat(v_output));
-	classify(q'[CREATE or replace INDEXTYPE my_schema.my_indextype for indtype(a number) using my_type;]', v_output); assert_equals('CREATE INDEXTYPE', 'DDL|CREATE|CREATE INDEXTYPE|164', concat(v_output));
+	feedback(q'[CREATE INDEXTYPE my_schema.my_indextype for indtype(a number) using my_type;]', v_success, v_warning); assert_equals('CREATE INDEXTYPE', 'Indextype created.|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace INDEXTYPE my_schema.my_indextype for indtype(a number) using my_type;]', v_success, v_warning); assert_equals('CREATE INDEXTYPE', 'Indextype created.|', v_success||'|'||v_warning);
 
 	--12 combinations of initial keywords.  COMPILE is optional here, but not elsewhere so it requires special handling.
-	classify(q'[CREATE and resolve noforce JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_output); assert_equals('CREATE JAVA', 'DDL|CREATE|CREATE JAVA|160', concat(v_output));
-	classify(q'[CREATE and resolve JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_output); assert_equals('CREATE JAVA', 'DDL|CREATE|CREATE JAVA|160', concat(v_output));
-	classify(q'[CREATE and compile noforce JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_output); assert_equals('CREATE JAVA', 'DDL|CREATE|CREATE JAVA|160', concat(v_output));
-	classify(q'[CREATE and compile JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_output); assert_equals('CREATE JAVA', 'DDL|CREATE|CREATE JAVA|160', concat(v_output));
-	classify(q'[CREATE noforce JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_output); assert_equals('CREATE JAVA', 'DDL|CREATE|CREATE JAVA|160', concat(v_output));
-	classify(q'[CREATE JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_output); assert_equals('CREATE JAVA', 'DDL|CREATE|CREATE JAVA|160', concat(v_output));
-	classify(q'[CREATE or replace and resolve noforce JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_output); assert_equals('CREATE JAVA', 'DDL|CREATE|CREATE JAVA|160', concat(v_output));
-	classify(q'[CREATE or replace and resolve  JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_output); assert_equals('CREATE JAVA', 'DDL|CREATE|CREATE JAVA|160', concat(v_output));
-	classify(q'[CREATE or replace and compile noforce JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_output); assert_equals('CREATE JAVA', 'DDL|CREATE|CREATE JAVA|160', concat(v_output));
-	classify(q'[CREATE or replace and compile  JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_output); assert_equals('CREATE JAVA', 'DDL|CREATE|CREATE JAVA|160', concat(v_output));
-	classify(q'[CREATE or replace noforce JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_output); assert_equals('CREATE JAVA', 'DDL|CREATE|CREATE JAVA|160', concat(v_output));
-	classify(q'[CREATE or replace JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_output); assert_equals('CREATE JAVA', 'DDL|CREATE|CREATE JAVA|160', concat(v_output));
+	feedback(q'[CREATE and resolve noforce JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_success, v_warning); assert_equals('CREATE JAVA', 'Java created.|Warning: Java created with compilation errors.', v_success||'|'||v_warning);
+	feedback(q'[CREATE and resolve JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_success, v_warning); assert_equals('CREATE JAVA', 'Java created.|Warning: Java created with compilation errors.', v_success||'|'||v_warning);
+	feedback(q'[CREATE and compile noforce JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_success, v_warning); assert_equals('CREATE JAVA', 'Java created.|Warning: Java created with compilation errors.', v_success||'|'||v_warning);
+	feedback(q'[CREATE and compile JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_success, v_warning); assert_equals('CREATE JAVA', 'Java created.|Warning: Java created with compilation errors.', v_success||'|'||v_warning);
+	feedback(q'[CREATE noforce JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_success, v_warning); assert_equals('CREATE JAVA', 'Java created.|Warning: Java created with compilation errors.', v_success||'|'||v_warning);
+	feedback(q'[CREATE JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_success, v_warning); assert_equals('CREATE JAVA', 'Java created.|Warning: Java created with compilation errors.', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace and resolve noforce JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_success, v_warning); assert_equals('CREATE JAVA', 'Java created.|Warning: Java created with compilation errors.', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace and resolve  JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_success, v_warning); assert_equals('CREATE JAVA', 'Java created.|Warning: Java created with compilation errors.', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace and compile noforce JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_success, v_warning); assert_equals('CREATE JAVA', 'Java created.|Warning: Java created with compilation errors.', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace and compile  JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_success, v_warning); assert_equals('CREATE JAVA', 'Java created.|Warning: Java created with compilation errors.', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace noforce JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_success, v_warning); assert_equals('CREATE JAVA', 'Java created.|Warning: Java created with compilation errors.', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_success, v_warning); assert_equals('CREATE JAVA', 'Java created.|Warning: Java created with compilation errors.', v_success||'|'||v_warning);
 
-	classify(q'[CREATE LIBRARY ext_lib AS 'ddl_1' IN ddl_dir;]'||chr(10)||'/', v_output); assert_equals('CREATE LIBRARY', 'DDL|CREATE|CREATE LIBRARY|159', concat(v_output));
-	classify(q'[CREATE or replace LIBRARY ext_lib AS 'ddl_1' IN ddl_dir;]'||chr(10)||'/', v_output); assert_equals('CREATE LIBRARY', 'DDL|CREATE|CREATE LIBRARY|159', concat(v_output));
-	classify(q'[CREATE or replace editionable LIBRARY ext_lib AS 'ddl_1' IN ddl_dir;]'||chr(10)||'/', v_output); assert_equals('CREATE LIBRARY', 'DDL|CREATE|CREATE LIBRARY|159', concat(v_output));
-	classify(q'[CREATE or replace noneditionable LIBRARY ext_lib AS 'ddl_1' IN ddl_dir;]'||chr(10)||'/', v_output); assert_equals('CREATE LIBRARY', 'DDL|CREATE|CREATE LIBRARY|159', concat(v_output));
-	classify(q'[CREATE editionable LIBRARY ext_lib AS 'ddl_1' IN ddl_dir;]'||chr(10)||'/', v_output); assert_equals('CREATE LIBRARY', 'DDL|CREATE|CREATE LIBRARY|159', concat(v_output));
-	classify(q'[CREATE noneditionable LIBRARY ext_lib AS 'ddl_1' IN ddl_dir;]'||chr(10)||'/', v_output); assert_equals('CREATE LIBRARY', 'DDL|CREATE|CREATE LIBRARY|159', concat(v_output));
+	feedback(q'[CREATE LIBRARY ext_lib AS 'ddl_1' IN ddl_dir;]'||chr(10)||'/', v_success, v_warning); assert_equals('CREATE LIBRARY', 'Library created.|Warning: Library created with compilation errors.', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace LIBRARY ext_lib AS 'ddl_1' IN ddl_dir;]'||chr(10)||'/', v_success, v_warning); assert_equals('CREATE LIBRARY', 'Library created.|Warning: Library created with compilation errors.', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace editionable LIBRARY ext_lib AS 'ddl_1' IN ddl_dir;]'||chr(10)||'/', v_success, v_warning); assert_equals('CREATE LIBRARY', 'Library created.|Warning: Library created with compilation errors.', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace noneditionable LIBRARY ext_lib AS 'ddl_1' IN ddl_dir;]'||chr(10)||'/', v_success, v_warning); assert_equals('CREATE LIBRARY', 'Library created.|Warning: Library created with compilation errors.', v_success||'|'||v_warning);
+	feedback(q'[CREATE editionable LIBRARY ext_lib AS 'ddl_1' IN ddl_dir;]'||chr(10)||'/', v_success, v_warning); assert_equals('CREATE LIBRARY', 'Library created.|Warning: Library created with compilation errors.', v_success||'|'||v_warning);
+	feedback(q'[CREATE noneditionable LIBRARY ext_lib AS 'ddl_1' IN ddl_dir;]'||chr(10)||'/', v_success, v_warning); assert_equals('CREATE LIBRARY', 'Library created.|Warning: Library created with compilation errors.', v_success||'|'||v_warning);
 
-	classify(q'[CREATE MATERIALIZED VIEW my_mv as select 1 a from dual;]', v_output); assert_equals('CREATE MATERIALIZED VIEW ', 'DDL|CREATE|CREATE MATERIALIZED VIEW |74', concat(v_output));
-	classify(q'[CREATE SNAPSHOT my_mv as select 1 a from dual;]', v_output); assert_equals('CREATE MATERIALIZED VIEW ', 'DDL|CREATE|CREATE MATERIALIZED VIEW |74', concat(v_output));
+	feedback(q'[CREATE MATERIALIZED VIEW my_mv as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE MATERIALIZED VIEW ', 'Materialized view created.|', v_success||'|'||v_warning);
+	feedback(q'[CREATE SNAPSHOT my_mv as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE MATERIALIZED VIEW ', 'Materialized view created.|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE MATERIALIZED VIEW LOG on my_table with (a)]', v_output); assert_equals('CREATE MATERIALIZED VIEW LOG', 'DDL|CREATE|CREATE MATERIALIZED VIEW LOG|71', concat(v_output));
-	classify(q'[CREATE SNAPSHOT LOG on my_table with (a)]', v_output); assert_equals('CREATE MATERIALIZED VIEW LOG', 'DDL|CREATE|CREATE MATERIALIZED VIEW LOG|71', concat(v_output));
+	feedback(q'[CREATE MATERIALIZED VIEW LOG on my_table with (a)]', v_success, v_warning); assert_equals('CREATE MATERIALIZED VIEW LOG', 'Materialized view log created.|', v_success||'|'||v_warning);
+	feedback(q'[CREATE SNAPSHOT LOG on my_table with (a)]', v_success, v_warning); assert_equals('CREATE MATERIALIZED VIEW LOG', 'Materialized view log created.|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE MATERIALIZED ZONEMAP sales_zmap ON sales(cust_id, prod_id);]', v_output); assert_equals('CREATE MATERIALIZED ZONEMAP', 'DDL|CREATE|CREATE MATERIALIZED ZONEMAP|239', concat(v_output));
+	feedback(q'[CREATE MATERIALIZED ZONEMAP sales_zmap ON sales(cust_id, prod_id);]', v_success, v_warning); assert_equals('CREATE MATERIALIZED ZONEMAP', 'Materialized zonemap created.|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE OPERATOR eq_op BINDING (VARCHAR2, VARCHAR2) RETURN NUMBER USING eq_f; ]', v_output); assert_equals('CREATE OPERATOR', 'DDL|CREATE|CREATE OPERATOR|163', concat(v_output));
-	classify(q'[CREATE OR REPLACE OPERATOR eq_op BINDING (VARCHAR2, VARCHAR2) RETURN NUMBER USING eq_f; ]', v_output); assert_equals('CREATE OPERATOR', 'DDL|CREATE|CREATE OPERATOR|163', concat(v_output));
+	feedback(q'[CREATE OPERATOR eq_op BINDING (VARCHAR2, VARCHAR2) RETURN NUMBER USING eq_f; ]', v_success, v_warning); assert_equals('CREATE OPERATOR', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE OR REPLACE OPERATOR eq_op BINDING (VARCHAR2, VARCHAR2) RETURN NUMBER USING eq_f; ]', v_success, v_warning); assert_equals('CREATE OPERATOR', '|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE or replace OUTLINE salaries FOR CATEGORY special ON SELECT last_name, salary FROM employees;]', v_output); assert_equals('CREATE OUTLINE', 'DDL|CREATE|CREATE OUTLINE|180', concat(v_output));
-	classify(q'[CREATE or replace public OUTLINE salaries FOR CATEGORY special ON SELECT last_name, salary FROM employees;]', v_output); assert_equals('CREATE OUTLINE', 'DDL|CREATE|CREATE OUTLINE|180', concat(v_output));
-	classify(q'[CREATE or replace private OUTLINE salaries FOR CATEGORY special ON SELECT last_name, salary FROM employees;]', v_output); assert_equals('CREATE OUTLINE', 'DDL|CREATE|CREATE OUTLINE|180', concat(v_output));
-	classify(q'[CREATE OUTLINE salaries FOR CATEGORY special ON SELECT last_name, salary FROM employees;]', v_output); assert_equals('CREATE OUTLINE', 'DDL|CREATE|CREATE OUTLINE|180', concat(v_output));
-	classify(q'[CREATE OUTLINE salaries FOR CATEGORY special ON SELECT last_name, salary FROM employees;]', v_output); assert_equals('CREATE OUTLINE', 'DDL|CREATE|CREATE OUTLINE|180', concat(v_output));
-	classify(q'[CREATE public OUTLINE salaries FOR CATEGORY special ON SELECT last_name, salary FROM employees;]', v_output); assert_equals('CREATE OUTLINE', 'DDL|CREATE|CREATE OUTLINE|180', concat(v_output));
-	classify(q'[CREATE private OUTLINE salaries FOR CATEGORY special ON SELECT last_name, salary FROM employees;]', v_output); assert_equals('CREATE OUTLINE', 'DDL|CREATE|CREATE OUTLINE|180', concat(v_output));
+	feedback(q'[CREATE or replace OUTLINE salaries FOR CATEGORY special ON SELECT last_name, salary FROM employees;]', v_success, v_warning); assert_equals('CREATE OUTLINE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace public OUTLINE salaries FOR CATEGORY special ON SELECT last_name, salary FROM employees;]', v_success, v_warning); assert_equals('CREATE OUTLINE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace private OUTLINE salaries FOR CATEGORY special ON SELECT last_name, salary FROM employees;]', v_success, v_warning); assert_equals('CREATE OUTLINE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE OUTLINE salaries FOR CATEGORY special ON SELECT last_name, salary FROM employees;]', v_success, v_warning); assert_equals('CREATE OUTLINE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE OUTLINE salaries FOR CATEGORY special ON SELECT last_name, salary FROM employees;]', v_success, v_warning); assert_equals('CREATE OUTLINE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE public OUTLINE salaries FOR CATEGORY special ON SELECT last_name, salary FROM employees;]', v_success, v_warning); assert_equals('CREATE OUTLINE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE private OUTLINE salaries FOR CATEGORY special ON SELECT last_name, salary FROM employees;]', v_success, v_warning); assert_equals('CREATE OUTLINE', '|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE PACKAGE my_package is v_number number; end; /]', v_output); assert_equals('CREATE PACKAGE', 'DDL|CREATE|CREATE PACKAGE|94', concat(v_output));
-	classify(q'[CREATE editionable PACKAGE my_package is v_number number; end; /]', v_output); assert_equals('CREATE PACKAGE', 'DDL|CREATE|CREATE PACKAGE|94', concat(v_output));
-	classify(q'[CREATE noneditionable PACKAGE my_package is v_number number; end; /]', v_output); assert_equals('CREATE PACKAGE', 'DDL|CREATE|CREATE PACKAGE|94', concat(v_output));
-	classify(q'[CREATE or replace PACKAGE my_package is v_number number; end; /]', v_output); assert_equals('CREATE PACKAGE', 'DDL|CREATE|CREATE PACKAGE|94', concat(v_output));
-	classify(q'[CREATE or replace editionable PACKAGE my_package is v_number number; end; /]', v_output); assert_equals('CREATE PACKAGE', 'DDL|CREATE|CREATE PACKAGE|94', concat(v_output));
-	classify(q'[CREATE or replace noneditionable PACKAGE my_package is v_number number; end; /]', v_output); assert_equals('CREATE PACKAGE', 'DDL|CREATE|CREATE PACKAGE|94', concat(v_output));
+	feedback(q'[CREATE PACKAGE my_package is v_number number; end; /]', v_success, v_warning); assert_equals('CREATE PACKAGE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE editionable PACKAGE my_package is v_number number; end; /]', v_success, v_warning); assert_equals('CREATE PACKAGE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE noneditionable PACKAGE my_package is v_number number; end; /]', v_success, v_warning); assert_equals('CREATE PACKAGE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace PACKAGE my_package is v_number number; end; /]', v_success, v_warning); assert_equals('CREATE PACKAGE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace editionable PACKAGE my_package is v_number number; end; /]', v_success, v_warning); assert_equals('CREATE PACKAGE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace noneditionable PACKAGE my_package is v_number number; end; /]', v_success, v_warning); assert_equals('CREATE PACKAGE', '|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE PACKAGE BODY my_package is begin null; end;]', v_output); assert_equals('CREATE PACKAGE BODY', 'DDL|CREATE|CREATE PACKAGE BODY|97', concat(v_output));
-	classify(q'[CREATE editionable PACKAGE BODY my_package is begin null; end;]', v_output); assert_equals('CREATE PACKAGE BODY', 'DDL|CREATE|CREATE PACKAGE BODY|97', concat(v_output));
-	classify(q'[CREATE noneditionable PACKAGE BODY my_package is begin null; end;]', v_output); assert_equals('CREATE PACKAGE BODY', 'DDL|CREATE|CREATE PACKAGE BODY|97', concat(v_output));
-	classify(q'[CREATE or replace PACKAGE BODY my_package is begin null; end;]', v_output); assert_equals('CREATE PACKAGE BODY', 'DDL|CREATE|CREATE PACKAGE BODY|97', concat(v_output));
-	classify(q'[CREATE or replace editionable PACKAGE BODY my_package is begin null; end;]', v_output); assert_equals('CREATE PACKAGE BODY', 'DDL|CREATE|CREATE PACKAGE BODY|97', concat(v_output));
-	classify(q'[CREATE or replace noneditionable PACKAGE BODY my_package is begin null; end;]', v_output); assert_equals('CREATE PACKAGE BODY', 'DDL|CREATE|CREATE PACKAGE BODY|97', concat(v_output));
+	feedback(q'[CREATE PACKAGE BODY my_package is begin null; end;]', v_success, v_warning); assert_equals('CREATE PACKAGE BODY', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE editionable PACKAGE BODY my_package is begin null; end;]', v_success, v_warning); assert_equals('CREATE PACKAGE BODY', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE noneditionable PACKAGE BODY my_package is begin null; end;]', v_success, v_warning); assert_equals('CREATE PACKAGE BODY', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace PACKAGE BODY my_package is begin null; end;]', v_success, v_warning); assert_equals('CREATE PACKAGE BODY', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace editionable PACKAGE BODY my_package is begin null; end;]', v_success, v_warning); assert_equals('CREATE PACKAGE BODY', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace noneditionable PACKAGE BODY my_package is begin null; end;]', v_success, v_warning); assert_equals('CREATE PACKAGE BODY', '|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE PFILE from memory;]', v_output); assert_equals('CREATE PFILE', 'DDL|CREATE|CREATE PFILE|188', concat(v_output));
+	feedback(q'[CREATE PFILE from memory;]', v_success, v_warning); assert_equals('CREATE PFILE', '|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE PLUGGABLE DATABASE my_pdb from another_pdb]', v_output); assert_equals('CREATE PLUGGABLE DATABASE', 'DDL|CREATE|CREATE PLUGGABLE DATABASE|226', concat(v_output));
+	feedback(q'[CREATE PLUGGABLE DATABASE my_pdb from another_pdb]', v_success, v_warning); assert_equals('CREATE PLUGGABLE DATABASE', '|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE PROCEDURE my proc is begin null; end; /]', v_output); assert_equals('CREATE PROCEDURE', 'DDL|CREATE|CREATE PROCEDURE|24', concat(v_output));
-	classify(q'[CREATE editionable PROCEDURE my proc is begin null; end; /]', v_output); assert_equals('CREATE PROCEDURE', 'DDL|CREATE|CREATE PROCEDURE|24', concat(v_output));
-	classify(q'[CREATE noneditionable PROCEDURE my proc is begin null; end; /]', v_output); assert_equals('CREATE PROCEDURE', 'DDL|CREATE|CREATE PROCEDURE|24', concat(v_output));
-	classify(q'[CREATE or replace PROCEDURE my proc is begin null; end; /]', v_output); assert_equals('CREATE PROCEDURE', 'DDL|CREATE|CREATE PROCEDURE|24', concat(v_output));
-	classify(q'[CREATE or replace editionable PROCEDURE my proc is begin null; end; /]', v_output); assert_equals('CREATE PROCEDURE', 'DDL|CREATE|CREATE PROCEDURE|24', concat(v_output));
-	classify(q'[CREATE or replace noneditionable PROCEDURE my proc is begin null; end; /]', v_output); assert_equals('CREATE PROCEDURE', 'DDL|CREATE|CREATE PROCEDURE|24', concat(v_output));
+	feedback(q'[CREATE PROCEDURE my proc is begin null; end; /]', v_success, v_warning); assert_equals('CREATE PROCEDURE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE editionable PROCEDURE my proc is begin null; end; /]', v_success, v_warning); assert_equals('CREATE PROCEDURE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE noneditionable PROCEDURE my proc is begin null; end; /]', v_success, v_warning); assert_equals('CREATE PROCEDURE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace PROCEDURE my proc is begin null; end; /]', v_success, v_warning); assert_equals('CREATE PROCEDURE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace editionable PROCEDURE my proc is begin null; end; /]', v_success, v_warning); assert_equals('CREATE PROCEDURE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace noneditionable PROCEDURE my proc is begin null; end; /]', v_success, v_warning); assert_equals('CREATE PROCEDURE', '|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE PROFILE my_profile limit sessions_per_user 50;]', v_output); assert_equals('CREATE PROFILE', 'DDL|CREATE|CREATE PROFILE|65', concat(v_output));
+	feedback(q'[CREATE PROFILE my_profile limit sessions_per_user 50;]', v_success, v_warning); assert_equals('CREATE PROFILE', '|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE RESTORE POINT before_change gaurantee flashback database;]', v_output); assert_equals('CREATE RESTORE POINT', 'DDL|CREATE|CREATE RESTORE POINT|206', concat(v_output));
+	feedback(q'[CREATE RESTORE POINT before_change gaurantee flashback database;]', v_success, v_warning); assert_equals('CREATE RESTORE POINT', '|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE ROLE my_role;]', v_output); assert_equals('CREATE ROLE', 'DDL|CREATE|CREATE ROLE|52', concat(v_output));
+	feedback(q'[CREATE ROLE my_role;]', v_success, v_warning); assert_equals('CREATE ROLE', '|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE ROLLBACK SEGMENT my_rbs]', v_output); assert_equals('CREATE ROLLBACK SEGMENT', 'DDL|CREATE|CREATE ROLLBACK SEGMENT|36', concat(v_output));
-	classify(q'[CREATE public ROLLBACK SEGMENT my_rbs]', v_output); assert_equals('CREATE ROLLBACK SEGMENT', 'DDL|CREATE|CREATE ROLLBACK SEGMENT|36', concat(v_output));
+	feedback(q'[CREATE ROLLBACK SEGMENT my_rbs]', v_success, v_warning); assert_equals('CREATE ROLLBACK SEGMENT', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE public ROLLBACK SEGMENT my_rbs]', v_success, v_warning); assert_equals('CREATE ROLLBACK SEGMENT', '|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE SCHEMA authorization my_schema grant select on table1 to user2 grant select on table2 to user3]', v_output); assert_equals('CREATE SCHEMA', 'DDL|CREATE|CREATE SCHEMA|56', concat(v_output));
+	feedback(q'[CREATE SCHEMA authorization my_schema grant select on table1 to user2 grant select on table2 to user3]', v_success, v_warning); assert_equals('CREATE SCHEMA', '|', v_success||'|'||v_warning);
 	--Undocumented feature.
-	classify(q'[CREATE SCHEMA SYNONYM demo2 for demo1]', v_output); assert_equals('CREATE SCHEMA SYNONYM', 'DDL|CREATE|CREATE SCHEMA SYNONYM|222', concat(v_output));
+	feedback(q'[CREATE SCHEMA SYNONYM demo2 for demo1]', v_success, v_warning); assert_equals('CREATE SCHEMA SYNONYM', '|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE SEQUENCE my_schema.my_sequence cache 20;]', v_output); assert_equals('CREATE SEQUENCE', 'DDL|CREATE|CREATE SEQUENCE|13', concat(v_output));
+	feedback(q'[CREATE SEQUENCE my_schema.my_sequence cache 20;]', v_success, v_warning); assert_equals('CREATE SEQUENCE', '|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE SPFILE = 'my_spfile' from pfile;]', v_output); assert_equals('CREATE SPFILE', 'DDL|CREATE|CREATE SPFILE|187', concat(v_output));
+	feedback(q'[CREATE SPFILE = 'my_spfile' from pfile;]', v_success, v_warning); assert_equals('CREATE SPFILE', '|', v_success||'|'||v_warning);
 
 	--An old version of "CREATE SNAPSHOT"?  This is not supported in 11gR2+.
-	--classify(q'[CREATE SUMMARY]', v_output); assert_equals('CREATE SUMMARY', 'DDL|CREATE|CREATE SUMMARY|171', concat(v_output));
+	--feedback(q'[CREATE SUMMARY]', v_success, v_warning); assert_equals('CREATE SUMMARY', '|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE SYNONYM my_synonym for other_schema.some_object@some_link;]', v_output); assert_equals('CREATE SYNONYM', 'DDL|CREATE|CREATE SYNONYM|19', concat(v_output));
-	classify(q'[CREATE public SYNONYM my_synonym for other_schema.some_object@some_link;]', v_output); assert_equals('CREATE SYNONYM', 'DDL|CREATE|CREATE SYNONYM|19', concat(v_output));
-	classify(q'[CREATE editionable SYNONYM my_synonym for other_schema.some_object@some_link;]', v_output); assert_equals('CREATE SYNONYM', 'DDL|CREATE|CREATE SYNONYM|19', concat(v_output));
-	classify(q'[CREATE editionable public SYNONYM my_synonym for other_schema.some_object@some_link;]', v_output); assert_equals('CREATE SYNONYM', 'DDL|CREATE|CREATE SYNONYM|19', concat(v_output));
-	classify(q'[CREATE noneditionable SYNONYM my_synonym for other_schema.some_object@some_link;]', v_output); assert_equals('CREATE SYNONYM', 'DDL|CREATE|CREATE SYNONYM|19', concat(v_output));
-	classify(q'[CREATE noneditionable public SYNONYM my_synonym for other_schema.some_object@some_link;]', v_output); assert_equals('CREATE SYNONYM', 'DDL|CREATE|CREATE SYNONYM|19', concat(v_output));
-	classify(q'[CREATE or replace SYNONYM my_synonym for other_schema.some_object@some_link;]', v_output); assert_equals('CREATE SYNONYM', 'DDL|CREATE|CREATE SYNONYM|19', concat(v_output));
-	classify(q'[CREATE or replace public SYNONYM my_synonym for other_schema.some_object@some_link;]', v_output); assert_equals('CREATE SYNONYM', 'DDL|CREATE|CREATE SYNONYM|19', concat(v_output));
-	classify(q'[CREATE or replace editionable SYNONYM my_synonym for other_schema.some_object@some_link;]', v_output); assert_equals('CREATE SYNONYM', 'DDL|CREATE|CREATE SYNONYM|19', concat(v_output));
-	classify(q'[CREATE or replace editionable public SYNONYM my_synonym for other_schema.some_object@some_link;]', v_output); assert_equals('CREATE SYNONYM', 'DDL|CREATE|CREATE SYNONYM|19', concat(v_output));
-	classify(q'[CREATE or replace noneditionable SYNONYM my_synonym for other_schema.some_object@some_link;]', v_output); assert_equals('CREATE SYNONYM', 'DDL|CREATE|CREATE SYNONYM|19', concat(v_output));
-	classify(q'[CREATE or replace noneditionable public SYNONYM my_synonym for other_schema.some_object@some_link;]', v_output); assert_equals('CREATE SYNONYM', 'DDL|CREATE|CREATE SYNONYM|19', concat(v_output));
+	feedback(q'[CREATE SYNONYM my_synonym for other_schema.some_object@some_link;]', v_success, v_warning); assert_equals('CREATE SYNONYM', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE public SYNONYM my_synonym for other_schema.some_object@some_link;]', v_success, v_warning); assert_equals('CREATE SYNONYM', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE editionable SYNONYM my_synonym for other_schema.some_object@some_link;]', v_success, v_warning); assert_equals('CREATE SYNONYM', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE editionable public SYNONYM my_synonym for other_schema.some_object@some_link;]', v_success, v_warning); assert_equals('CREATE SYNONYM', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE noneditionable SYNONYM my_synonym for other_schema.some_object@some_link;]', v_success, v_warning); assert_equals('CREATE SYNONYM', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE noneditionable public SYNONYM my_synonym for other_schema.some_object@some_link;]', v_success, v_warning); assert_equals('CREATE SYNONYM', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace SYNONYM my_synonym for other_schema.some_object@some_link;]', v_success, v_warning); assert_equals('CREATE SYNONYM', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace public SYNONYM my_synonym for other_schema.some_object@some_link;]', v_success, v_warning); assert_equals('CREATE SYNONYM', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace editionable SYNONYM my_synonym for other_schema.some_object@some_link;]', v_success, v_warning); assert_equals('CREATE SYNONYM', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace editionable public SYNONYM my_synonym for other_schema.some_object@some_link;]', v_success, v_warning); assert_equals('CREATE SYNONYM', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace noneditionable SYNONYM my_synonym for other_schema.some_object@some_link;]', v_success, v_warning); assert_equals('CREATE SYNONYM', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace noneditionable public SYNONYM my_synonym for other_schema.some_object@some_link;]', v_success, v_warning); assert_equals('CREATE SYNONYM', '|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE TABLE my_table(a number);]', v_output); assert_equals('CREATE TABLE', 'DDL|CREATE|CREATE TABLE|1', concat(v_output));
-	classify(q'[CREATE global temporary TABLE my_table(a number);]', v_output); assert_equals('CREATE TABLE', 'DDL|CREATE|CREATE TABLE|1', concat(v_output));
+	feedback(q'[CREATE TABLE my_table(a number);]', v_success, v_warning); assert_equals('CREATE TABLE', 'Table created.|', v_success||'|'||v_warning);
+	feedback(q'[CREATE global temporary TABLE my_table(a number);]', v_success, v_warning); assert_equals('CREATE TABLE', 'Table created.|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
-	classify(q'[CREATE bigfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
-	classify(q'[CREATE smallfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
-	classify(q'[CREATE temporary TABLESPACE my_tbs tempfile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
-	classify(q'[CREATE temporary bigfile TABLESPACE my_tbs tempfile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
-	classify(q'[CREATE temporary smallfile TABLESPACE my_tbs tempfile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
-	classify(q'[CREATE undo TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
-	classify(q'[CREATE undo bigfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
-	classify(q'[CREATE undo smallfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
+	feedback(q'[CREATE TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_success, v_warning); assert_equals('CREATE TABLESPACE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE bigfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_success, v_warning); assert_equals('CREATE TABLESPACE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE smallfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_success, v_warning); assert_equals('CREATE TABLESPACE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE temporary TABLESPACE my_tbs tempfile '+mydg' size 100m autoextend on;]', v_success, v_warning); assert_equals('CREATE TABLESPACE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE temporary bigfile TABLESPACE my_tbs tempfile '+mydg' size 100m autoextend on;]', v_success, v_warning); assert_equals('CREATE TABLESPACE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE temporary smallfile TABLESPACE my_tbs tempfile '+mydg' size 100m autoextend on;]', v_success, v_warning); assert_equals('CREATE TABLESPACE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE undo TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_success, v_warning); assert_equals('CREATE TABLESPACE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE undo bigfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_success, v_warning); assert_equals('CREATE TABLESPACE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE undo smallfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_success, v_warning); assert_equals('CREATE TABLESPACE', '|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE TRIGGER my_trigger before insert on my_table begin null; end; /]', v_output); assert_equals('CREATE TRIGGER', 'DDL|CREATE|CREATE TRIGGER|59', concat(v_output));
-	classify(q'[CREATE editionable TRIGGER my_trigger before insert on my_table begin null; end; /]', v_output); assert_equals('CREATE TRIGGER', 'DDL|CREATE|CREATE TRIGGER|59', concat(v_output));
-	classify(q'[CREATE noneditionable TRIGGER my_trigger before insert on my_table begin null; end; /]', v_output); assert_equals('CREATE TRIGGER', 'DDL|CREATE|CREATE TRIGGER|59', concat(v_output));
-	classify(q'[CREATE or replace TRIGGER my_trigger before insert on my_table begin null; end; /]', v_output); assert_equals('CREATE TRIGGER', 'DDL|CREATE|CREATE TRIGGER|59', concat(v_output));
-	classify(q'[CREATE or replace editionable TRIGGER my_trigger before insert on my_table begin null; end; /]', v_output); assert_equals('CREATE TRIGGER', 'DDL|CREATE|CREATE TRIGGER|59', concat(v_output));
-	classify(q'[CREATE or replace noneditionable TRIGGER my_trigger before insert on my_table begin null; end; /]', v_output); assert_equals('CREATE TRIGGER', 'DDL|CREATE|CREATE TRIGGER|59', concat(v_output));
+	feedback(q'[CREATE TRIGGER my_trigger before insert on my_table begin null; end; /]', v_success, v_warning); assert_equals('CREATE TRIGGER', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE editionable TRIGGER my_trigger before insert on my_table begin null; end; /]', v_success, v_warning); assert_equals('CREATE TRIGGER', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE noneditionable TRIGGER my_trigger before insert on my_table begin null; end; /]', v_success, v_warning); assert_equals('CREATE TRIGGER', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace TRIGGER my_trigger before insert on my_table begin null; end; /]', v_success, v_warning); assert_equals('CREATE TRIGGER', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace editionable TRIGGER my_trigger before insert on my_table begin null; end; /]', v_success, v_warning); assert_equals('CREATE TRIGGER', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace noneditionable TRIGGER my_trigger before insert on my_table begin null; end; /]', v_success, v_warning); assert_equals('CREATE TRIGGER', '|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE TYPE my_type as object(a number); /]', v_output); assert_equals('CREATE TYPE', 'DDL|CREATE|CREATE TYPE|77', concat(v_output));
-	classify(q'[CREATE editionable TYPE my_type as object(a number); /]', v_output); assert_equals('CREATE TYPE', 'DDL|CREATE|CREATE TYPE|77', concat(v_output));
-	classify(q'[CREATE noneditionable TYPE my_type as object(a number); /]', v_output); assert_equals('CREATE TYPE', 'DDL|CREATE|CREATE TYPE|77', concat(v_output));
-	classify(q'[CREATE or replace TYPE my_type as object(a number); /]', v_output); assert_equals('CREATE TYPE', 'DDL|CREATE|CREATE TYPE|77', concat(v_output));
-	classify(q'[CREATE or replace editionable TYPE my_type as object(a number); /]', v_output); assert_equals('CREATE TYPE', 'DDL|CREATE|CREATE TYPE|77', concat(v_output));
-	classify(q'[CREATE or replace noneditionable TYPE my_type as object(a number); /]', v_output); assert_equals('CREATE TYPE', 'DDL|CREATE|CREATE TYPE|77', concat(v_output));
+	feedback(q'[CREATE TYPE my_type as object(a number); /]', v_success, v_warning); assert_equals('CREATE TYPE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE editionable TYPE my_type as object(a number); /]', v_success, v_warning); assert_equals('CREATE TYPE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE noneditionable TYPE my_type as object(a number); /]', v_success, v_warning); assert_equals('CREATE TYPE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace TYPE my_type as object(a number); /]', v_success, v_warning); assert_equals('CREATE TYPE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace editionable TYPE my_type as object(a number); /]', v_success, v_warning); assert_equals('CREATE TYPE', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace noneditionable TYPE my_type as object(a number); /]', v_success, v_warning); assert_equals('CREATE TYPE', '|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE TYPE BODY my_type is member function my_function return number is begin return 1; end; end; ]', v_output); assert_equals('CREATE TYPE BODY', 'DDL|CREATE|CREATE TYPE BODY|81', concat(v_output));
-	classify(q'[CREATE editionable TYPE BODY my_type is member function my_function return number is begin return 1; end; end; ]', v_output); assert_equals('CREATE TYPE BODY', 'DDL|CREATE|CREATE TYPE BODY|81', concat(v_output));
-	classify(q'[CREATE noneditionable TYPE BODY my_type is member function my_function return number is begin return 1; end; end; ]', v_output); assert_equals('CREATE TYPE BODY', 'DDL|CREATE|CREATE TYPE BODY|81', concat(v_output));
-	classify(q'[CREATE or replace TYPE BODY my_type is member function my_function return number is begin return 1; end; end; ]', v_output); assert_equals('CREATE TYPE BODY', 'DDL|CREATE|CREATE TYPE BODY|81', concat(v_output));
-	classify(q'[CREATE or replace editionable TYPE BODY my_type is member function my_function return number is begin return 1; end; end; ]', v_output); assert_equals('CREATE TYPE BODY', 'DDL|CREATE|CREATE TYPE BODY|81', concat(v_output));
-	classify(q'[CREATE or replace noneditionable TYPE BODY my_type is member function my_function return number is begin return 1; end; end; ]', v_output); assert_equals('CREATE TYPE BODY', 'DDL|CREATE|CREATE TYPE BODY|81', concat(v_output));
+	feedback(q'[CREATE TYPE BODY my_type is member function my_function return number is begin return 1; end; end; ]', v_success, v_warning); assert_equals('CREATE TYPE BODY', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE editionable TYPE BODY my_type is member function my_function return number is begin return 1; end; end; ]', v_success, v_warning); assert_equals('CREATE TYPE BODY', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE noneditionable TYPE BODY my_type is member function my_function return number is begin return 1; end; end; ]', v_success, v_warning); assert_equals('CREATE TYPE BODY', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace TYPE BODY my_type is member function my_function return number is begin return 1; end; end; ]', v_success, v_warning); assert_equals('CREATE TYPE BODY', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace editionable TYPE BODY my_type is member function my_function return number is begin return 1; end; end; ]', v_success, v_warning); assert_equals('CREATE TYPE BODY', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace noneditionable TYPE BODY my_type is member function my_function return number is begin return 1; end; end; ]', v_success, v_warning); assert_equals('CREATE TYPE BODY', '|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE USER my_user identified by "asdf";]', v_output); assert_equals('CREATE USER', 'DDL|CREATE|CREATE USER|51', concat(v_output));
+	feedback(q'[CREATE USER my_user identified by "asdf";]', v_success, v_warning); assert_equals('CREATE USER', '|', v_success||'|'||v_warning);
 
-	classify(q'[CREATE VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 1', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE editioning VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 2', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE editionable VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 3', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE editionable editioning VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 4', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE noneditionable VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 5', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE force VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 6', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE force editioning VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 7', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE force editionable VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 8', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE force editionable editioning VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 9', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE force noneditionable VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 10', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE no force VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 11', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE no force editioning VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 12', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE no force editionable VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 13', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE no force editionable editioning VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 14', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE no force noneditionable VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 15', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE or replace VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 16', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE or replace editioning VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 17', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE or replace editionable VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 18', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE or replace editionable editioning VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 19', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE or replace noneditionable VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 20', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE or replace force VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 21', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE or replace force editioning VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 22', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE or replace force editionable VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 23', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE or replace force editionable editioning VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 24', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE or replace force noneditionable VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 25', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE or replace no force VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 26', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE or replace no force editioning VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 27', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE or replace no force editionable VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 28', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE or replace no force editionable editioning VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 29', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE or replace no force noneditionable VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 30', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	feedback(q'[CREATE VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 1', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE editioning VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 2', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE editionable VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 3', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE editionable editioning VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 4', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE noneditionable VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 5', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE force VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 6', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE force editioning VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 7', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE force editionable VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 8', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE force editionable editioning VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 9', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE force noneditionable VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 10', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE no force VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 11', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE no force editioning VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 12', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE no force editionable VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 13', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE no force editionable editioning VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 14', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE no force noneditionable VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 15', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 16', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace editioning VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 17', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace editionable VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 18', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace editionable editioning VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 19', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace noneditionable VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 20', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace force VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 21', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace force editioning VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 22', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace force editionable VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 23', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace force editionable editioning VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 24', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace force noneditionable VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 25', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace no force VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 26', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace no force editioning VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 27', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace no force editionable VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 28', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace no force editionable editioning VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 29', '|', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace no force noneditionable VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 30', '|', v_success||'|'||v_warning);
 
 	--Not a real command.
-	--classify(q'[DECLARE REWRITE EQUIVALENCE]', v_output); assert_equals('DECLARE REWRITE EQUIVALENCE', 'DDL|ALTER|DECLARE REWRITE EQUIVALENCE|209', concat(v_output));
+	--feedback(q'[DECLARE REWRITE EQUIVALENCE]', v_success, v_warning); assert_equals('DECLARE REWRITE EQUIVALENCE', '|', v_success||'|'||v_warning);
 
-	classify(q'[DELETE my_schema.my_table@my_link]', v_output); assert_equals('DELETE', 'DML|DELETE|DELETE|7', concat(v_output));
-	classify(q'[DELETE FROM my_schema.my_table@my_link]', v_output); assert_equals('DELETE', 'DML|DELETE|DELETE|7', concat(v_output));
+	feedback(q'[DELETE my_schema.my_table@my_link]', v_success, v_warning); assert_equals('DELETE', '|', v_success||'|'||v_warning);
+	feedback(q'[DELETE FROM my_schema.my_table@my_link]', v_success, v_warning); assert_equals('DELETE', '|', v_success||'|'||v_warning);
 
-	classify(q'[DISASSOCIATE STATISTICS from columns mytable.a force;]', v_output); assert_equals('DISASSOCIATE STATISTICS', 'DDL|DISASSOCIATE STATISTICS|DISASSOCIATE STATISTICS|169', concat(v_output));
+	feedback(q'[DISASSOCIATE STATISTICS from columns mytable.a force;]', v_success, v_warning); assert_equals('DISASSOCIATE STATISTICS', '|', v_success||'|'||v_warning);
 
-	classify(q'[DROP ASSEMBLY my_assembly]', v_output); assert_equals('DROP ASSEMBLY', 'DDL|DROP|DROP ASSEMBLY|215', concat(v_output));
+	feedback(q'[DROP ASSEMBLY my_assembly]', v_success, v_warning); assert_equals('DROP ASSEMBLY', '|', v_success||'|'||v_warning);
 
-	classify(q'[DROP AUDIT POLICY my_policy;]', v_output); assert_equals('DROP AUDIT POLICY', 'DDL|DROP|DROP AUDIT POLICY|231', concat(v_output));
+	feedback(q'[DROP AUDIT POLICY my_policy;]', v_success, v_warning); assert_equals('DROP AUDIT POLICY', '|', v_success||'|'||v_warning);
 
 	--This isn't a real command as far as I can tell.
-	--classify(q'[DROP BITMAPFILE]', v_output); assert_equals('DROP BITMAPFILE', 'DDL|DROP|DROP BITMAPFILE|89', concat(v_output));
+	--feedback(q'[DROP BITMAPFILE]', v_success, v_warning); assert_equals('DROP BITMAPFILE', '|', v_success||'|'||v_warning);
 
-	classify(q'[DROP CLUSTER my_cluster]', v_output); assert_equals('DROP CLUSTER', 'DDL|DROP|DROP CLUSTER|8', concat(v_output));
+	feedback(q'[DROP CLUSTER my_cluster]', v_success, v_warning); assert_equals('DROP CLUSTER', 'Cluster dropped.|', v_success||'|'||v_warning);
 
-	classify(q'[DROP CONTEXT my_context;]', v_output); assert_equals('DROP CONTEXT', 'DDL|DROP|DROP CONTEXT|178', concat(v_output));
+	feedback(q'[DROP CONTEXT my_context;]', v_success, v_warning); assert_equals('DROP CONTEXT', '|', v_success||'|'||v_warning);
 
-	classify(q'[DROP DATABASE;]', v_output); assert_equals('DROP DATABASE', 'DDL|DROP|DROP DATABASE|203', concat(v_output));
+	feedback(q'[DROP DATABASE;]', v_success, v_warning); assert_equals('DROP DATABASE', '|', v_success||'|'||v_warning);
 
-	classify(q'[DROP DATABASE LINK my_link;]', v_output); assert_equals('DROP DATABASE LINK', 'DDL|DROP|DROP DATABASE LINK|33', concat(v_output));
+	feedback(q'[DROP DATABASE LINK my_link;]', v_success, v_warning); assert_equals('DROP DATABASE LINK', 'Database link dropped.|', v_success||'|'||v_warning);
 
-	classify(q'[DROP public DATABASE LINK my_link;]', v_output); assert_equals('DROP DATABASE LINK', 'DDL|DROP|DROP DATABASE LINK|33', concat(v_output));
+	feedback(q'[DROP public DATABASE LINK my_link;]', v_success, v_warning); assert_equals('DROP DATABASE LINK', '|', v_success||'|'||v_warning);
 
-	classify(q'[DROP DIMENSION my_dimenson;]', v_output); assert_equals('DROP DIMENSION', 'DDL|DROP|DROP DIMENSION|176', concat(v_output));
+	feedback(q'[DROP DIMENSION my_dimenson;]', v_success, v_warning); assert_equals('DROP DIMENSION', '|', v_success||'|'||v_warning);
 
-	classify(q'[DROP DIRECTORY my_directory;]', v_output); assert_equals('DROP DIRECTORY', 'DDL|DROP|DROP DIRECTORY|158', concat(v_output));
+	feedback(q'[DROP DIRECTORY my_directory;]', v_success, v_warning); assert_equals('DROP DIRECTORY', '|', v_success||'|'||v_warning);
 	--Command name has extra space, real command is "DISKGROUP".
-	classify(q'[DROP DISKGROUP fradg force including contents;]', v_output); assert_equals('DROP DISK GROUP', 'DDL|DROP|DROP DISK GROUP|195', concat(v_output));
+	feedback(q'[DROP DISKGROUP fradg force including contents;]', v_success, v_warning); assert_equals('DROP DISK GROUP', '|', v_success||'|'||v_warning);
 
-	classify(q'[DROP EDITION my_edition cascade;]', v_output); assert_equals('DROP EDITION', 'DDL|DROP|DROP EDITION|214', concat(v_output));
+	feedback(q'[DROP EDITION my_edition cascade;]', v_success, v_warning); assert_equals('DROP EDITION', '|', v_success||'|'||v_warning);
 
-	classify(q'[DROP FLASHBACK ARCHIVE my_fba;]', v_output); assert_equals('DROP FLASHBACK ARCHIVE', 'DDL|DROP|DROP FLASHBACK ARCHIVE|220', concat(v_output));
+	feedback(q'[DROP FLASHBACK ARCHIVE my_fba;]', v_success, v_warning); assert_equals('DROP FLASHBACK ARCHIVE', 'Flashback archive dropped.|', v_success||'|'||v_warning);
 
-	classify(q'[DROP FUNCTION my_schema.my_function;]', v_output); assert_equals('DROP FUNCTION', 'DDL|DROP|DROP FUNCTION|93', concat(v_output));
+	feedback(q'[DROP FUNCTION my_schema.my_function;]', v_success, v_warning); assert_equals('DROP FUNCTION', 'Function dropped.|', v_success||'|'||v_warning);
 
-	classify(q'[DROP INDEX my_schema.my_index online force;]', v_output); assert_equals('DROP INDEX', 'DDL|DROP|DROP INDEX|10', concat(v_output));
+	feedback(q'[DROP INDEX my_schema.my_index online force;]', v_success, v_warning); assert_equals('DROP INDEX', 'Index dropped.|', v_success||'|'||v_warning);
 
-	classify(q'[DROP INDEXTYPE my_indextype force;]', v_output); assert_equals('DROP INDEXTYPE', 'DDL|DROP|DROP INDEXTYPE|165', concat(v_output));
+	feedback(q'[DROP INDEXTYPE my_indextype force;]', v_success, v_warning); assert_equals('DROP INDEXTYPE', 'Indextype dropped.|', v_success||'|'||v_warning);
 
-	classify(q'[DROP JAVA resourse some_resource;]', v_output); assert_equals('DROP JAVA', 'DDL|DROP|DROP JAVA|162', concat(v_output));
+	feedback(q'[DROP JAVA resourse some_resource;]', v_success, v_warning); assert_equals('DROP JAVA', '|', v_success||'|'||v_warning);
 
-	classify(q'[DROP LIBRARY my_library]', v_output); assert_equals('DROP LIBRARY', 'DDL|DROP|DROP LIBRARY|84', concat(v_output));
+	feedback(q'[DROP LIBRARY my_library]', v_success, v_warning); assert_equals('DROP LIBRARY', 'Drop library.|', v_success||'|'||v_warning);
 
 	--Commands have an extra space in them.
-	classify(q'[DROP MATERIALIZED VIEW my_mv preserve table]', v_output); assert_equals('DROP MATERIALIZED VIEW', 'DDL|DROP|DROP MATERIALIZED VIEW |76', concat(v_output));
-	classify(q'[DROP SNAPSHOT my_mv preserve table]', v_output); assert_equals('DROP MATERIALIZED VIEW', 'DDL|DROP|DROP MATERIALIZED VIEW |76', concat(v_output));
+	feedback(q'[DROP MATERIALIZED VIEW my_mv preserve table]', v_success, v_warning); assert_equals('DROP MATERIALIZED VIEW', 'Materialized view dropped.|', v_success||'|'||v_warning);
+	feedback(q'[DROP SNAPSHOT my_mv preserve table]', v_success, v_warning); assert_equals('DROP MATERIALIZED VIEW', 'Materialized view dropped.|', v_success||'|'||v_warning);
 
-	classify(q'[DROP MATERIALIZED VIEW LOG on some_table;]', v_output); assert_equals('DROP MATERIALIZED VIEW LOG', 'DDL|DROP|DROP MATERIALIZED VIEW  LOG|73', concat(v_output));
-	classify(q'[DROP snapshot LOG on some_table;]', v_output); assert_equals('DROP MATERIALIZED VIEW LOG', 'DDL|DROP|DROP MATERIALIZED VIEW  LOG|73', concat(v_output));
+	feedback(q'[DROP MATERIALIZED VIEW LOG on some_table;]', v_success, v_warning); assert_equals('DROP MATERIALIZED VIEW LOG', 'Materialized view log dropped.|', v_success||'|'||v_warning);
+	feedback(q'[DROP snapshot LOG on some_table;]', v_success, v_warning); assert_equals('DROP MATERIALIZED VIEW LOG', 'Materialized view log dropped.|', v_success||'|'||v_warning);
 
-	classify(q'[DROP MATERIALIZED ZONEMAP my_schema.my_zonemap]', v_output); assert_equals('DROP MATERIALIZED ZONEMAP', 'DDL|DROP|DROP MATERIALIZED ZONEMAP|241', concat(v_output));
+	feedback(q'[DROP MATERIALIZED ZONEMAP my_schema.my_zonemap]', v_success, v_warning); assert_equals('DROP MATERIALIZED ZONEMAP', 'Materialized zonemap dropped.|', v_success||'|'||v_warning);
 
-	classify(q'[DROP OPERATOR my_operator force;]', v_output); assert_equals('DROP OPERATOR', 'DDL|DROP|DROP OPERATOR|167', concat(v_output));
+	feedback(q'[DROP OPERATOR my_operator force;]', v_success, v_warning); assert_equals('DROP OPERATOR', '|', v_success||'|'||v_warning);
 
-	classify(q'[DROP OUTLINE my_outline;]', v_output); assert_equals('DROP OUTLINE', 'DDL|DROP|DROP OUTLINE|181', concat(v_output));
+	feedback(q'[DROP OUTLINE my_outline;]', v_success, v_warning); assert_equals('DROP OUTLINE', '|', v_success||'|'||v_warning);
 
-	classify(q'[DROP PACKAGE my_package]', v_output); assert_equals('DROP PACKAGE', 'DDL|DROP|DROP PACKAGE|96', concat(v_output));
+	feedback(q'[DROP PACKAGE my_package]', v_success, v_warning); assert_equals('DROP PACKAGE', '|', v_success||'|'||v_warning);
 
-	classify(q'[DROP PACKAGE BODY my_package;]', v_output); assert_equals('DROP PACKAGE BODY', 'DDL|DROP|DROP PACKAGE BODY|99', concat(v_output));
+	feedback(q'[DROP PACKAGE BODY my_package;]', v_success, v_warning); assert_equals('DROP PACKAGE BODY', '|', v_success||'|'||v_warning);
 
-	classify(q'[DROP PLUGGABLE DATABASE my_pdb]', v_output); assert_equals('DROP PLUGGABLE DATABASE', 'DDL|DROP|DROP PLUGGABLE DATABASE|228', concat(v_output));
+	feedback(q'[DROP PLUGGABLE DATABASE my_pdb]', v_success, v_warning); assert_equals('DROP PLUGGABLE DATABASE', '|', v_success||'|'||v_warning);
 
-	classify(q'[DROP PROCEDURE my_proc]', v_output); assert_equals('DROP PROCEDURE', 'DDL|DROP|DROP PROCEDURE|68', concat(v_output));
+	feedback(q'[DROP PROCEDURE my_proc]', v_success, v_warning); assert_equals('DROP PROCEDURE', '|', v_success||'|'||v_warning);
 
-	classify(q'[DROP PROFILE my_profile cascade;]', v_output); assert_equals('DROP PROFILE', 'DDL|DROP|DROP PROFILE|66', concat(v_output));
+	feedback(q'[DROP PROFILE my_profile cascade;]', v_success, v_warning); assert_equals('DROP PROFILE', '|', v_success||'|'||v_warning);
 
-	classify(q'[DROP RESTORE POINT my_restore_point]', v_output); assert_equals('DROP RESTORE POINT', 'DDL|DROP|DROP RESTORE POINT|207', concat(v_output));
+	feedback(q'[DROP RESTORE POINT my_restore_point]', v_success, v_warning); assert_equals('DROP RESTORE POINT', '|', v_success||'|'||v_warning);
 
 	--This is not a real command.
-	--classify(q'[DROP REWRITE EQUIVALENCE]', v_output); assert_equals('DROP REWRITE EQUIVALENCE', 'DDL|DROP|DROP REWRITE EQUIVALENCE|211', concat(v_output));
+	--feedback(q'[DROP REWRITE EQUIVALENCE]', v_success, v_warning); assert_equals('DROP REWRITE EQUIVALENCE', '|', v_success||'|'||v_warning);
 
-	classify(q'[DROP ROLE my_role]', v_output); assert_equals('DROP ROLE', 'DDL|DROP|DROP ROLE|54', concat(v_output));
+	feedback(q'[DROP ROLE my_role]', v_success, v_warning); assert_equals('DROP ROLE', '|', v_success||'|'||v_warning);
 
-	classify(q'[DROP ROLLBACK SEGMENT my_rbs]', v_output); assert_equals('DROP ROLLBACK SEGMENT', 'DDL|DROP|DROP ROLLBACK SEGMENT|38', concat(v_output));
+	feedback(q'[DROP ROLLBACK SEGMENT my_rbs]', v_success, v_warning); assert_equals('DROP ROLLBACK SEGMENT', '|', v_success||'|'||v_warning);
 
 	--Undocumented feature.
-	classify(q'[DROP SCHEMA SYNONYM a_schema_synonym]', v_output); assert_equals('DROP SCHEMA SYNONYM', 'DDL|DROP|DROP SCHEMA SYNONYM|224', concat(v_output));
+	feedback(q'[DROP SCHEMA SYNONYM a_schema_synonym]', v_success, v_warning); assert_equals('DROP SCHEMA SYNONYM', '|', v_success||'|'||v_warning);
 
-	classify(q'[DROP SEQUENCE my_sequence;]', v_output); assert_equals('DROP SEQUENCE', 'DDL|DROP|DROP SEQUENCE|16', concat(v_output));
+	feedback(q'[DROP SEQUENCE my_sequence;]', v_success, v_warning); assert_equals('DROP SEQUENCE', '|', v_success||'|'||v_warning);
 	--An old version of "DROP SNAPSHOT"?  This is not supported in 11gR2+.
-	--classify(q'[DROP SUMMARY]', v_output); assert_equals('DROP SUMMARY', 'DDL|DROP|DROP SUMMARY|173', concat(v_output));
+	--feedback(q'[DROP SUMMARY]', v_success, v_warning); assert_equals('DROP SUMMARY', '|', v_success||'|'||v_warning);
 
-	classify(q'[DROP SYNONYM my_synonym]', v_output); assert_equals('DROP SYNONYM', 'DDL|DROP|DROP SYNONYM|20', concat(v_output));
-	classify(q'[DROP public SYNONYM my_synonym]', v_output); assert_equals('DROP SYNONYM', 'DDL|DROP|DROP SYNONYM|20', concat(v_output));
+	feedback(q'[DROP SYNONYM my_synonym]', v_success, v_warning); assert_equals('DROP SYNONYM', '|', v_success||'|'||v_warning);
+	feedback(q'[DROP public SYNONYM my_synonym]', v_success, v_warning); assert_equals('DROP SYNONYM', '|', v_success||'|'||v_warning);
 
-	classify(q'[DROP TABLE my_schema.my_table cascade constraints purge]', v_output); assert_equals('DROP TABLE', 'DDL|DROP|DROP TABLE|12', concat(v_output));
+	feedback(q'[DROP TABLE my_schema.my_table cascade constraints purge]', v_success, v_warning); assert_equals('DROP TABLE', '|', v_success||'|'||v_warning);
 
-	classify(q'[DROP TABLESPACE my_tbs including contents and datafiles cascade constraints;]', v_output); assert_equals('DROP TABLESPACE', 'DDL|DROP|DROP TABLESPACE|41', concat(v_output));
+	feedback(q'[DROP TABLESPACE my_tbs including contents and datafiles cascade constraints;]', v_success, v_warning); assert_equals('DROP TABLESPACE', '|', v_success||'|'||v_warning);
 
-	classify(q'[DROP TRIGGER my_trigger]', v_output); assert_equals('DROP TRIGGER', 'DDL|DROP|DROP TRIGGER|61', concat(v_output));
+	feedback(q'[DROP TRIGGER my_trigger]', v_success, v_warning); assert_equals('DROP TRIGGER', '|', v_success||'|'||v_warning);
 
-	classify(q'[DROP TYPE my_type validate]', v_output); assert_equals('DROP TYPE', 'DDL|DROP|DROP TYPE|78', concat(v_output));
+	feedback(q'[DROP TYPE my_type validate]', v_success, v_warning); assert_equals('DROP TYPE', '|', v_success||'|'||v_warning);
 
-	classify(q'[DROP TYPE BODY my_type]', v_output); assert_equals('DROP TYPE BODY', 'DDL|DROP|DROP TYPE BODY|83', concat(v_output));
+	feedback(q'[DROP TYPE BODY my_type]', v_success, v_warning); assert_equals('DROP TYPE BODY', '|', v_success||'|'||v_warning);
 
-	classify(q'[DROP USER my_user cascde;]', v_output); assert_equals('DROP USER', 'DDL|DROP|DROP USER|53', concat(v_output));
+	feedback(q'[DROP USER my_user cascde;]', v_success, v_warning); assert_equals('DROP USER', '|', v_success||'|'||v_warning);
 
-	classify(q'[DROP VIEW my_schema.my_view cascade constraints;]', v_output); assert_equals('DROP VIEW', 'DDL|DROP|DROP VIEW|22', concat(v_output));
+	feedback(q'[DROP VIEW my_schema.my_view cascade constraints;]', v_success, v_warning); assert_equals('DROP VIEW', '|', v_success||'|'||v_warning);
 
-	--classify(q'[Do not use 184]', v_output); assert_equals('Do not use 184', 'DDL|ALTER|Do not use 184|184', concat(v_output));
-	--classify(q'[Do not use 185]', v_output); assert_equals('Do not use 185', 'DDL|ALTER|Do not use 185|185', concat(v_output));
-	--classify(q'[Do not use 186]', v_output); assert_equals('Do not use 186', 'DDL|ALTER|Do not use 186|186', concat(v_output));
+	--feedback(q'[Do not use 184]', v_success, v_warning); assert_equals('Do not use 184', '|', v_success||'|'||v_warning);
+	--feedback(q'[Do not use 185]', v_success, v_warning); assert_equals('Do not use 185', '|', v_success||'|'||v_warning);
+	--feedback(q'[Do not use 186]', v_success, v_warning); assert_equals('Do not use 186', '|', v_success||'|'||v_warning);
 
-	classify(q'[EXPLAIN plan set statement_id='asdf' for select * from dual]', v_output); assert_equals('EXPLAIN 1', 'DML|EXPLAIN PLAN|EXPLAIN|50', concat(v_output));
-	classify(q'[explain plan for with function f return number is begin return 1; end; select f from dual;]', v_output); assert_equals('EXPLAIN 2', 'DML|EXPLAIN PLAN|EXPLAIN|50', concat(v_output));
+	feedback(q'[EXPLAIN plan set statement_id='asdf' for select * from dual]', v_success, v_warning); assert_equals('EXPLAIN 1', '|', v_success||'|'||v_warning);
+	feedback(q'[explain plan for with function f return number is begin return 1; end; select f from dual;]', v_success, v_warning); assert_equals('EXPLAIN 2', '|', v_success||'|'||v_warning);
 
-	classify(q'[FLASHBACK DATABASE to restore point my_restore_point]', v_output); assert_equals('FLASHBACK DATABASE', 'DDL|FLASHBACK|FLASHBACK DATABASE|204', concat(v_output));
-	classify(q'[FLASHBACK standby DATABASE to restore point my_restore_point]', v_output); assert_equals('FLASHBACK DATABASE', 'DDL|FLASHBACK|FLASHBACK DATABASE|204', concat(v_output));
+	feedback(q'[FLASHBACK DATABASE to restore point my_restore_point]', v_success, v_warning); assert_equals('FLASHBACK DATABASE', '|', v_success||'|'||v_warning);
+	feedback(q'[FLASHBACK standby DATABASE to restore point my_restore_point]', v_success, v_warning); assert_equals('FLASHBACK DATABASE', '|', v_success||'|'||v_warning);
 
-	classify(q'[FLASHBACK TABLE my_schema.my_table to timestamp timestamp '2015-01-01 12:00:00']', v_output); assert_equals('FLASHBACK TABLE', 'DDL|FLASHBACK|FLASHBACK TABLE|205', concat(v_output));
+	feedback(q'[FLASHBACK TABLE my_schema.my_table to timestamp timestamp '2015-01-01 12:00:00']', v_success, v_warning); assert_equals('FLASHBACK TABLE', '|', v_success||'|'||v_warning);
 
-	classify(q'[GRANT dba my_user]', v_output); assert_equals('GRANT OBJECT 1', 'DDL|GRANT|GRANT OBJECT|17', concat(v_output));
-	classify(q'[GRANT select on my_table to some_other_user with grant option]', v_output); assert_equals('GRANT OBJECT 2', 'DDL|GRANT|GRANT OBJECT|17', concat(v_output));
-	classify(q'[GRANT dba to my_package]', v_output); assert_equals('GRANT OBJECT 3', 'DDL|GRANT|GRANT OBJECT|17', concat(v_output));
+	feedback(q'[GRANT dba my_user]', v_success, v_warning); assert_equals('GRANT OBJECT 1', '|', v_success||'|'||v_warning);
+	feedback(q'[GRANT select on my_table to some_other_user with grant option]', v_success, v_warning); assert_equals('GRANT OBJECT 2', '|', v_success||'|'||v_warning);
+	feedback(q'[GRANT dba to my_package]', v_success, v_warning); assert_equals('GRANT OBJECT 3', '|', v_success||'|'||v_warning);
 
-	classify(q'[INSERT \*+ append *\ into my_table select * from other_table]', v_output); assert_equals('INSERT 1', 'DML|INSERT|INSERT|2', concat(v_output));
-	classify(q'[INSERT all into table1(a) values(b) into table2(a) values(b) select b from another_table;]', v_output); assert_equals('INSERT 2', 'DML|INSERT|INSERT|2', concat(v_output));
-	classify(q'[insert into test1 with function f return number is begin return 1; end; select f from dual;]', v_output); assert_equals('INSERT 3', 'DML|INSERT|INSERT|2', concat(v_output));
+	feedback(q'[INSERT /*+ append */ into my_table select * from other_table]', v_success, v_warning); assert_equals('INSERT 1', '|', v_success||'|'||v_warning);
+	feedback(q'[INSERT all into table1(a) values(b) into table2(a) values(b) select b from another_table;]', v_success, v_warning); assert_equals('INSERT 2', '|', v_success||'|'||v_warning);
+	feedback(q'[insert into test1 with function f return number is begin return 1; end; select f from dual;]', v_success, v_warning); assert_equals('INSERT 3', '|', v_success||'|'||v_warning);
 
-	classify(q'[LOCK TABLE my_schema.my_table in exclsive mode]', v_output); assert_equals('LOCK TABLE', 'DML|LOCK TABLE|LOCK TABLE|26', concat(v_output));
+	feedback(q'[LOCK TABLE my_schema.my_table in exclsive mode]', v_success, v_warning); assert_equals('LOCK TABLE', '|', v_success||'|'||v_warning);
 
 	--See "UPSERT" for "MERGE".
-	--classify(q'[NO-OP]', v_output); assert_equals('NO-OP', 'DDL|ALTER|NO-OP|27', concat(v_output));
+	--feedback(q'[NO-OP]', v_success, v_warning); assert_equals('NO-OP', '|', v_success||'|'||v_warning);
 
-	classify(q'[NOAUDIT insert any table]', v_output); assert_equals('NOAUDIT OBJECT', 'DDL|NOAUDIT|NOAUDIT OBJECT|31', concat(v_output));
-	classify(q'[NOAUDIT policy my_policy by some_user]', v_output); assert_equals('NOAUDIT OBJECT', 'DDL|NOAUDIT|NOAUDIT OBJECT|31', concat(v_output));
+	feedback(q'[NOAUDIT insert any table]', v_success, v_warning); assert_equals('NOAUDIT OBJECT', '|', v_success||'|'||v_warning);
+	feedback(q'[NOAUDIT policy my_policy by some_user]', v_success, v_warning); assert_equals('NOAUDIT OBJECT', '|', v_success||'|'||v_warning);
 
-	classify(q'[ <<my_label>>begin null; end;]', v_output); assert_equals('PL/SQL EXECUTE 1', 'PL/SQL|BLOCK|PL/SQL EXECUTE|47', concat(v_output));
-	classify(q'[\*asdf*\declare v_test number; begin null; end; /]', v_output); assert_equals('PL/SQL EXECUTE 2', 'PL/SQL|BLOCK|PL/SQL EXECUTE|47', concat(v_output));
-	classify(q'[  begin null; end; /]', v_output); assert_equals('PL/SQL EXECUTE 3', 'PL/SQL|BLOCK|PL/SQL EXECUTE|47', concat(v_output));
+	feedback(q'[ <<my_label>>begin null; end;]', v_success, v_warning); assert_equals('PL/SQL EXECUTE 1', '|', v_success||'|'||v_warning);
+	feedback(q'[/*asdf*/declare v_test number; begin null; end; /]', v_success, v_warning); assert_equals('PL/SQL EXECUTE 2', '|', v_success||'|'||v_warning);
+	feedback(q'[  begin null; end; /]', v_success, v_warning); assert_equals('PL/SQL EXECUTE 3', '|', v_success||'|'||v_warning);
 
 	--Command name has space instead of underscore.
- 	classify(q'[PURGE DBA_RECYCLEBIN;]', v_output); assert_equals('PURGE DBA RECYCLEBIN', 'DDL|PURGE|PURGE DBA RECYCLEBIN|198', concat(v_output));
+ 	feedback(q'[PURGE DBA_RECYCLEBIN;]', v_success, v_warning); assert_equals('PURGE DBA RECYCLEBIN', '|', v_success||'|'||v_warning);
 
-	classify(q'[PURGE INDEX my_index]', v_output); assert_equals('PURGE INDEX', 'DDL|PURGE|PURGE INDEX|201', concat(v_output));
+	feedback(q'[PURGE INDEX my_index]', v_success, v_warning); assert_equals('PURGE INDEX', '|', v_success||'|'||v_warning);
 
-	classify(q'[PURGE TABLE my_table]', v_output); assert_equals('PURGE TABLE', 'DDL|PURGE|PURGE TABLE|200', concat(v_output));
+	feedback(q'[PURGE TABLE my_table]', v_success, v_warning); assert_equals('PURGE TABLE', '|', v_success||'|'||v_warning);
 
-	classify(q'[PURGE TABLESPACE my_tbs user my_user]', v_output); assert_equals('PURGE TABLESPACE', 'DDL|PURGE|PURGE TABLESPACE|199', concat(v_output));
+	feedback(q'[PURGE TABLESPACE my_tbs user my_user]', v_success, v_warning); assert_equals('PURGE TABLESPACE', '|', v_success||'|'||v_warning);
 
 	--Command name has extra "USER".
-	classify(q'[PURGE RECYCLEBIN;]', v_output); assert_equals('PURGE USER RECYCLEBIN', 'DDL|PURGE|PURGE USER RECYCLEBIN|197', concat(v_output));
+	feedback(q'[PURGE RECYCLEBIN;]', v_success, v_warning); assert_equals('PURGE USER RECYCLEBIN', '|', v_success||'|'||v_warning);
 
-	classify(q'[RENAME old_table to new_table]', v_output); assert_equals('RENAME', 'DDL|RENAME|RENAME|28', concat(v_output));
+	feedback(q'[RENAME old_table to new_table]', v_success, v_warning); assert_equals('RENAME', '|', v_success||'|'||v_warning);
 
-	classify(q'[REVOKE select any table from my_user]', v_output); assert_equals('REVOKE OBJECT 1', 'DDL|REVOKE|REVOKE OBJECT|18', concat(v_output));
-	classify(q'[REVOKE select on my_tables from user2]', v_output); assert_equals('REVOKE OBJECT 2', 'DDL|REVOKE|REVOKE OBJECT|18', concat(v_output));
-	classify(q'[REVOKE dba from my_package]', v_output); assert_equals('REVOKE OBJECT 3', 'DDL|REVOKE|REVOKE OBJECT|18', concat(v_output));
+	feedback(q'[REVOKE select any table from my_user]', v_success, v_warning); assert_equals('REVOKE OBJECT 1', '|', v_success||'|'||v_warning);
+	feedback(q'[REVOKE select on my_tables from user2]', v_success, v_warning); assert_equals('REVOKE OBJECT 2', '|', v_success||'|'||v_warning);
+	feedback(q'[REVOKE dba from my_package]', v_success, v_warning); assert_equals('REVOKE OBJECT 3', '|', v_success||'|'||v_warning);
 
-	classify(q'[ROLLBACK;]', v_output); assert_equals('ROLLBACK 1', 'Transaction Control|ROLLBACK|ROLLBACK|45', concat(v_output));
-	classify(q'[ROLLBACK work;]', v_output); assert_equals('ROLLBACK 2', 'Transaction Control|ROLLBACK|ROLLBACK|45', concat(v_output));
-	classify(q'[ROLLBACK to savepoint savepoint1]', v_output); assert_equals('ROLLBACK 3', 'Transaction Control|ROLLBACK|ROLLBACK|45', concat(v_output));
+	feedback(q'[ROLLBACK;]', v_success, v_warning); assert_equals('ROLLBACK 1', '|', v_success||'|'||v_warning);
+	feedback(q'[ROLLBACK work;]', v_success, v_warning); assert_equals('ROLLBACK 2', '|', v_success||'|'||v_warning);
+	feedback(q'[ROLLBACK to savepoint savepoint1]', v_success, v_warning); assert_equals('ROLLBACK 3', '|', v_success||'|'||v_warning);
 
-	classify(q'[SAVEPOINT my_savepoint;]', v_output); assert_equals('SAVEPOINT', 'Transaction Control|SAVEPOINT|SAVEPOINT|46', concat(v_output));
+	feedback(q'[SAVEPOINT my_savepoint;]', v_success, v_warning); assert_equals('SAVEPOINT', '|', v_success||'|'||v_warning);
 
-	classify(q'[select * from dual;]', v_output); assert_equals('SELECT 1', 'DML|SELECT|SELECT|3', concat(v_output));
-	classify(q'[\*asdf*\select * from dual;]', v_output); assert_equals('SELECT 2', 'DML|SELECT|SELECT|3', concat(v_output));
-	classify(q'[((((select * from dual))));]', v_output); assert_equals('SELECT 3', 'DML|SELECT|SELECT|3', concat(v_output));
-	classify(q'[with test1 as (select 1 a from dual) select * from test1;]', v_output); assert_equals('SELECT 4', 'DML|SELECT|SELECT|3', concat(v_output));
-	classify(q'[with function test_function return number is begin return 1; end; select test_function from dual;
-	/]', v_output); assert_equals('SELECT 4', 'DML|SELECT|SELECT|3', concat(v_output));
+	feedback(q'[select * from dual;]', v_success, v_warning); assert_equals('SELECT 1', '|', v_success||'|'||v_warning);
+	feedback(q'[/*asdf*/select * from dual;]', v_success, v_warning); assert_equals('SELECT 2', '|', v_success||'|'||v_warning);
+	feedback(q'[((((select * from dual))));]', v_success, v_warning); assert_equals('SELECT 3', '|', v_success||'|'||v_warning);
+	feedback(q'[with test1 as (select 1 a from dual) select * from test1;]', v_success, v_warning); assert_equals('SELECT 4', '|', v_success||'|'||v_warning);
+	feedback(q'[with function test_function return number is begin return 1; end; select test_function from dual;
+	/]', v_success, v_warning); assert_equals('SELECT 4', '|', v_success||'|'||v_warning);
 
 	--There are two versions of CONSTRAINT[S].
-	classify(q'[SET CONSTRAINTS all deferred]', v_output); assert_equals('SET CONSTRAINT', 'Transaction Control|SET CONSTRAINT|SET CONSTRAINTS|90', concat(v_output));
-	classify(q'[SET CONSTRAINT all immediate]', v_output); assert_equals('SET CONSTRAINT', 'Transaction Control|SET CONSTRAINT|SET CONSTRAINTS|90', concat(v_output));
+	feedback(q'[SET CONSTRAINTS all deferred]', v_success, v_warning); assert_equals('SET CONSTRAINT', '|', v_success||'|'||v_warning);
+	feedback(q'[SET CONSTRAINT all immediate]', v_success, v_warning); assert_equals('SET CONSTRAINT', '|', v_success||'|'||v_warning);
 
-	classify(q'[SET ROLE none]', v_output); assert_equals('SET ROLE', 'Session Control|SET ROLE|SET ROLE|55', concat(v_output));
+	feedback(q'[SET ROLE none]', v_success, v_warning); assert_equals('SET ROLE', '|', v_success||'|'||v_warning);
 
-	classify(q'[SET TRANSACTION read only]', v_output); assert_equals('SET TRANSACTION', 'Transaction Control|SET TRANSACTION|SET TRANSACTION|48', concat(v_output));
+	feedback(q'[SET TRANSACTION read only]', v_success, v_warning); assert_equals('SET TRANSACTION', '|', v_success||'|'||v_warning);
 
-	classify(q'[TRUNCATE CLUSTER my_schema.my_cluster drop storage;]', v_output); assert_equals('TRUNCATE CLUSTER', 'DDL|TRUNCATE|TRUNCATE CLUSTER|86', concat(v_output));
+	feedback(q'[TRUNCATE CLUSTER my_schema.my_cluster drop storage;]', v_success, v_warning); assert_equals('TRUNCATE CLUSTER', '|', v_success||'|'||v_warning);
 
-	classify(q'[TRUNCATE TABLE my_schema.my_table purge materialized view log]', v_output); assert_equals('TRUNCATE TABLE', 'DDL|TRUNCATE|TRUNCATE TABLE|85', concat(v_output));
+	feedback(q'[TRUNCATE TABLE my_schema.my_table purge materialized view log]', v_success, v_warning); assert_equals('TRUNCATE TABLE', '|', v_success||'|'||v_warning);
 
 	--Not a real command.
-	--classify(q'[UNDROP OBJECT]', v_output); assert_equals('UNDROP OBJECT', 'DDL|ALTER|UNDROP OBJECT|202', concat(v_output));
+	--feedback(q'[UNDROP OBJECT]', v_success, v_warning); assert_equals('UNDROP OBJECT', '|', v_success||'|'||v_warning);
 
-	classify(q'[UPDATE my_tables set a = 1]', v_output); assert_equals('UPDATE 1', 'DML|UPDATE|UPDATE|6', concat(v_output));
-	classify(q'[UPDATE my_tables set a = (with function f return number is begin return 1; end; select f from dual);]', v_output); assert_equals('UPDATE 2', 'DML|UPDATE|UPDATE|6', concat(v_output));
+	feedback(q'[UPDATE my_tables set a = 1]', v_success, v_warning); assert_equals('UPDATE 1', '|', v_success||'|'||v_warning);
+	feedback(q'[UPDATE my_tables set a = (with function f return number is begin return 1; end; select f from dual);]', v_success, v_warning); assert_equals('UPDATE 2', '|', v_success||'|'||v_warning);
 
 	--These are not real commands (they are part of alter table) and they could be ambiguous with an UPDATE statement
 	--if there was a table named "INDEXES" or "JOIN".
-	--classify(q'[UPDATE INDEXES]', v_output); assert_equals('UPDATE INDEXES', '?|?|UPDATE INDEXES|182', concat(v_output));
-	--classify(q'[UPDATE JOIN INDEX]', v_output); assert_equals('UPDATE JOIN INDEX', '?|?|UPDATE JOIN INDEX|191', concat(v_output));
+	--feedback(q'[UPDATE INDEXES]', v_success, v_warning); assert_equals('UPDATE INDEXES', '|', v_success||'|'||v_warning);
+	--feedback(q'[UPDATE JOIN INDEX]', v_success, v_warning); assert_equals('UPDATE JOIN INDEX', '|', v_success||'|'||v_warning);
 
-	classify(q'[merge into table1 using table2 on (table1.a = table2.a) when matched then update set table1.b = 1;]', v_output); assert_equals('UPSERT 1', 'DML|MERGE|UPSERT|189', concat(v_output));
-	classify(q'[merge into table1 using table2 on (table1.a = table2.a) when matched then update set table1.b = (with function test_function return number is begin return 1; end; select test_function from dual);]', v_output); assert_equals('UPSERT 2', 'DML|MERGE|UPSERT|189', concat(v_output));
+	feedback(q'[merge into table1 using table2 on (table1.a = table2.a) when matched then update set table1.b = 1;]', v_success, v_warning); assert_equals('UPSERT 1', '|', v_success||'|'||v_warning);
+	feedback(q'[merge into table1 using table2 on (table1.a = table2.a) when matched then update set table1.b = (with function test_function return number is begin return 1; end; select test_function from dual);]', v_success, v_warning); assert_equals('UPSERT 2', '|', v_success||'|'||v_warning);
 
 	--Not a real command, this is part of ANALYZE.
-	--classify(q'[VALIDATE INDEX]', v_output); assert_equals('VALIDATE INDEX', '?|?|VALIDATE INDEX|23', concat(v_output));
-*/end test_commands;
-
-
---------------------------------------------------------------------------------
-procedure dynamic_tests is
-	type clob_table is table of clob;
-	type string_table is table of varchar2(100);
-	type number_table is table of number;
-	v_sql_ids string_table;
-	v_sql_fulltexts clob_table;
-	v_command_types number_table;
-	v_command_names string_table;
-	sql_cursor sys_refcursor;
-
-	v_category varchar2(30);
-	v_statement_type varchar2(30);
-	v_command_name varchar2(4000);
-	v_command_type varchar2(4000);
-	v_lex_sqlcode number;
-	v_lex_sqlerrm varchar2(4000);
-begin
-	--Test everything in GV$SQL.
-	open sql_cursor for
-	q'<
-		--Only need to select one value per SQL_ID.
-		select sql_id, sql_fulltext, command_type, command_name
-		from
-		(
-			select sql_id, sql_fulltext, command_type, command_name, row_number() over (partition by sql_id order by 1) rownumber
-			from gv$sql
-			join gv$sqlcommand using (command_type)
-			--TEST - takes 2 seconds
-			where sql_id = 'dfffkcnqfystw'
-		)
-		where rownumber = 1
-		order by sql_id
-	>';
-
-	loop
-		fetch sql_cursor bulk collect into v_sql_ids, v_sql_fulltexts, v_command_types, v_command_names limit 100;
-		exit when v_sql_fulltexts.count = 0;
-
-		--Debug if there is an infinite loop.
-		--dbms_output.put_line('SQL_ID: '||statements.sql_id);
-
-		for i in 1 .. v_sql_fulltexts.count loop
-
-			g_test_count := g_test_count + 1;
-
-			statement_classifier.classify(tokenizer.tokenize(v_sql_fulltexts(i))
-				,v_category, v_statement_type, v_command_name, v_command_type, v_lex_sqlcode, v_lex_sqlerrm);
-			if v_command_type = v_command_types(i) and v_command_name = v_command_names(i) then
-				g_passed_count := g_passed_count + 1;
-			else
-				g_failed_count := g_failed_count + 1;
-				dbms_output.put_line('Failed: '||v_sql_ids(i));
-				dbms_output.put_line('Expected Command Type: '||v_command_types(i));
-				dbms_output.put_line('Expected Command Name: '||v_command_names(i));
-				dbms_output.put_line('Actual Command Type:   '||v_command_type);
-				dbms_output.put_line('Actual Command Name:   '||v_command_name);
-			end if;
-		end loop;
-	end loop;
-end dynamic_tests;
+	--feedback(q'[VALIDATE INDEX]', v_success, v_warning); assert_equals('VALIDATE INDEX', '|', v_success||'|'||v_warning);
+end test_commands;
 
 
 
@@ -880,8 +785,6 @@ begin
 	--Run the chosen tests.
 	if bitand(p_tests, c_errors)                  > 0 then test_errors; end if;
 	if bitand(p_tests, c_commands)                > 0 then test_commands; end if;
-
-	if bitand(p_tests, c_dynamic_tests)           > 0 then dynamic_tests; end if;
 
 	--Print summary of results.
 	dbms_output.put_line(null);

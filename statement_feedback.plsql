@@ -144,7 +144,7 @@ begin
 		elsif p_command_name = 'DROP MATERIALIZED VIEW  LOG' then
 			p_success_message := 'Materialized view log dropped.';
 		elsif p_command_name = 'DROP MATERIALIZED VIEW ' then
-			p_success_message := 'Drop materialized view.';
+			p_success_message := 'Materialized view dropped.';
 		elsif p_command_name = 'EXPLAIN' then
 			p_success_message := 'Explained.';
 		elsif p_command_name = 'FLASHBACK DATABASE' then
@@ -246,6 +246,7 @@ begin
 			and
 			(
 				p_command_name like '%ASSEMBLY' or
+				p_command_name like '%DIMENSION' or
 				p_command_name like '%FUNCTION' or
 				p_command_name like '%JAVA' or
 				p_command_name like '%LIBRARY' or
@@ -262,6 +263,10 @@ begin
 			and
 			(
 				p_command_name like '%ASSEMBLY' or
+				--I don't think a dimension can be created with a compilation error.
+				--But it is possible to ALTER them with a warning.
+				--For example if a column was changed since it was created.
+				--p_command_name like '%DIMENSION' or
 				p_command_name like '%FUNCTION' or
 				p_command_name like '%JAVA' or
 				p_command_name like '%LIBRARY' or
@@ -272,7 +277,7 @@ begin
 				p_command_name like '%TYPE' or
 				p_command_name like '%TYPE BODY'
 			) then
-				p_compile_warning_message := 'Warning: '||initcap(replace(p_command_name, 'ALTER '))
+				p_compile_warning_message := 'Warning: '||initcap(replace(p_command_name, 'CREATE '))
 					||' created with compilation errors.';
 		end if;
 	end if;
