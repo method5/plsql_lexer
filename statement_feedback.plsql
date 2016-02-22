@@ -119,7 +119,7 @@ begin
 			p_success_message := 'Statistics associated.';
 		elsif p_command_name = 'AUDIT OBJECT' then
 			p_success_message := 'Audit succeeded.';
-		elsif p_command_name = 'CALL' then
+		elsif p_command_name = 'CALL METHOD' then
 			p_success_message := 'Call completed.';
 		elsif p_command_name = 'COMMENT' then
 			p_success_message := 'Comment created.';
@@ -129,6 +129,10 @@ begin
 			p_success_message := 'Diskgroup created.';
 		elsif p_command_name = 'CREATE MATERIALIZED VIEW ' then
 			p_success_message := 'Materialized view created.';
+		elsif p_command_name = 'CREATE PFILE' then
+			p_success_message := 'File created.';
+		elsif p_command_name = 'CREATE SPFILE' then
+			p_success_message := 'File created.';
 		elsif p_command_name = 'DELETE' then
 			if p_rowcount is null then
 				p_success_message := 'ERROR: Unknown number of rows deleted.';
@@ -139,6 +143,8 @@ begin
 			end if;
 		elsif p_command_name = 'DISASSOCIATE STATISTICS' then
 			p_success_message := 'Statistics disassociated.';
+		elsif p_command_name = 'DROP AUDIT POLICY' then
+			p_success_message := 'Audit Policy dropped.';
 		elsif p_command_name = 'DROP DISK GROUP' then
 			p_success_message := 'Diskgroup dropped.';
 		elsif p_command_name = 'DROP MATERIALIZED VIEW  LOG' then
@@ -167,7 +173,7 @@ begin
 			p_success_message := 'Noaudit succeeded.';
 		elsif p_command_name = 'PL/SQL EXECUTE' then
 			p_success_message := 'PL/SQL procedure successfully completed.';
-		elsif p_command_name = 'PURGE DBA_RECYCLEBIN' then
+		elsif p_command_name = 'PURGE DBA RECYCLEBIN' then
 			p_success_message := 'DBA Recyclebin purged.';
 		elsif p_command_name = 'PURGE INDEX' then
 			p_success_message := 'Index purged.';
@@ -254,8 +260,9 @@ begin
 				p_command_name like '%PACKAGE BODY' or
 				p_command_name like '%PROCEDURE' or
 				p_command_name like '%TRIGGER' or
-				p_command_name like '%TYPE' or
-				p_command_name like '%TYPE BODY'
+				(p_command_name like '%TYPE' and p_command_name not like '%INDEXTYPE') or
+				p_command_name like '%TYPE BODY' or
+				p_command_name like '%VIEW'
 			) then
 				p_compile_warning_message := 'Warning: '||initcap(replace(p_command_name, 'ALTER '))
 					||' altered with compilation errors.';
@@ -274,8 +281,9 @@ begin
 				p_command_name like '%PACKAGE BODY' or
 				p_command_name like '%PROCEDURE' or
 				p_command_name like '%TRIGGER' or
-				p_command_name like '%TYPE' or
-				p_command_name like '%TYPE BODY'
+				(p_command_name like '%TYPE' and p_command_name not like '%INDEXTYPE') or
+				p_command_name like '%TYPE BODY' or
+				p_command_name like '%VIEW'
 			) then
 				p_compile_warning_message := 'Warning: '||initcap(replace(p_command_name, 'CREATE '))
 					||' created with compilation errors.';

@@ -188,7 +188,7 @@ end test_errors;
 
 
 --------------------------------------------------------------------------------
---NOTE: This test suite is similar in structure to the one in STATEMENT_TERMINATOR_TEST and STATEMENT_FEEDBACK_TEST.
+--NOTE: This test suite is similar in STATEMENT_CLASSIFIER_TEST, STATEMENT_FEEDBACK_TEST, and STATEMENT_TERMINATOR_TEST.
 --If you add a test case here you should probably add one there as well.
 procedure test_commands is
 	v_output output_rec;
@@ -286,7 +286,7 @@ begin
 
 	classify(q'[ALTER PROCEDURE my_proc compile]', v_output); assert_equals('ALTER PROCEDURE', 'DDL|ALTER|ALTER PROCEDURE|25', concat(v_output));
 
-	classify(q'[ alter profile default limit password_max_time unlimited;]', v_output); assert_equals('ALTER PROFILE', 'DDL|ALTER|ALTER PROFILE|67', concat(v_output));
+	classify(q'[ alter profile default limit password_lock_time unlimited;]', v_output); assert_equals('ALTER PROFILE', 'DDL|ALTER|ALTER PROFILE|67', concat(v_output));
 
 	classify(q'[ALTER RESOURCE COST privat_sga 1000;]', v_output); assert_equals('ALTER RESOURCE COST', 'DDL|ALTER|ALTER RESOURCE COST|70', concat(v_output));
 
@@ -300,7 +300,6 @@ begin
 	classify(q'[alter sequence my_seq cache 100]', v_output); assert_equals('ALTER SEQUENCE', 'DDL|ALTER|ALTER SEQUENCE|14', concat(v_output));
 
 	classify(q'[alter session set OPTIMIZER_DYNAMIC_SAMPLING=5;]', v_output); assert_equals('ALTER SESSION', 'Session Control|ALTER SESSION|ALTER SESSION|42', concat(v_output));
-
 	classify(q'[ALTER SESSION set current_schema=my_schema]', v_output); assert_equals('ALTER SESSION', 'Session Control|ALTER SESSION|ALTER SESSION|42', concat(v_output));
 
 	--An old version of "ALTER SNAPSHOT"?  This is not supported in 11gR2+.
@@ -495,6 +494,7 @@ begin
 	classify(q'[CREATE public ROLLBACK SEGMENT my_rbs]', v_output); assert_equals('CREATE ROLLBACK SEGMENT', 'DDL|CREATE|CREATE ROLLBACK SEGMENT|36', concat(v_output));
 
 	classify(q'[CREATE SCHEMA authorization my_schema grant select on table1 to user2 grant select on table2 to user3]', v_output); assert_equals('CREATE SCHEMA', 'DDL|CREATE|CREATE SCHEMA|56', concat(v_output));
+
 	--Undocumented feature.
 	classify(q'[CREATE SCHEMA SYNONYM demo2 for demo1]', v_output); assert_equals('CREATE SCHEMA SYNONYM', 'DDL|CREATE|CREATE SCHEMA SYNONYM|222', concat(v_output));
 
@@ -607,12 +607,12 @@ begin
 	classify(q'[DROP DATABASE;]', v_output); assert_equals('DROP DATABASE', 'DDL|DROP|DROP DATABASE|203', concat(v_output));
 
 	classify(q'[DROP DATABASE LINK my_link;]', v_output); assert_equals('DROP DATABASE LINK', 'DDL|DROP|DROP DATABASE LINK|33', concat(v_output));
-
 	classify(q'[DROP public DATABASE LINK my_link;]', v_output); assert_equals('DROP DATABASE LINK', 'DDL|DROP|DROP DATABASE LINK|33', concat(v_output));
 
 	classify(q'[DROP DIMENSION my_dimenson;]', v_output); assert_equals('DROP DIMENSION', 'DDL|DROP|DROP DIMENSION|176', concat(v_output));
 
 	classify(q'[DROP DIRECTORY my_directory;]', v_output); assert_equals('DROP DIRECTORY', 'DDL|DROP|DROP DIRECTORY|158', concat(v_output));
+
 	--Command name has extra space, real command is "DISKGROUP".
 	classify(q'[DROP DISKGROUP fradg force including contents;]', v_output); assert_equals('DROP DISK GROUP', 'DDL|DROP|DROP DISK GROUP|195', concat(v_output));
 
@@ -666,6 +666,7 @@ begin
 	classify(q'[DROP SCHEMA SYNONYM a_schema_synonym]', v_output); assert_equals('DROP SCHEMA SYNONYM', 'DDL|DROP|DROP SCHEMA SYNONYM|224', concat(v_output));
 
 	classify(q'[DROP SEQUENCE my_sequence;]', v_output); assert_equals('DROP SEQUENCE', 'DDL|DROP|DROP SEQUENCE|16', concat(v_output));
+
 	--An old version of "DROP SNAPSHOT"?  This is not supported in 11gR2+.
 	--classify(q'[DROP SUMMARY]', v_output); assert_equals('DROP SUMMARY', 'DDL|DROP|DROP SUMMARY|173', concat(v_output));
 

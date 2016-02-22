@@ -187,7 +187,7 @@ end test_semicolon_errors;
 
 
 --------------------------------------------------------------------------------
---NOTE: This test suite is similar in structure to the one in STATEMENT_CLASSIFIER_TEST and STATEMENT_FEEDBACK_TEST.
+--NOTE: This test suite is similar in STATEMENT_CLASSIFIER_TEST, STATEMENT_FEEDBACK_TEST, and STATEMENT_TERMINATOR_TEST.
 --If you add a test case here you should probably add one there as well.
 procedure test_semicolon_commands is
 	v_statement clob;
@@ -280,7 +280,7 @@ begin
 
 	v_statement := q'[ALTER PROCEDURE my_proc compile;]'; assert_equals('ALTER PROCEDURE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
-	v_statement := q'[ alter profile default limit password_max_time unlimited;]'; assert_equals('ALTER PROFILE', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[ alter profile default limit password_lock_time unlimited;]'; assert_equals('ALTER PROFILE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	v_statement := q'[ALTER RESOURCE COST privat_sga 1000;]'; assert_equals('ALTER RESOURCE COST', replace(v_statement, ';'), get_wo_semi(v_statement));
 
@@ -499,17 +499,6 @@ begin
 	--But I'm pretty sure the last semicolon should be removed.
 	--For example, the statement in the above test only works in dynamic SQL if the semicolon is removed.
 	v_statement := q'[create schema authorization jheller create view test_view1 as with function f return number is begin return 1; end; select f from dual;]'; assert_equals('CREATE SCHEMA', replace(v_statement, 'dual;', 'dual'), get_wo_semi(v_statement));
-
-
-
-
-
-
-
-
-
-
-
 
 	--Undocumented feature.
 	v_statement := q'[CREATE SCHEMA SYNONYM demo2 for demo1;]'; assert_equals('CREATE SCHEMA SYNONYM', replace(v_statement, ';'), get_wo_semi(v_statement));
