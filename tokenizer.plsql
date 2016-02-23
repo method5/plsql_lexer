@@ -2,6 +2,84 @@ create or replace package tokenizer is
 --Copyright (C) 2015 Jon Heller.  This program is licensed under the LGPLv3.
 C_VERSION constant varchar2(10) := '0.6.0';
 
+--Main functions:
+function tokenize(p_source in clob) return token_table;
+function concatenate(p_tokens in token_table) return clob;
+
+--Helper functions useful for some tools:
+function print_tokens(p_tokens token_table) return clob;
+function is_lexical_whitespace(p_char varchar2) return boolean;
+function get_varchar2_table_from_clob(p_clob clob) return varchar2_table;
+
+/*
+
+== Purpose ==
+
+Tokenize a SQL or PL/SQL statement.
+
+Tokens may be one of these types:
+    whitespace
+        Characters 0,9,10,11,12,13,32,and unistr('\3000') (ideographic space)
+    comment
+        Single and multiline.  Does not include newline at end of the single line comment
+    text
+        Includes quotation marks, alternative quote delimiters, "Q", and "N"
+    numeric
+        Everything but initial + or -: ^([0-9]+\.[0-9]+|\.[0-9]+|[0-9]+)((e|E)(\+|-)?[0-9]+)?(f|F|d|D)?
+    word
+        May be a keyword, identifier, or (alphabetic) operator.
+        The parser must distinguish between them because keywords are frequently not reserved.
+    inquiry_directive
+        PL/SQL preprocessor (conditional compilation) feature that is like: $$name
+    preprocessor_control_token
+        PL/SQL preprocessor (conditional compilation) feature that is like: $plsql_identifier
+    ,}?
+        3-character punctuation operators (Row Pattern Quantifier).
+    ~= != ^= <> := => >= <= ** || << >> {- -} *? +? ?? ,} }? {,
+        2-character punctuation operators.
+    $ @ % ^ * ( ) - + = [ ] { } | : ; < , > . / ?
+        1-character punctuation operators.
+    EOF
+        End of File.
+    unexpected
+        Everything else.  For example "&", a SQL*Plus characters.
+
+
+== Output ==
+
+The most important output is a Token type:
+
+create or replace type token is object
+(
+	type                varchar2(4000), --String to represent token type.  See the constants in TOKENIZER.
+	value               clob,           --The text of the token.
+	line_number         number,         --The line number the token starts at - useful for printing warning and error information.
+	column_number       number,         --The column number the token starts at - useful for printing warning and error information.
+	first_char_position number,         --First character position of token in the whole string - useful for inserting before a token.
+	last_char_position  number,         --Last character position of token in the whole string  - useful for inserting after a token.
+	sqlcode             number,         --Error code of serious parsing problem.
+	sqlerrm             varchar2(4000)  --Error message of serious parsing problem.
+);
+
+
+== Requirements ==
+
+- Only 11gR2 and above are supported.  But this will likely work well in lower versions.
+- EBCDIC character set is not supported.
+
+
+== Example ==
+
+begin
+	dbms_output.put_line(tokenizer.print_tokens(tokenizer.tokenize(
+		'select * from dual;'
+	)));
+end;
+
+Results:  word whitespace * whitespace word whitespace word ; EOF
+
+*/
+
 --Constants for token types.
 C_WHITESPACE                 constant varchar2(10) := 'whitespace';
 C_COMMENT                    constant varchar2(7)  := 'comment';
@@ -60,82 +138,6 @@ C_PREPROCESSOR_CONTROL_TOKEN constant varchar2(26) := 'preprocessor_control_toke
 
 C_EOF                        constant varchar2(26) := 'EOF';
 C_unexpected                 constant varchar2(10) := 'unexpected';
-
-/*
-
-== Purpose ==
-
-Tokenize a SQL or PL/SQL statement.
-
-Tokens may be one of these types:
-    whitespace
-        Characters 0,9,10,11,12,13,32,and unistr('\3000') (ideographic space)
-    comment
-        Single and multiline.  Does not include newline at end of the single line comment
-    text
-        Includes quotation marks, alternative quote delimiters, "Q", and "N"
-    numeric
-        Everything but initial + or -: ^([0-9]+\.[0-9]+|\.[0-9]+|[0-9]+)((e|E)(\+|-)?[0-9]+)?(f|F|d|D)?
-    word
-        May be a keyword, identifier, or (alphabetic) operator.
-        The parser must distinguish between them because keywords are frequently not reserved.
-    inquiry_directive
-        PL/SQL preprocessor (conditional compilation) feature that is like: $$name
-    preprocessor_control_token
-        PL/SQL preprocessor (conditional compilation) feature that is like: $plsql_identifier
-    ,}?
-        3-character punctuation operators (Row Pattern Quantifier).
-    ~= != ^= <> := => >= <= ** || << >> {- -} *? +? ?? ,} }? {,
-        2-character punctuation operators.
-    $ @ % ^ * ( ) - + = [ ] { } | : ; < , > . / ?
-        1-character punctuation operators.
-    EOF
-        End of File.
-    unexpected
-        Everything else.  For example "&", a SQL*Plus characters.
-
-
-== Output ==
-
-The most important output is a Token type:
-	type     varchar2(4000),
-	value    clob,
-	sqlcode  number,
-	sqlerrm  varchar2(4000)
-
-- type: One of the names listed in the Purpose section above.
-- value: The exact string value.
-- sqlcode: The SQLCODE for a serious error that prevents effective lexing.
-	For example, this could be "ORA-1756: quoted string not properly terminated".
-- sqlerrm: The SQLERRM that goes with the SQLCODE above.
-
-
-== Requirements ==
-
-- Only 11gR2 and above are supported.  But this will likely work well in lower versions.
-- EBCDIC character set is not supported.
-
-
-== Example ==
-
-begin
-	dbms_output.put_line(tokenizer.print_tokens(tokenizer.tokenize(
-		'select * from dual;'
-	)));
-end;
-
-Results:  word whitespace * whitespace word whitespace word ; EOF
-
-*/
-
---Main functions.
-function tokenize(p_source in clob) return token_table;
-function concatenate(p_tokens in token_table) return clob;
-
---Helper functions useful for some tools.
-function print_tokens(p_tokens token_table) return clob;
-function is_lexical_whitespace(p_char varchar2) return boolean;
-function get_varchar2_table_from_clob(p_clob clob) return varchar2_table;
 
 end;
 /
