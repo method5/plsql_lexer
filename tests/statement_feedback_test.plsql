@@ -110,64 +110,29 @@ end feedback;
 
 --------------------------------------------------------------------------------
 procedure test_errors is
+	v_success varchar2(32767);
+	v_warning varchar2(32767);
 begin
-	--TODO:
-	null;
-/*	classify('(select * from dual)', v_output);
-	assert_equals('No errors 1', null, v_output.lex_sqlcode);
-	assert_equals('No errors 1', null, v_output.lex_sqlerrm);
+	--Huge syntax errors but it's still obvious what the statement is.
+	feedback(q'[(select * from dual) /*]', v_success, v_warning, 10); assert_equals('Bad SELECT 1', '10 rows selected.|', v_success||'|'||v_warning);
+	feedback(q'[(select * from dual) " ]', v_success, v_warning, 20); assert_equals('Bad SELECT 2', '20 rows selected.|', v_success||'|'||v_warning);
+	feedback(q'[(select * from dual) ' ]', v_success, v_warning, 30); assert_equals('Bad SELECT 2', '30 rows selected.|', v_success||'|'||v_warning);
 
-	classify('(select * from dual) \*', v_output);
-	assert_equals('Comment error 1', -1742, v_output.lex_sqlcode);
-	assert_equals('Comment error 2', 'comment not terminated properly', v_output.lex_sqlerrm);
-
-	classify('(select * from dual) "', v_output);
-	assert_equals('Missing double quote error 1', -1740, v_output.lex_sqlcode);
-	assert_equals('Missing double quote error 2', 'missing double quote in identifier', v_output.lex_sqlerrm);
-
-	--"Zero-length identifier" error, but must be caught by the parser.
-	classify('(select 1 "" from dual)', v_output);
-	assert_equals('Zero-length identifier 1', null, v_output.lex_sqlcode);
-	assert_equals('Zero-length identifier 2', null, v_output.lex_sqlerrm);
-
-	--"identifier is too long" error, but must be caught by the parser.
-	classify('(select 1 a123456789012345678901234567890 from dual)', v_output);
-	assert_equals('Identifier too long error 1', null, v_output.lex_sqlcode);
-	assert_equals('Identifier too long error 2', null, v_output.lex_sqlerrm);
-
-	--"identifier is too long" error, but must be caught by the parser.
-	classify('(select 1 "a123456789012345678901234567890" from dual)', v_output);
-	assert_equals('Identifier too long error 3', null, v_output.lex_sqlcode);
-	assert_equals('Identifier too long error 4', null, v_output.lex_sqlerrm);
-
-	classify(q'<declare v_test varchar2(100) := q'  '; begin null; end;>', v_output);
-	assert_equals('Invalid character 1', -911, v_output.lex_sqlcode);
-	assert_equals('Invalid character 2', 'invalid character', v_output.lex_sqlerrm);
-	classify(q'<declare v_test varchar2(100) := nq'  '; begin null; end;>', v_output);
-	assert_equals('Invalid character 3', -911, v_output.lex_sqlcode);
-	assert_equals('Invalid character 4', 'invalid character', v_output.lex_sqlerrm);
-
-	classify('(select * from dual) '' ', v_output);
-	assert_equals('String not terminated 1', -1756, v_output.lex_sqlcode);
-	assert_equals('String not terminated 2', 'quoted string not properly terminated', v_output.lex_sqlerrm);
-	classify(q'<(select * from dual) q'!' >', v_output);
-	assert_equals('String not terminated 3', -1756, v_output.lex_sqlcode);
-	assert_equals('String not terminated 4', 'quoted string not properly terminated', v_output.lex_sqlerrm);
-
-	--Invalid.
-	classify(q'[asdf]', v_output); assert_equals('Cannot classify 1', 'Invalid|Invalid|Invalid|-1', concat(v_output));
-	classify(q'[create tableS test1(a number);]', v_output); assert_equals('Cannot classify 2', 'Invalid|Invalid|Invalid|-1', concat(v_output));
-	classify(q'[seeelect * from dual]', v_output); assert_equals('Cannot classify 3', 'Invalid|Invalid|Invalid|-1', concat(v_output));
-	classify(q'[alter what_is_this set x = y;]', v_output); assert_equals('Cannot classify 4', 'Invalid|Invalid|Invalid|-1', concat(v_output));
-	classify(q'[upsert my_table using other_table on (my_table.a = other_table.a) when matched then update set b = 1]', v_output); assert_equals('Cannot classify 5', 'Invalid|Invalid|Invalid|-1', concat(v_output));
+	--Completely invalid syntax, no way to even guess at the intent.
+	feedback(q'[asdf]', v_success, v_warning); assert_equals('Invalid 1', 'ERROR: Cannot determine statement type.|', v_success||'|'||v_warning);
+	feedback(q'[asdf]', v_success, v_warning, 10); assert_equals('Invalid 2', 'ERROR: Cannot determine statement type.|', v_success||'|'||v_warning);
+	feedback(q'[asdf]', v_success, v_warning); assert_equals('Invalid 3', 'ERROR: Cannot determine statement type.|', v_success||'|'||v_warning);
+	feedback(q'[create tableS test1(a number);]', v_success, v_warning); assert_equals('Invalid 4', 'ERROR: Cannot determine statement type.|', v_success||'|'||v_warning);
+	feedback(q'[seeelect * from dual]', v_success, v_warning); assert_equals('Invalid 5', 'ERROR: Cannot determine statement type.|', v_success||'|'||v_warning);
+	feedback(q'[alter what_is_this set x = y;]', v_success, v_warning); assert_equals('Invalid 6', 'ERROR: Cannot determine statement type.|', v_success||'|'||v_warning);
+	feedback(q'[upsert my_table using other_table on (my_table.a = other_table.a) when matched then update set b = 1]', v_success, v_warning); assert_equals('Invalid 7', 'ERROR: Cannot determine statement type.|', v_success||'|'||v_warning);
 
 	--Nothing.
-	classify(q'[]', v_output); assert_equals('Nothing to classify 1', 'Nothing|Nothing|Nothing|-2', concat(v_output));
-	classify(q'[ 	 ]', v_output); assert_equals('Nothing to classify 2', 'Nothing|Nothing|Nothing|-2', concat(v_output));
-	classify(q'[ \* asdf *\ ]', v_output); assert_equals('Nothing to classify 3', 'Nothing|Nothing|Nothing|-2', concat(v_output));
-	classify(q'[ -- comment ]', v_output); assert_equals('Nothing to classify 4', 'Nothing|Nothing|Nothing|-2', concat(v_output));
-	classify(q'[ \* asdf ]', v_output); assert_equals('Nothing to classify 5', 'Nothing|Nothing|Nothing|-2', concat(v_output));
-*/end test_errors;
+	feedback(q'[]', v_success, v_warning); assert_equals('Nothing 1', 'ERROR: Cannot determine statement type.|', v_success||'|'||v_warning);
+	feedback(q'[ /* asdf */-- ]', v_success, v_warning); assert_equals('Nothing 2', 'ERROR: Cannot determine statement type.|', v_success||'|'||v_warning);
+	feedback(q'[ -- comment ]', v_success, v_warning); assert_equals('Nothing 3', 'ERROR: Cannot determine statement type.|', v_success||'|'||v_warning);
+	feedback(q'[ /* asdf ]', v_success, v_warning); assert_equals('Nothing 4', 'ERROR: Cannot determine statement type.|', v_success||'|'||v_warning);
+end test_errors;
 
 
 --------------------------------------------------------------------------------
@@ -176,7 +141,6 @@ begin
 procedure test_commands is
 	v_success varchar2(32767);
 	v_warning varchar2(32767);
-
 begin
 	/*
 	DDL
@@ -571,8 +535,10 @@ begin
 	--Not a real command.
 	--feedback(q'[DECLARE REWRITE EQUIVALENCE]', v_success, v_warning); assert_equals('DECLARE REWRITE EQUIVALENCE', '|', v_success||'|'||v_warning);
 
-	feedback(q'[DELETE my_schema.my_table@my_link]', v_success, v_warning); assert_equals('DELETE', '|', v_success||'|'||v_warning);
-	feedback(q'[DELETE FROM my_schema.my_table@my_link]', v_success, v_warning); assert_equals('DELETE', '|', v_success||'|'||v_warning);
+	feedback(q'[DELETE my_schema.my_table@my_link]', v_success, v_warning); assert_equals('DELETE 1', 'ERROR: Unknown number of rows deleted.|', v_success||'|'||v_warning);
+	feedback(q'[DELETE FROM my_schema.my_table@my_link]', v_success, v_warning, 0); assert_equals('DELETE 2', '0 rows deleted.|', v_success||'|'||v_warning);
+	feedback(q'[DELETE FROM my_schema.my_table@my_link]', v_success, v_warning, 1); assert_equals('DELETE 3', '1 row deleted.|', v_success||'|'||v_warning);
+	feedback(q'[DELETE FROM my_schema.my_table@my_link]', v_success, v_warning, 999999); assert_equals('DELETE 4', '999999 rows deleted.|', v_success||'|'||v_warning);
 
 	feedback(q'[DISASSOCIATE STATISTICS from columns mytable.a force;]', v_success, v_warning); assert_equals('DISASSOCIATE STATISTICS', 'Statistics disassociated.|', v_success||'|'||v_warning);
 
@@ -686,9 +652,10 @@ begin
 	feedback(q'[GRANT select on my_table to some_other_user with grant option]', v_success, v_warning); assert_equals('GRANT OBJECT 2', 'Grant succeeded.|', v_success||'|'||v_warning);
 	feedback(q'[GRANT dba to my_package]', v_success, v_warning); assert_equals('GRANT OBJECT 3', 'Grant succeeded.|', v_success||'|'||v_warning);
 
-	feedback(q'[INSERT /*+ append */ into my_table select * from other_table]', v_success, v_warning); assert_equals('INSERT 1', '|', v_success||'|'||v_warning);
-	feedback(q'[INSERT all into table1(a) values(b) into table2(a) values(b) select b from another_table;]', v_success, v_warning); assert_equals('INSERT 2', '|', v_success||'|'||v_warning);
-	feedback(q'[insert into test1 with function f return number is begin return 1; end; select f from dual;]', v_success, v_warning); assert_equals('INSERT 3', '|', v_success||'|'||v_warning);
+	feedback(q'[INSERT /*+ append */ into my_table select * from other_table]', v_success, v_warning); assert_equals('INSERT 1', 'ERROR: Unknown number of rows created.|', v_success||'|'||v_warning);
+	feedback(q'[INSERT all into table1(a) values(b) into table2(a) values(b) select b from another_table;]', v_success, v_warning, 0); assert_equals('INSERT 2', '0 rows created.|', v_success||'|'||v_warning);
+	feedback(q'[insert into test1 with function f return number is begin return 1; end; select f from dual;]', v_success, v_warning, 1); assert_equals('INSERT 3', '1 row created.|', v_success||'|'||v_warning);
+	feedback(q'[insert into test1 with function f return number is begin return 1; end; select f from dual;]', v_success, v_warning, 99999); assert_equals('INSERT 4', '99999 rows created.|', v_success||'|'||v_warning);
 
 	feedback(q'[LOCK TABLE my_schema.my_table in exclsive mode]', v_success, v_warning); assert_equals('LOCK TABLE', 'Table(s) Locked.|', v_success||'|'||v_warning);
 
@@ -727,12 +694,15 @@ begin
 
 	feedback(q'[SAVEPOINT my_savepoint;]', v_success, v_warning); assert_equals('SAVEPOINT', 'Savepoint created.|', v_success||'|'||v_warning);
 
-	feedback(q'[select * from dual;]', v_success, v_warning); assert_equals('SELECT 1', '|', v_success||'|'||v_warning);
-	feedback(q'[/*asdf*/select * from dual;]', v_success, v_warning); assert_equals('SELECT 2', '|', v_success||'|'||v_warning);
-	feedback(q'[((((select * from dual))));]', v_success, v_warning); assert_equals('SELECT 3', '|', v_success||'|'||v_warning);
-	feedback(q'[with test1 as (select 1 a from dual) select * from test1;]', v_success, v_warning); assert_equals('SELECT 4', '|', v_success||'|'||v_warning);
+	--Slight deviation from SQL*Plus behavior:
+	--SQL*Plus does not display any feedback message if the number of rows is between 1 to 5.
+	--This program always displays the number of rows.
+	feedback(q'[select * from dual;]', v_success, v_warning); assert_equals('SELECT 1', 'ERROR: Unknown number of rows selected.|', v_success||'|'||v_warning);
+	feedback(q'[/*asdf*/select * from dual;]', v_success, v_warning, 0); assert_equals('SELECT 2', 'no rows selected|', v_success||'|'||v_warning);
+	feedback(q'[((((select * from dual))));]', v_success, v_warning, 1); assert_equals('SELECT 3', '1 row selected.|', v_success||'|'||v_warning);
+	feedback(q'[with test1 as (select 1 a from dual) select * from test1;]', v_success, v_warning, 5); assert_equals('SELECT 4', '5 rows selected.|', v_success||'|'||v_warning);
 	feedback(q'[with function test_function return number is begin return 1; end; select test_function from dual;
-	/]', v_success, v_warning); assert_equals('SELECT 4', '|', v_success||'|'||v_warning);
+	/]', v_success, v_warning, 6); assert_equals('SELECT 5', '6 rows selected.|', v_success||'|'||v_warning);
 
 	--There are two versions of CONSTRAINT[S].
 	feedback(q'[SET CONSTRAINTS all deferred]', v_success, v_warning); assert_equals('SET CONSTRAINT', 'Constraint set.|', v_success||'|'||v_warning);
@@ -749,16 +719,20 @@ begin
 	--Not a real command.
 	--feedback(q'[UNDROP OBJECT]', v_success, v_warning); assert_equals('UNDROP OBJECT', '|', v_success||'|'||v_warning);
 
-	feedback(q'[UPDATE my_tables set a = 1]', v_success, v_warning); assert_equals('UPDATE 1', '|', v_success||'|'||v_warning);
-	feedback(q'[UPDATE my_tables set a = (with function f return number is begin return 1; end; select f from dual);]', v_success, v_warning); assert_equals('UPDATE 2', '|', v_success||'|'||v_warning);
+	feedback(q'[UPDATE my_tables set a = 1]', v_success, v_warning); assert_equals('UPDATE 1', 'ERROR: Unknown number of rows updated.|', v_success||'|'||v_warning);
+	feedback(q'[UPDATE my_tables set a = (with function f return number is begin return 1; end; select f from dual);]', v_success, v_warning, 0); assert_equals('UPDATE 2', '0 rows updated.|', v_success||'|'||v_warning);
+	feedback(q'[UPDATE my_tables set a = 1]', v_success, v_warning, 1); assert_equals('UPDATE 3', '1 row updated.|', v_success||'|'||v_warning);
+	feedback(q'[UPDATE my_tables set a = 1]', v_success, v_warning, 555); assert_equals('UPDATE 4', '555 rows updated.|', v_success||'|'||v_warning);
 
 	--These are not real commands (they are part of alter table) and they could be ambiguous with an UPDATE statement
 	--if there was a table named "INDEXES" or "JOIN".
 	--feedback(q'[UPDATE INDEXES]', v_success, v_warning); assert_equals('UPDATE INDEXES', '|', v_success||'|'||v_warning);
 	--feedback(q'[UPDATE JOIN INDEX]', v_success, v_warning); assert_equals('UPDATE JOIN INDEX', '|', v_success||'|'||v_warning);
 
-	feedback(q'[merge into table1 using table2 on (table1.a = table2.a) when matched then update set table1.b = 1;]', v_success, v_warning); assert_equals('UPSERT 1', '|', v_success||'|'||v_warning);
-	feedback(q'[merge into table1 using table2 on (table1.a = table2.a) when matched then update set table1.b = (with function test_function return number is begin return 1; end; select test_function from dual);]', v_success, v_warning); assert_equals('UPSERT 2', '|', v_success||'|'||v_warning);
+	feedback(q'[merge into table1 using table2 on (table1.a = table2.a) when matched then update set table1.b = 1;]', v_success, v_warning); assert_equals('UPSERT 1', 'ERROR: Unknown number of rows merged.|', v_success||'|'||v_warning);
+	feedback(q'[merge into table1 using table2 on (table1.a = table2.a) when matched then update set table1.b = (with function test_function return number is begin return 1; end; select test_function from dual);]', v_success, v_warning, 0); assert_equals('UPSERT 2', '0 rows merged.|', v_success||'|'||v_warning);
+	feedback(q'[merge into table1 using table2 on (table1.a = table2.a) when matched then update set table1.b = 1;]', v_success, v_warning, 1); assert_equals('UPSERT 3', '1 row merged.|', v_success||'|'||v_warning);
+	feedback(q'[merge into table1 using table2 on (table1.a = table2.a) when matched then update set table1.b = 1;]', v_success, v_warning, 100); assert_equals('UPSERT 4', '100 rows merged.|', v_success||'|'||v_warning);
 
 	--Not a real command, this is part of ANALYZE.
 	--feedback(q'[VALIDATE INDEX]', v_success, v_warning); assert_equals('VALIDATE INDEX', '|', v_success||'|'||v_warning);

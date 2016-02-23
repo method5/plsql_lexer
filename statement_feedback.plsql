@@ -243,7 +243,7 @@ begin
 
 		--Print error message if statement type could not be determined.
 		else
-			p_success_message := 'Cannot determine statement type.';
+			p_success_message := 'ERROR: Cannot determine statement type.';
 		end if;
 
 
