@@ -18,6 +18,20 @@ See the individual packages for details on each procedure.
 
 		function concatenate(p_tokens in token_table) return clob;
 
+	Tokens are the central data structure of this program.  This is the TOKEN type specification:
+
+		create or replace type token is object
+		(
+			type                varchar2(4000), --String to represent token type.  See the constants in TOKENIZER.
+			value               clob,           --The text of the token.
+			line_number         number,         --The line number the token starts at - useful for printing warning and error information.
+			column_number       number,         --The column number the token starts at - useful for printing warning and error information.
+			first_char_position number,         --First character position of token in the whole string - useful for inserting before a token.
+			last_char_position  number,         --Last character position of token in the whole string  - useful for inserting after a token.
+			sqlcode             number,         --Error code of serious parsing problem.
+			sqlerrm             varchar2(4000)  --Error message of serious parsing problem.
+		);
+
 - **STATEMENT_SPLITTER**  Split multiple statements into individual statements based on a terminator.
 
 	Split statements like SQL*Plus and drops the delimiter.  Delimiters must be on a line with only whitespace.  Delimiters may be counted even if it's inside a string or comment:

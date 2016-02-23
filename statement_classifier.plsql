@@ -15,7 +15,7 @@ procedure classify(
 --Helper functions useful for further classifying statements.
 function has_plsql_declaration(
 	p_tokens token_table,
-	p_token_start_index in number default
+	p_token_start_index in number default 1
 ) return boolean;
 
 procedure get_trigger_type_body_index (
