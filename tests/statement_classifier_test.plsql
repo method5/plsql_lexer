@@ -874,7 +874,7 @@ begin
 			from gv$sql
 			join gv$sqlcommand using (command_type)
 			--TEST - takes 2 seconds
-			where sql_id = 'dfffkcnqfystw'
+			--where sql_id = 'dfffkcnqfystw'
 		)
 		where rownumber = 1
 		order by sql_id

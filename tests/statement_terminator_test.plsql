@@ -888,59 +888,41 @@ end test_sqlplus_and_semi;
 procedure dynamic_tests is
 	type clob_table is table of clob;
 	type string_table is table of varchar2(100);
-	type number_table is table of number;
 	v_sql_ids string_table;
 	v_sql_fulltexts clob_table;
-	v_command_types number_table;
-	v_command_names string_table;
 	sql_cursor sys_refcursor;
-
-	v_category varchar2(30);
-	v_statement_type varchar2(30);
-	v_command_name varchar2(4000);
-	v_command_type varchar2(4000);
-	v_lex_sqlcode number;
-	v_lex_sqlerrm varchar2(4000);
 begin
 	--Test everything in GV$SQL.
 	open sql_cursor for
 	q'<
 		--Only need to select one value per SQL_ID.
-		select sql_id, sql_fulltext, command_type, command_name
+		select sql_id, sql_fulltext
 		from
 		(
-			select sql_id, sql_fulltext, command_type, command_name, row_number() over (partition by sql_id order by 1) rownumber
+			select sql_id, sql_fulltext, row_number() over (partition by sql_id order by 1) rownumber
 			from gv$sql
-			join gv$sqlcommand using (command_type)
-			--TEST - takes 2 seconds
-			where sql_id = 'dfffkcnqfystw'
 		)
 		where rownumber = 1
 		order by sql_id
 	>';
 
 	loop
-		fetch sql_cursor bulk collect into v_sql_ids, v_sql_fulltexts, v_command_types, v_command_names limit 100;
+		fetch sql_cursor bulk collect into v_sql_ids, v_sql_fulltexts limit 100;
 		exit when v_sql_fulltexts.count = 0;
 
 		--Debug if there is an infinite loop.
 		--dbms_output.put_line('SQL_ID: '||statements.sql_id);
 
+		--Nothing in GV$SQL should have an extra semicolon.
 		for i in 1 .. v_sql_fulltexts.count loop
 
 			g_test_count := g_test_count + 1;
 
-			statement_classifier.classify(tokenizer.tokenize(v_sql_fulltexts(i))
-				,v_category, v_statement_type, v_command_name, v_command_type, v_lex_sqlcode, v_lex_sqlerrm);
-			if v_command_type = v_command_types(i) and v_command_name = v_command_names(i) then
+			if v_sql_fulltexts(i) = tokenizer.concatenate(statement_terminator.remove_semicolon(tokenizer.tokenize(v_sql_fulltexts(i)))) then
 				g_passed_count := g_passed_count + 1;
 			else
 				g_failed_count := g_failed_count + 1;
 				dbms_output.put_line('Failed: '||v_sql_ids(i));
-				dbms_output.put_line('Expected Command Type: '||v_command_types(i));
-				dbms_output.put_line('Expected Command Name: '||v_command_names(i));
-				dbms_output.put_line('Actual Command Type:   '||v_command_type);
-				dbms_output.put_line('Actual Command Name:   '||v_command_name);
 			end if;
 		end loop;
 	end loop;
@@ -963,7 +945,7 @@ begin
 	--Print header.
 	dbms_output.put_line(null);
 	dbms_output.put_line('----------------------------------------');
-	dbms_output.put_line('PL/SQL Statement Classifier Test Summary');
+	dbms_output.put_line('PL/SQL Statement Terminator Test Summary');
 	dbms_output.put_line('----------------------------------------');
 
 	--Run the chosen tests.
