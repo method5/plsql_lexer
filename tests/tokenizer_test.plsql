@@ -447,29 +447,30 @@ end test_3_character_punctuation;
 --------------------------------------------------------------------------------
 procedure test_2_character_punctuation is
 begin
-	assert_equals('2-char punctuation: 01', '~= != ^= <> := => >= <= ** || << >> {- -} *? +? ?? ,} }? {, EOF', lex(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]'));
+	assert_equals('2-char punctuation: 01', '~= != ^= <> := => >= <= ** || << >> {- -} *? +? ?? ,} }? {, .. EOF', lex(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,..]'));
 
-	assert_equals('2-char punctuation: 02', '~=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 1));
-	assert_equals('2-char punctuation: 03', '!=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 2));
-	assert_equals('2-char punctuation: 04', '^=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 3));
-	assert_equals('2-char punctuation: 05', '<>', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 4));
-	assert_equals('2-char punctuation: 06', ':=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 5));
-	assert_equals('2-char punctuation: 07', '=>', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 6));
-	assert_equals('2-char punctuation: 08', '>=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 7));
-	assert_equals('2-char punctuation: 09', '<=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 8));
-	assert_equals('2-char punctuation: 10', '**', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 9));
-	assert_equals('2-char punctuation: 11', '||', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 10));
-	assert_equals('2-char punctuation: 12', '<<', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 11));
-	assert_equals('2-char punctuation: 13', '>>', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 12));
-	assert_equals('2-char punctuation: 14', '{-', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 13));
-	assert_equals('2-char punctuation: 15', '-}', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 14));
-	assert_equals('2-char punctuation: 16', '*?', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 15));
-	assert_equals('2-char punctuation: 17', '+?', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 16));
-	assert_equals('2-char punctuation: 18', '??', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 17));
-	assert_equals('2-char punctuation: 19', ',}', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 18));
-	assert_equals('2-char punctuation: 20', '}?', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 19));
-	assert_equals('2-char punctuation: 21', '{,', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 20));
-	assert_equals('2-char punctuation: 22', null, get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,]', 21));
+	assert_equals('2-char punctuation: 02', '~=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,..]', 1));
+	assert_equals('2-char punctuation: 03', '!=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,..]', 2));
+	assert_equals('2-char punctuation: 04', '^=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,..]', 3));
+	assert_equals('2-char punctuation: 05', '<>', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,..]', 4));
+	assert_equals('2-char punctuation: 06', ':=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,..]', 5));
+	assert_equals('2-char punctuation: 07', '=>', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,..]', 6));
+	assert_equals('2-char punctuation: 08', '>=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,..]', 7));
+	assert_equals('2-char punctuation: 09', '<=', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,..]', 8));
+	assert_equals('2-char punctuation: 10', '**', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,..]', 9));
+	assert_equals('2-char punctuation: 11', '||', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,..]', 10));
+	assert_equals('2-char punctuation: 12', '<<', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,..]', 11));
+	assert_equals('2-char punctuation: 13', '>>', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,..]', 12));
+	assert_equals('2-char punctuation: 14', '{-', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,..]', 13));
+	assert_equals('2-char punctuation: 15', '-}', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,..]', 14));
+	assert_equals('2-char punctuation: 16', '*?', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,..]', 15));
+	assert_equals('2-char punctuation: 17', '+?', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,..]', 16));
+	assert_equals('2-char punctuation: 18', '??', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,..]', 17));
+	assert_equals('2-char punctuation: 19', ',}', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,..]', 18));
+	assert_equals('2-char punctuation: 20', '}?', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,..]', 19));
+	assert_equals('2-char punctuation: 21', '{,', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,..]', 20));
+	assert_equals('2-char punctuation: 22', '..', get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,..]', 21));
+	assert_equals('2-char punctuation: 22', null, get_value_n(q'[~=!=^=<>:==>>=<=**||<<>>{--}*?+???,}}?{,..]', 22));
 end test_2_character_punctuation;
 
 

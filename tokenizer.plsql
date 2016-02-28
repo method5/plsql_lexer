@@ -1,6 +1,6 @@
 create or replace package tokenizer is
 --Copyright (C) 2015 Jon Heller.  This program is licensed under the LGPLv3.
-C_VERSION constant varchar2(10) := '0.6.0';
+C_VERSION constant varchar2(10) := '0.6.1';
 
 --Main functions:
 function tokenize(p_source in clob) return token_table;
@@ -35,7 +35,7 @@ Tokens may be one of these types:
         PL/SQL preprocessor (conditional compilation) feature that is like: $plsql_identifier
     ,}?
         3-character punctuation operators (Row Pattern Quantifier).
-    ~= != ^= <> := => >= <= ** || << >> {- -} *? +? ?? ,} }? {,
+    ~= != ^= <> := => >= <= ** || << >> {- -} *? +? ?? ,} }? {, ..
         2-character punctuation operators.
     $ @ % ^ * ( ) - + = [ ] { } | : ; < , > . / ?
         1-character punctuation operators.
@@ -111,6 +111,7 @@ C_PREPROCESSOR_CONTROL_TOKEN constant varchar2(26) := 'preprocessor_control_toke
 "C_,}"                       constant varchar2(2)  := ',}';
 "C_}?"                       constant varchar2(2)  := '}?';
 "C_{,"                       constant varchar2(2)  := '{,';
+"C_.."                       constant varchar2(2)  := '..';
 
 "C_$"                        constant varchar2(1)  := '$';
 "C_@"                        constant varchar2(1)  := '@';
@@ -610,7 +611,7 @@ begin
 	--2-character punctuation operators.
 	--Ignore the IBM "not" character - it's in the manual but is only supported
 	--on obsolete platforms: http://stackoverflow.com/q/9305925/409172
-	if g_last_char||look_ahead(1) in ('~=','!=','^=','<>',':=','=>','>=','<=','<<','>>','{-','-}','*?','+?','??',',}','}?','{,') then
+	if g_last_char||look_ahead(1) in ('~=','!=','^=','<>',':=','=>','>=','<=','<<','>>','{-','-}','*?','+?','??',',}','}?','{,','..') then
 		g_token_text := g_last_char || get_char;
 		g_last_char := get_char;
 		return token(g_token_text, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
