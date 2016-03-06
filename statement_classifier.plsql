@@ -777,7 +777,7 @@ A PL/SQL Declaration must have this pattern before the first ";":
 This was discovered by analyzing all "with" strings in the Oracle documentation
 text descriptions.  That is, download the library and run a command like this:
 
-	C:\E11882_01\E11882_01\server.112\e26088\img_text>findstr /s /i "with" *.*
+	C:\E50529_01\SQLRF\img_text> findstr /s /i "with" *.*
 
 There are a lot of potential ambiguities as SQL does not have many fully
 reserved words.  And the pattern "with" "function" can be found in 2 cases:the following:

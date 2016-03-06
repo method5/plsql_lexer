@@ -389,9 +389,9 @@ begin
 	assert_equals('PLSQL Block 5c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
 
 	--Count ">> begin".
-	v_statements:='declare a number; <<label1>> begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='declare a number; begin <<label1>> null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
 	assert_equals('PLSQL Block 6a', 2, v_split_statements.count);
-	assert_equals('PLSQL Block 6b', 'declare a number; <<label1>> begin null; end;', tokenizer.concatenate(v_split_statements(1)));
+	assert_equals('PLSQL Block 6b', 'declare a number; begin <<label1>> null; end;', tokenizer.concatenate(v_split_statements(1)));
 	assert_equals('PLSQL Block 6c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
 
 	--Count "then begin".

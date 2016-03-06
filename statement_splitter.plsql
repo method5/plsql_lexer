@@ -43,976 +43,929 @@ end;
 create or replace package body statement_splitter is
 
 C_TERMINATOR_SEMI              constant number := 1;
-C_TERMINATOR_PLSQL_DECLARE_END constant number := 2;
-C_TERMINATOR_PLSQL_MATCHED_END constant number := 3;
-C_TERMINATOR_PLSQL_EXTRA_END   constant number := 4;
-C_TERMINATOR_EOF               constant number := 5;
-C_TERMINATOR_PACKAGE_BODY      constant number := 6;
+C_TERMINATOR_PLSQL_DECLARATION constant number := 2;
+C_TERMINATOR_PLSQL             constant number := 3;
+C_TERMINATOR_EOF               constant number := 4;
 
 
 
-
-
---------------------------------------------------------------------------------
-/*
-Purpose: Detect if there is another PLSQL_DECLARATION.  This is only valid if
-called immediately at the end of another PLSQL_DECLARATION.
-
-An additional PL/SQL Declaration must start with this pattern:
-
-	("function"|"procedure") word [anything other than "(", "is", or "as"]
-
-This is complicated because there may be a regular common table expression with
-the name "function" or "procedure".  Thanks, Oracle, for not reserving keywords.
-
-See the function has_plsql_declaration for some more information.
-*/
-function has_another_plsql_declaration(p_tokens token_table, p_token_start_index in number) return boolean is
-	v_next_concrete_token_1 token := token(null, null, null, null, null, null, null, null);
-	v_next_concrete_token_2 token := token(null, null, null, null, null, null, null, null);
-begin
-	--Loop through the tokens and find concrete tokens.
-	for i in p_token_start_index .. p_tokens.count loop
-		--If it's concrete, decide which one it is.
-		if p_tokens(i).type not in ('whitespace', 'comment', 'EOF') then
-			--Record the first one.
-			if v_next_concrete_token_1.type is null then
-				v_next_concrete_token_1 := p_tokens(i);
-			--Record the second one and exit the loop.
-			else
-				v_next_concrete_token_2 := p_tokens(i);
-				exit;
-			end if;
-		end if;
-	end loop;
-
-	--Determine if there is another PL/SQL Declaration.
-	if
-	lower(v_next_concrete_token_1.value) in ('function', 'procedure') and
-	lower(v_next_concrete_token_2.value) not in ('(', 'is', 'as') then
-		return true;
-	else
-		return false;
-	end if;
-end has_another_plsql_declaration;
-
-
---------------------------------------------------------------------------------
---Purpose: Determine if a "CREATE PROCEDURE" or "CREATE FUNCTION" is EXTERNAL.
---	That is, does the syntax use either "call_spec" or "EXTERNAL".
---
---This is true if (is|as) (external|langauge java|language c|language dotnet)
---is found before the first semicolon.  I'm not sure if "language dotnet" is valid.
---It appears in some error messages  and in the Oracle Database Lite SQL Reference.
---It shouldn't hurt to include it.
---
---Assumption: This is only called for "CREATE PROCEDURE" or "CREATE FUNCTION".
---
---Example: create procedure test_procedure as external language c name "c_test" library somelib;
-function is_external_method(p_tokens in token_table, p_temp_token_index in number) return boolean is
-	v_previous_concrete_token_1 token := token(null, null, null, null, null, null, null, null);
-	v_previous_concrete_token_2 token := token(null, null, null, null, null, null, null, null);
-begin
-	for i in p_temp_token_index .. p_tokens.count loop
-		--Look for semicolon or a sequence of tokens that implies it's external.
-		if p_tokens(i).type = ';' then
-			return false;
-		elsif
-		(
-			(
-				lower(v_previous_concrete_token_1.value) in ('is', 'as')
-				and
-				lower(p_tokens(i).value) = 'external'
-			)
-			or
-			(
-				lower(v_previous_concrete_token_2.value) in ('is', 'as')
-				and
-				lower(v_previous_concrete_token_1.value) in ('language')
-				and
-				lower(p_tokens(i).value) in ('java', 'c', 'dotnet')
-			)
-		) then
-			return true;
-		end if;
-
-		--Shift tokens if it is not a whitespace or comment.
-		if p_tokens(i).type not in ('whitespace', 'comment') then
-			v_previous_concrete_token_2 := v_previous_concrete_token_1;
-			v_previous_concrete_token_1 := p_tokens(i);
-		end if;
-	end loop;
-
-	--Default to not an external method.
-	return false;
-end is_external_method;
-
-
---------------------------------------------------------------------------------
-function only_ws_comments_eof_remain(p_tokens in token_table, p_token_index in number)  return boolean is
-begin
-	for i in p_token_index .. p_tokens.count loop
-		if p_tokens(i).type not in ('whitespace', 'comment', 'EOF') then
-			return false;
-		end if;
-	end loop;
-	return true;
-end only_ws_comments_eof_remain;
-
-
---------------------------------------------------------------------------------
---Return the next concrete token, or NULL if there are no more.
-function get_next_concrete_value_n(p_tokens in token_table, p_token_index in number, p_n in number) return varchar2 is
-	v_concrete_token_counter number := 0;
-begin
-	--Loop through the tokens.
-	for i in p_token_index + 1 .. p_tokens.count loop
-		--Process if it's concrte.
-		if p_tokens(i).type not in ('whitespace', 'comment', 'EOF') then
-			--Increment concrete counter.
-			v_concrete_token_counter := v_concrete_token_counter + 1;
-
-			--Return the value if we've reached the Nth concrete token.
-			if v_concrete_token_counter = p_n then
-				return p_tokens(i).value;
-			end if;
-		end if;
-	end loop;
-
-	--Return NULL if nothing was found.
-	return null;
-end get_next_concrete_value_n;
-
-
---------------------------------------------------------------------------------
-/*
-BEGIN must come after "begin", "as", "is", ";", or ">>", "then", "else", "loop",
-	the beginning of the string, or in the special case of a trigger the first
-	BEGIN can happen anywhere after	all the excluded BEGINs are thrown out
-	(based on the trigger type).
-	- "as" could be a column name, but it cannot be referenced as a column name:
-		select as from (select 1 as from dual);
-			   *
-		ERROR at line 1:
-		ORA-00936: missing expression
-	- Some forms of "begin begin" do not count, such as select begin begin from (select 1 begin from dual);
-	- Exclude "as begin", "then begin", "else begin", and "loop begin" if it's used as an alias.
-		Exclude where next concrete token is ",", "from", "into", or "bulk collect".  For column aliases.
-		Exclude where next concrete token is "," or ")".  For CLUSTER_ID USING, model columns, PIVOT_IN_CLAUSE, XMLATTRIBUTES, XMLCOLATTVAL, XMLELEMENT, XMLFOREST, XMLnamespaces_clause.
-		Exclude where next concrete token is "," or ")" or "columns".  For XMLTABLE_options.
-			ASTRONOMICALLY UNLIKELY LEXER BUG: It is possible to have an object named "COLUMNS", although it would be invalid.
-		Exclude when "in pivot (xml)" and previous1 = "as" and previous2 = ")" and next1 in (",", "for").  For PIVOT clause.
-			create or replace procedure test(a number) as begin for i in 1 .. 2 loop null; end loop; end;
-
-			select *
-			from (select 1 deptno, 'A' job, 100 sal from dual)
-			pivot
-			(
-				sum(sal) as begin1, sum(sal) as begin
-				for deptno
-				in  (1,2)
-			);
-		Exclude when command_name in ('ALTER TABLE', 'CREATE TABLE') and previous1 = "as" and previous2 = "store".  For nested_table_col_properties.
-			create type type1 is table of number;
-			create table test1
-			(
-				a type1
-			)
-			nested table a store as begin;
-
-			create or replace procedure store as begin null end;
-
-		Documentation bug: For XMLnamespaces_clause (in XMLELEMENT) there must be a comma between "string AS identifier"
-			and "DEFAULT string".  Although the documentation implies " 'A' as begin default 'B' " is valid it is NOT.
-			It must be " 'A' as begin, default 'B' ", which is handled by above rules.
-	- Note: These rules were determined by downloading and searching the BNF descriptions like this: findstr /i /s "as" *.*
-		and findstr /i /s "statement" *.*
-*/
-procedure detect_begin(
-	p_tokens in token_table,
-	p_token_index in number,
-	p_command_name in varchar2,
-	v_previous_concrete_token_1 in out nocopy token,
-	v_previous_concrete_token_2 in out nocopy token,
-	v_has_entered_block in out boolean,
-	v_block_counter in out number,
-	v_pivot_paren_counter in number,
-	v_prev_conc_tok_was_real_begin in out boolean,
-	v_has_nested_table in boolean,
-	p_trigger_body_start_index in out number
-) is
-begin
-	if
-	p_tokens(p_token_index).type = 'word'
-	and
-	lower(p_tokens(p_token_index).value) = 'begin'
-	and
-	(
-		--Normal rules.
-		(
-			(
-				p_command_name <> 'CREATE TRIGGER'
-				or
-				p_trigger_body_start_index is null
-			)
-			and
-			(
-				(
-					lower(v_previous_concrete_token_1.value) in ('as', 'is', ';', '>>', 'then', 'else', 'loop')
-					or
-					v_previous_concrete_token_1.type is null
-				)
-				or
-				(
-					--Ignore some "begin begin", such as select begin begin from (select 1 begin from dual);
-					lower(v_previous_concrete_token_1.value) = 'begin'
-					and
-					v_prev_conc_tok_was_real_begin
-				)
-			)
-			--Ignore "as begin" if it's used as an alias.
-			and not
-			(
-				lower(v_previous_concrete_token_1.value) = 'as'
-				and
-				get_next_concrete_value_n(p_tokens, p_token_index, 1) in (',', 'from', 'into', ')', 'columns')
-			)
-			--Ignore "as begin" if it's used in bulk collect.
-			and not
-			(
-				lower(v_previous_concrete_token_1.value) = 'as'
-				and
-				lower(get_next_concrete_value_n(p_tokens, p_token_index, 1)) in ('bulk')
-				and
-				lower(get_next_concrete_value_n(p_tokens, p_token_index, 2)) in ('collect')
-			)
-			--Ignore "as begin" if it's used in a PIVOT
-			and not
-			(
-				v_pivot_paren_counter > 0
-				and
-				lower(v_previous_concrete_token_1.value) = 'as'
-				and
-				lower(v_previous_concrete_token_2.value) = ')'
-				and
-				lower(get_next_concrete_value_n(p_tokens, p_token_index, 1)) in (',', 'for')
-			)
-			--Ignore "as begin" if it's used in a nested table "... store as begin".
-			and not
-			(
-				v_has_nested_table
-				and
-				lower(v_previous_concrete_token_2.value) = 'store'
-				and
-				lower(v_previous_concrete_token_1.value) = 'as'
-			)
-		)
-		or
-		--Trigger rules.
-		(
-			--Count BEGIN if it's after the starting index.
-			p_command_name = 'CREATE TRIGGER'
-			and
-			p_token_index >= p_trigger_body_start_index
-		)
-	)
-	then
-		v_has_entered_block := true;
-		v_block_counter := v_block_counter + 1;
-		v_prev_conc_tok_was_real_begin := true;
-		--Reset this, only the first BEGIN is treated differently.
-		p_trigger_body_start_index := null;
-	--If token is concrete, reset the flag.
-	elsif p_tokens(p_token_index).type not in ('whitespace', 'comment', 'EOF') then
-		v_prev_conc_tok_was_real_begin := false;
-	end if;
-
-end detect_begin;
-
-
---------------------------------------------------------------------------------
-/*
-END must come after ";", or as part of a trigger timing point.
-	It cannot come after ">>", labels can't go there without compilation error.
-	end could be an object, but the object will be invalid so things won't compile
-Note: Special case of "END" in empty package is handled elsewhere.
-*/
-procedure detect_end(
-	p_tokens in token_table,
-	p_token_index in number,
-	v_previous_concrete_token_1 in out nocopy token,
-	v_previous_concrete_token_2 in out nocopy token,
-	v_previous_concrete_token_3 in out nocopy token,
-	v_previous_concrete_token_4 in out nocopy token,
-	v_previous_concrete_token_5 in out nocopy token,
-	v_block_counter in out number
-) is
-begin
-	if
-	p_tokens(p_token_index).type = ';'
-	and
-	(
-		--Regular "end;".
-		(
-			lower(v_previous_concrete_token_1.value) = 'end'
-			and
-			lower(v_previous_concrete_token_2.type) = ';'
-		)
-		or
-		--End with optional name: "end object_name;".
-		--But "object_name" cannot be "if", "loop", or "case".
-		(
-			v_previous_concrete_token_1.type = 'word'
-			and
-			lower(v_previous_concrete_token_2.value) = 'end'
-			and
-			lower(v_previous_concrete_token_3.type) = ';'
-			and
-			lower(v_previous_concrete_token_1.value) not in ('if', 'loop', 'case')
-		)
-		or
-		--Trigger timing points end.
-		--One of: before statement, before each row, after statement, after each row, instead of each row
-		(
-			(
-				lower(v_previous_concrete_token_3.value) = 'end'
-				and
-				lower(v_previous_concrete_token_2.value) = 'before'
-				and
-				lower(v_previous_concrete_token_1.value) = 'statement'
-			)
-			or
-			(
-				lower(v_previous_concrete_token_4.value) = 'end'
-				and
-				lower(v_previous_concrete_token_3.value) = 'before'
-				and
-				lower(v_previous_concrete_token_2.value) = 'each'
-				and
-				lower(v_previous_concrete_token_1.value) = 'row'
-			)
-			or
-			(
-				lower(v_previous_concrete_token_3.value) = 'end'
-				and
-				lower(v_previous_concrete_token_2.value) = 'after'
-				and
-				lower(v_previous_concrete_token_1.value) = 'statement'
-			)
-			or
-			(
-				lower(v_previous_concrete_token_4.value) = 'end'
-				and
-				lower(v_previous_concrete_token_3.value) = 'after'
-				and
-				lower(v_previous_concrete_token_2.value) = 'each'
-				and
-				lower(v_previous_concrete_token_1.value) = 'row'
-			)
-			or
-			(
-				lower(v_previous_concrete_token_5.value) = 'end'
-				and
-				lower(v_previous_concrete_token_4.value) = 'instead'
-				and
-				lower(v_previous_concrete_token_3.value) = 'of'
-				and
-				lower(v_previous_concrete_token_2.value) = 'each'
-				and
-				lower(v_previous_concrete_token_1.value) = 'row'
-			)
-		)
-	) then
-		v_block_counter := v_block_counter - 1;
-	end if;
-end detect_end;
 
 
 --------------------------------------------------------------------------------
 procedure add_statement_consume_tokens(
 	p_split_tokens in out nocopy token_table_table,
-	p_old_tokens in token_table,
+	p_parse_tree in token_table,
 	p_terminator number,
-	p_new_tokens in out nocopy token_table,
-	p_token_index in out number,
-	p_command_name in varchar2,
-	p_trigger_body_start_index in number
+	p_parse_tree_index in out number,
+	p_command_name in varchar2
 ) is
-	v_previous_concrete_token_1 token := token(null, null, null, null, null, null, null, null);
-	v_previous_concrete_token_2 token := token(null, null, null, null, null, null, null, null);
-	v_previous_concrete_token_3 token := token(null, null, null, null, null, null, null, null);
-	v_previous_concrete_token_4 token := token(null, null, null, null, null, null, null, null);
-	v_previous_concrete_token_5 token := token(null, null, null, null, null, null, null, null);
+	/*
+	This is a recursive descent parser for PL/SQL.
+	This link has a good introduction to recursive descent parsers: https://www.cis.upenn.edu/~matuszek/General/recursive-descent-parsing.html)
+
+	The functions roughly follow the same order as the "Block" chapater in the 12c PL/SQL Langauge Reference:
+	http://docs.oracle.com/database/121/LNPLS/block.htm#LNPLS01303
+
+	The splitter only needs to know when the statement ends and does not consume
+	every token in a meaningful way, like a real parser would.  For example,
+	there are many times when tokens can be skipped until the next semicolon.
+
+	If Oracle ever allows PLSQL_DECLARATIONS inside PL/SQL code this code will need to
+	be much more complicated.
+	*/
+
+	-------------------------------------------------------------------------------
+	--Globals
+	-------------------------------------------------------------------------------
+	--v_code clob := 'declare procedure p1 is begin null; end; begin null; end;select * from dual;';
+	--v_code clob := '<<asdf>>declare a number; procedure p1 is begin null; end; begin null; end;select * from dual;';
+
+	--Cursors can have lots of parentheses, and even an "IS" inside them.
+	--v_code clob := 'declare cursor c(a number default case when (((1 is null))) then 1 else 0 end) is select 1 a from dual; begin null; end;select * from dual;';
+	--v_code clob := '<<asdf>>begin null; end;';
+
+	--SELECT test.
+	--v_code clob := 'declare a number; select 1 into a from dual; end;';
 
 
-	---------------------------------------
-	--Shift tokens if the new token is not whitespace.
-	procedure shift_tokens_if_not_ws(
-		p_new_token in token,
-		p_previous_concrete_token_1 in out nocopy token,
-		p_previous_concrete_token_2 in out nocopy token,
-		p_previous_concrete_token_3 in out nocopy token,
-		p_previous_concrete_token_4 in out nocopy token,
-		p_previous_concrete_token_5 in out nocopy token
-	) is
+	type string_table is table of varchar2(32767);
+	type number_table is table of number;
+	v_debug_lines string_table := string_table();
+
+	v_abstract_syntax_tree token_table := token_table();
+	v_map_between_parse_and_ast number_table := number_table();
+
+	v_ast_index number := 1;
+	v_ast_index_at_start number;
+
+
+	-------------------------------------------------------------------------------
+	--Forward declarations so that functions can be in the same order as the documentation.
+	-------------------------------------------------------------------------------
+	function anything_(p_value varchar2) return boolean;
+	function anything_before_begin return boolean;
+	function anything_in_parentheses return boolean;
+	function anything_up_to_and_including_(p_value varchar2) return boolean;
+	function basic_loop_statement return boolean;
+	function body return boolean;
+	function case_statement return boolean;
+	function create_procedure return boolean;
+	function create_function return boolean;
+	function create_package return boolean;
+	function create_type_body return boolean;
+	function create_trigger return boolean;
+	function cursor_for_loop_statement return boolean;
+	function declare_section return boolean;
+	function exception_handler return boolean;
+	function expression_case_when_then return boolean;
+	function for_loop_statement return boolean;
+	function function_definition return boolean;
+	function if_statement return boolean;
+	function label return boolean;
+	function name return boolean;
+	function p_end return boolean;
+	function plsql_block return boolean;
+	function procedure_definition return boolean;
+	function statement_or_inline_pragma return boolean;
+
+
+	-------------------------------------------------------------------------------
+	--Procedures that wrap functions and ignore output.
+	-------------------------------------------------------------------------------
+	procedure anything_(p_value varchar2) is v_ignore boolean; begin v_ignore := anything_(p_value); end;
+	procedure anything_before_begin is v_ignore boolean; begin v_ignore := anything_before_begin; end;
+	procedure anything_in_parentheses is v_ignore boolean; begin v_ignore := anything_in_parentheses; end;
+	procedure anything_up_to_and_including_(p_value varchar2) is v_ignore boolean; begin v_ignore := anything_up_to_and_including_(p_value); end;
+	procedure body is v_ignore boolean; begin v_ignore := body; end;
+	procedure declare_section is v_ignore boolean;begin v_ignore := declare_section; end;
+	procedure expression_case_when_then is v_ignore boolean; begin v_ignore := expression_case_when_then; end;
+	procedure function_definition is v_ignore boolean; begin v_ignore := function_definition; end;
+	procedure label is v_ignore boolean; begin v_ignore := label; end;
+	procedure name is v_ignore boolean; begin v_ignore := name; end;
+	procedure p_end is v_ignore boolean; begin v_ignore := p_end; end;
+	procedure plsql_block is v_ignore boolean; begin v_ignore := plsql_block; end;
+	procedure procedure_definition is v_ignore boolean; begin v_ignore := procedure_definition; end;
+
+	-------------------------------------------------------------------------------
+	--Helper functions
+	-------------------------------------------------------------------------------
+	procedure push_line(p_line varchar2) is
 	begin
-		if p_new_token.type not in ('whitespace', 'comment') then
-			p_previous_concrete_token_5 := p_previous_concrete_token_4;
-			p_previous_concrete_token_4 := p_previous_concrete_token_3;
-			p_previous_concrete_token_3 := p_previous_concrete_token_2;
-			p_previous_concrete_token_2 := p_previous_concrete_token_1;
-			p_previous_concrete_token_1 := p_new_token;
-		end if;
-	end shift_tokens_if_not_ws;
+		v_debug_lines.extend;
+		v_debug_lines(v_debug_lines.count) := p_line;
+	end;
 
-	---------------------------------------
-	--Count pivot parentheses.
-	procedure set_pivot_paren_counter(
-		v_pivot_paren_counter in out number,
-		v_previous_concrete_token_1 in token,
-		v_previous_concrete_token_2 in token,
-		v_previous_concrete_token_3 in token
-	) is
+	procedure pop_line is
 	begin
-		--Initialize, if it's not already initialized and it's in a "pivot xml? (".
-		if
-		(
-			v_pivot_paren_counter = 0
-			and
-			(
-				(
-					v_previous_concrete_token_1.value = '('
-					and
-					lower(v_previous_concrete_token_2.value) = 'pivot'
-				)
-				or
-				(
-					v_previous_concrete_token_1.value = '('
-					and
-					lower(v_previous_concrete_token_2.value) = 'xml'
-					and
-					lower(v_previous_concrete_token_3.value) = 'pivot'
-				)
-			)
-		) then
-			v_pivot_paren_counter := 1;
-		--Increment, if it's in a PIVOT and a "(" is found.
-		elsif
-		(
-			v_pivot_paren_counter > 0
-			and
-			p_old_tokens(p_token_index).value = '('
-		) then
-			v_pivot_paren_counter := v_pivot_paren_counter + 1;
-		--Decrement, if it's in a PIVOT and a ")" is found.
-		elsif
-		(
-			v_pivot_paren_counter > 0
-			and
-			p_old_tokens(p_token_index).value = ')'
-		) then
-			v_pivot_paren_counter := v_pivot_paren_counter - 1;
-		end if;
-	end set_pivot_paren_counter;
+		v_debug_lines.trim;
+	end;
 
-	---------------------------------------
-	--Track the first "IS" or "AS" and handle an empty package or empty package body.
-	procedure track_first_isas_and_empty_pkg(
-		p_is_past_first_is_or_as in out boolean,
-		p_exit_loop out boolean
-	) is
-	begin
-		--Do not exit the outer loop by default.
-		p_exit_loop := false;
+	procedure increment is begin
+		v_ast_index := v_ast_index + 1;
+	end;
 
-		--Detect the first IS or AS, and possibly an empty package.
-		if not p_is_past_first_is_or_as and lower(p_old_tokens(p_token_index).value) in ('is', 'as') then
-			p_is_past_first_is_or_as := true;
-
-			--Consume first "is" or "as" and shift tokens.
-			p_token_index := p_token_index + 1;
-			p_new_tokens.extend;
-			p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
-			shift_tokens_if_not_ws(p_old_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
-
-			--Return when empty package.
-			--Special case where the next concrete token is END.
-			declare
-				v_next_concrete_value1 varchar2(32767);
-				v_next_concrete_value2 varchar2(32767);
-				v_next_concrete_value3 varchar2(32767);
-			begin
-				v_next_concrete_value1 := get_next_concrete_value_n(p_old_tokens, p_token_index, 1);
-				v_next_concrete_value2 := get_next_concrete_value_n(p_old_tokens, p_token_index, 2);
-				v_next_concrete_value3 := get_next_concrete_value_n(p_old_tokens, p_token_index, 3);
-
-				--Consume tokens and exit if an END is found.
-				if
-				(
-					--Regular "END;".
-					(
-						lower(v_next_concrete_value1) = 'end'
-						and
-						lower(v_next_concrete_value2) = ';'
-					)
-					or
-					(
-						lower(v_next_concrete_value1) = 'end'
-						and
-						lower(v_next_concrete_value3) = ';'
-					)
-				) then
-					--Consume all tokens until the final ";".
-					loop
-						p_token_index := p_token_index + 1;
-						p_new_tokens.extend;
-						p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
-						exit when p_old_tokens(p_token_index).type = ';';
-					end loop;
-					p_token_index := p_token_index + 1;
-					p_exit_loop := true;
-				end if;
-			end;
-		end if;
-	end track_first_isas_and_empty_pkg;
-
-begin
-	--Consume everything
-	if p_terminator = C_TERMINATOR_EOF then
-		--Consume all tokens.
-		loop
-			exit when p_token_index > p_old_tokens.count;
-			p_new_tokens.extend;
-			p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
-			p_token_index := p_token_index + 1;
+	function get_next_(p_value varchar2) return number is begin
+		for i in v_ast_index .. v_abstract_syntax_tree.count loop
+			if upper(v_abstract_syntax_tree(i).value) = p_value then
+				return i;
+			end if;
 		end loop;
-	--Look for a ';' anywhere.
-	elsif p_terminator = C_TERMINATOR_SEMI then
-		--Build new statement and count tokens.
-		loop
-			--Increment.
-			exit when p_token_index > p_old_tokens.count;
-			p_new_tokens.extend;
-			p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
+		return null;
+	end;
 
-			--Detect end of statement.
-			if p_old_tokens(p_token_index).type = ';' or p_old_tokens(p_token_index).type = 'EOF' then
-				--Stop if no more tokens.
-				if p_token_index = p_old_tokens.count then
-					p_token_index := p_token_index + 1;
-					exit;
-				--Consume all tokens if only whitespace, comments, and EOF remain.
-				elsif only_ws_comments_eof_remain(p_old_tokens, p_token_index+1) then
-					--Consume all tokens.
-					loop
-						p_token_index := p_token_index + 1;
-						exit when p_token_index > p_old_tokens.count;
-						p_new_tokens.extend;
-						p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
-					end loop;
-					exit;
-				--Otherwise stop at this spot.
-				else
-					p_token_index := p_token_index + 1;
-					exit;
+	function current_value return clob is begin
+		return upper(v_abstract_syntax_tree(v_ast_index).value);
+	end;
+
+	function next_value return clob is begin
+		begin
+			return upper(v_abstract_syntax_tree(v_ast_index+1).value);
+		exception when subscript_beyond_count then
+			null;
+		end;
+	end;
+
+	function previous_value(p_decrement number) return clob is begin
+		begin
+			if v_ast_index - p_decrement <= 0 then
+				return null;
+			else
+				return upper(v_abstract_syntax_tree(v_ast_index - p_decrement).value);
+			end if;
+		exception when subscript_beyond_count then
+			null;
+		end;
+	end;
+
+	function current_type return varchar2 is begin
+		return v_abstract_syntax_tree(v_ast_index).type;
+	end;
+
+	function anything_(p_value varchar2) return boolean is begin
+		push_line(p_value);
+		if current_value = p_value then
+			increment;
+			return true;
+		else
+			pop_line;
+			return false;
+		end if;
+	end;
+
+	function anything_up_to_and_including_(p_value varchar2) return boolean is begin
+		push_line('ANYTHING_UP_TO_'||p_value);
+		loop
+			if current_value = p_value then
+				increment;
+				return true;
+			end if;
+			increment;
+		end loop;
+	end;
+
+	function anything_before_begin return boolean is begin
+		push_line('ANYTHING_BUT_BEGIN');
+		loop
+			if current_value = 'BEGIN' then
+				return true;
+			end if;
+			increment;
+		end loop;
+	end;
+
+	function anything_in_parentheses return boolean is v_paren_counter number; begin
+		if current_value = '(' then
+			v_paren_counter := 1;
+			increment;
+			while v_paren_counter >= 1 loop
+				if current_value = '(' then
+					v_paren_counter := v_paren_counter + 1;
+				elsif current_value = ')' then
+					v_paren_counter := v_paren_counter - 1;
+				end if;
+				increment;
+			end loop;
+			push_line('ANYTHING_IN_PARENTHESES');
+			return true;
+		end if;
+		return false;
+	end;
+
+	-------------------------------------------------------------------------------
+	--Production rules that consume tokens and return true or false if rule was found.
+	-------------------------------------------------------------------------------
+	function plsql_block return boolean is begin
+		push_line('PLSQL_BLOCK');
+		v_ast_index_at_start := v_ast_index;
+
+		label;
+		if anything_('DECLARE') then
+			declare_section;
+			if body then
+				return true;
+			else
+				v_ast_index := v_ast_index_at_start;
+				pop_line;
+				return false;
+			end if;
+		elsif body then
+			return true;
+		else
+			v_ast_index := v_ast_index_at_start;
+			pop_line;
+			return false;
+		end if;
+	end;
+
+	function label return boolean is begin
+		push_line('LABEL');
+		if current_value = '<<' then
+			loop
+				increment;
+				if current_value = '>>' then
+					increment;
+					return true;
+				end if;
+			end loop;
+		end if;
+		pop_line;
+		return false;
+	end;
+
+	function declare_section return boolean is begin
+		push_line('DECLARE_SECTION');
+		if current_value in ('BEGIN', 'END') then
+			return false;
+		else
+			loop
+				if current_value in ('BEGIN', 'END') then
+					return true;
+				end if;
+
+				--Of the items in ITEM_LIST_1 and ITEM_LIST_2, only
+				--these two require any special processing.
+				if procedure_definition then null;
+				elsif function_definition then null;
+				elsif anything_up_to_and_including_(';') then null;
+				end if;
+			end loop;
+		end if;
+	end;
+
+	function body return boolean is begin
+		push_line('BODY');
+		if anything_('BEGIN') then
+			while statement_or_inline_pragma loop null; end loop;
+			if anything_('EXCEPTION') then
+				while exception_handler loop null; end loop;
+			end if;
+			p_end;
+			return true;
+		else
+			pop_line;
+			return false;
+		end if;
+	end;
+
+	function procedure_definition return boolean is begin
+		push_line('PROCEDURE_DEFINITION');
+		--Exclude CTE queries that create a table expression named "PROCEDURE".
+		if current_value = 'PROCEDURE' and next_value not in ('AS', '(') then
+			anything_before_begin; --Don't need the header information.
+			return body;
+		else
+			pop_line;
+			return false;
+		end if;
+	end;
+
+	function function_definition return boolean is begin
+		push_line('FUNCTION_DEFINITION');
+		--Exclude CTE queries that create a table expression named "FUNCTION".
+		if current_value = 'FUNCTION' and next_value not in ('AS', '(') then
+			anything_before_begin; --Don't need the header information.
+			return body;
+		else
+			pop_line;
+			return false;
+		end if;
+	end;
+
+	function name return boolean is begin
+		push_line('NAME');
+		if current_type = tokenizer.c_word then
+			increment;
+			return true;
+		else
+			pop_line;
+			return false;
+		end if;
+	end;
+
+	function statement_or_inline_pragma return boolean is begin
+		push_line('STATEMENT_OR_INLINE_PRAGMA');
+		if label then return true;
+		--Types that might have more statements:
+		elsif basic_loop_statement then return true;
+		elsif case_statement then return true;
+		elsif for_loop_statement then return true;
+		elsif cursor_for_loop_statement then return true;
+		elsif if_statement then return true;
+		elsif plsql_block then return true;
+		--Anything else
+		elsif current_value not in ('EXCEPTION', 'END', 'ELSE', 'ELSIF') then
+			return anything_up_to_and_including_(';');
+		else
+			pop_line;
+			return false;
+		end if;
+	end;
+
+	function p_end return boolean is begin
+		push_line('P_END');
+		if current_value = 'END' then
+			increment;
+			name;
+			if current_type = ';' then
+				increment;
+			end if;
+			return true;
+		end if;
+		pop_line;
+		return false;
+	end;
+
+	function exception_handler return boolean is begin
+		push_line('EXCEPTION_HANDLER');
+		if current_value = 'WHEN' then
+			anything_up_to_and_including_('THEN');
+			while statement_or_inline_pragma loop null; end loop;
+			return true;
+		end if;
+		pop_line;
+		return false;
+	end;
+
+	function basic_loop_statement return boolean is begin
+		push_line('BASIC_LOOP_STATEMENT');
+		if current_value = 'LOOP' then
+			increment;
+			while statement_or_inline_pragma loop null; end loop;
+			if current_value = 'END' then
+				increment;
+				if current_value = 'LOOP' then
+					increment;
+					name;
+					if current_value = ';' then
+						increment;
+						return true;
+					end if;
 				end if;
 			end if;
+			raise_application_error(-20330, 'Fatal parse error in BASIC_LOOP_STATEMENT.');
+		end if;
+		pop_line;
+		return false;
+	end;
 
-			p_token_index := p_token_index + 1;
+	function for_loop_statement return boolean is begin
+		push_line('FOR_LOOP_STATEMENT');
+		if current_value = 'FOR' and get_next_('..') < get_next_(';') then
+			anything_up_to_and_including_('LOOP');
+			while statement_or_inline_pragma loop null; end loop;
+			if current_value = 'END' then
+				increment;
+				if current_value = 'LOOP' then
+					increment;
+					name;
+					if current_value = ';' then
+						increment;
+						return true;
+					end if;
+				end if;
+			end if;
+			raise_application_error(-20330, 'Fatal parse error in FOR_LOOP_STATEMENT.');
+		else
+			pop_line;
+			return false;
+		end if;
+	end;
+
+	function cursor_for_loop_statement return boolean is begin
+		push_line('CURSOR_FOR_LOOP_STATEMENT');
+		v_ast_index_at_start := v_ast_index;
+		if current_value = 'FOR' then
+			increment;
+			if name then
+				if current_value = 'IN' then
+					increment;
+					name;
+					if current_value = '(' then
+						anything_in_parentheses;
+						if current_value = 'LOOP' then
+							increment;
+							while statement_or_inline_pragma loop null; end loop;
+							if current_value = 'END' then
+								increment;
+								if current_value = 'LOOP' then
+									increment;
+									name;
+									if current_value = ';' then
+										increment;
+										return true;
+									end if;
+								end if;
+							end if;
+						end if;
+					end if;
+				end if;
+			end if;
+			raise_application_error(-20330, 'Fatal parse error in CURSOR_FOR_LOOP_STATEMENT.');
+		else
+			v_ast_index := v_ast_index_at_start;
+			pop_line;
+			return false;
+		end if;
+	end;
+
+	procedure case_expression is begin
+		push_line('CASE_EXPRESSION');
+		loop
+			if anything_('CASE') then
+				case_expression;
+				return;
+			elsif anything_('END') then
+				return;
+			else
+				increment;
+			end if;
+		end loop;
+		pop_line;
+	end;
+
+	function expression_case_when_then return boolean is begin
+		push_line('EXPRESSION_CASE_WHEN_THEN');
+		loop
+			if current_value = 'CASE' then
+				case_expression;
+			elsif current_value = 'WHEN' or current_value = 'THEN' then
+				return true;
+			else
+				increment;
+			end if;
+		end loop;
+		pop_line;
+		return false;
+	end;
+
+	function case_statement return boolean is begin
+		push_line('CASE_STATEMENT');
+		if anything_('CASE') then
+			--Searched case.
+			if current_value = 'WHEN' then
+				while anything_('WHEN') and expression_case_when_then and anything_('THEN') loop
+					while statement_or_inline_pragma loop null; end loop;
+				end loop;
+				if anything_('ELSE') then
+					while statement_or_inline_pragma loop null; end loop;
+				end if;
+				if anything_('END') and anything_('CASE') and (name or not name) and anything_(';') then
+					return true;
+				end if;
+				raise_application_error(-20330, 'Fatal parse error in SEARCHED_CASE_STATEMENT.');
+			--Simple case.
+			else
+				if expression_case_when_then then
+					while anything_('WHEN') and expression_case_when_then and anything_('THEN') loop
+						while statement_or_inline_pragma loop null; end loop;
+					end loop;
+					if anything_('ELSE') then
+						while statement_or_inline_pragma loop null; end loop;
+					end if;
+					if anything_('END') and anything_('CASE') and (name or not name) and anything_(';') then
+						return true;
+					end if;
+				end if;
+				raise_application_error(-20330, 'Fatal parse error in SIMPLE_CASE_STATEMENT.');
+			end if;
+		else
+			pop_line;
+			return false;
+		end if;
+	end;
+
+	function if_statement return boolean is begin
+		push_line('IF_STATEMENT');
+		if anything_('IF') then
+			if expression_case_when_then and anything_('THEN') then
+				while statement_or_inline_pragma loop null; end loop;
+				while anything_('ELSIF') and expression_case_when_then and anything_('THEN') loop
+					while statement_or_inline_pragma loop null; end loop;
+				end loop;
+				if anything_('ELSE') then
+					while statement_or_inline_pragma loop null; end loop;
+				end if;
+				if anything_('END') and anything_('IF') and anything_(';') then
+					return true;
+				end if;
+			end if;
+			raise_application_error(-20330, 'Fatal parse error in IF_STATEMENT.');
+		end if;
+		pop_line;
+		return false;
+	end;
+
+	function create_or_replace_edition return boolean is begin
+		push_line('CREATE_OR_REPLACE_EDITION');
+		v_ast_index := v_ast_index_at_start;
+		if anything_('CREATE') then
+			anything_('OR');
+			anything_('REPLACE');
+			anything_('EDITIONABLE');
+			anything_('NONEDITIONABLE');
+			return true;
+		end if;
+		pop_line;
+		return false;
+	end;
+
+	function create_procedure return boolean is begin
+		push_line('CREATE_PROCEDURE');
+		v_ast_index_at_start := v_ast_index;
+		if create_or_replace_edition and anything_('PROCEDURE') and name then
+			if anything_('.') then
+				name;
+			end if;
+			anything_in_parentheses;
+			--TODO: Add support for external and call syntax.
+			if anything_up_to_and_including_('IS') or anything_up_to_and_including_('AS') then
+				plsql_block;
+				return true;
+			end if;
+		end if;
+		v_ast_index := v_ast_index_at_start;
+		pop_line;
+		return false;
+	end;
+
+	function create_function return boolean is begin
+		push_line('CREATE_FUNCTION');
+		v_ast_index_at_start := v_ast_index;
+		if create_or_replace_edition and anything_('FUNCTION') and name then
+			if anything_('.') then
+				name;
+			end if;
+			anything_in_parentheses;
+			--TODO: Add function extra processing - functions may allow an "IS".
+			--TODO: Add support for external and call syntax.
+			if anything_up_to_and_including_('IS') or anything_up_to_and_including_('AS') then
+				plsql_block;
+				return true;
+			end if;
+		end if;
+		v_ast_index := v_ast_index_at_start;
+		pop_line;
+		return false;
+	end;
+
+	function create_package_body return boolean is begin
+		push_line('CREATE_PACKAGE_BODY');
+		v_ast_index_at_start := v_ast_index;
+		if create_or_replace_edition and anything_('PACKAGE') and name then
+			if anything_('.') then
+				name;
+			end if;
+			anything_in_parentheses;
+			if anything_up_to_and_including_('IS') or anything_up_to_and_including_('AS') then
+				loop
+					if anything_('END') then
+						name;
+						anything_(';');
+						return true;
+					else
+						anything_up_to_and_including_(';');
+					end if;
+				end loop;
+			end if;
+		end if;
+		v_ast_index := v_ast_index_at_start;
+		pop_line;
+		return false;
+	end;
+
+	function create_package return boolean is begin
+		push_line('CREATE_PACKAGE');
+		v_ast_index_at_start := v_ast_index;
+		if create_or_replace_edition and anything_('PACKAGE') and anything_('BODY') and name then
+			if anything_('.') then
+				name;
+			end if;
+			if anything_('IS') or anything_('AS') then
+				declare_section;
+				body;
+				if anything_('END') then
+					name;
+					anything_(';');
+					return true;
+				end if;
+			end if;
+		end if;
+		v_ast_index := v_ast_index_at_start;
+		pop_line;
+		return false;
+	end;
+
+	function create_type_body return boolean is begin
+		push_line('CREATE_TYPE_BODY');
+		v_ast_index_at_start := v_ast_index;
+		if create_or_replace_edition and anything_('TYPE') and anything_('BODY') and name then
+			if anything_('.') then
+				name;
+			end if;
+			anything_in_parentheses;
+			if anything_up_to_and_including_('IS') or anything_up_to_and_including_('AS') then
+				loop
+					if anything_('END') and anything_(';') then
+						return true;
+					elsif current_value in ('MAP', 'ORDER', 'MEMBER') then
+						anything_('MAP');
+						anything_('ORDER');
+						anything_('MEMBER');
+						if procedure_definition or function_definition then
+							null;
+						end if;
+					elsif current_value in ('FINAL', 'INSTANTIABLE', 'CONSTRUCTOR') then
+						anything_('FINAL');
+						anything_('INSTANTIABLE');
+						anything_('CONSTRUCTOR');
+						function_definition;
+					else
+						anything_up_to_and_including_(';');
+					end if;
+				end loop;
+			end if;
+			raise_application_error(-20330, 'Fatal parse error in CREATE_TYPE_BODY.');
+		end if;
+		v_ast_index := v_ast_index_at_start;
+		pop_line;
+		return false;
+	end;
+
+	function create_trigger return boolean is begin
+		push_line('');
+		--TODO;
+/*
+			if v_trigger_type = statement_classifier.C_TRIGGER_TYPE_REGULAR then
+				add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_PLSQL_MATCHED_END, v_parse_tree_index, v_command_name, v_trigger_body_start_index);
+			elsif v_trigger_type = statement_classifier.C_TRIGGER_TYPE_COMPOUND then
+				add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_PLSQL_EXTRA_END, v_parse_tree_index, v_command_name, v_trigger_body_start_index);
+			elsif v_trigger_type = statement_classifier.C_TRIGGER_TYPE_CALL then
+				add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_SEMI, v_parse_tree_index, v_command_name, v_trigger_body_start_index);
+			end if;
+*/
+		pop_line;
+		return false;
+	end;
+
+
+begin
+	--Convert parse tree into abstract syntax tree by removing whitespace, comment, and EOF.
+	--Also create a map between the two.
+	for i in p_parse_tree_index .. p_parse_tree.count loop
+		if p_parse_tree(i).type not in (tokenizer.c_whitespace, tokenizer.c_comment, tokenizer.c_eof) then
+			v_abstract_syntax_tree.extend;
+			v_abstract_syntax_tree(v_abstract_syntax_tree.count) := p_parse_tree(i);
+
+			v_map_between_parse_and_ast.extend;
+			v_map_between_parse_and_ast(v_map_between_parse_and_ast.count) := i;
+		end if;
+	end loop;
+
+	--Find the last AST token index.
+	--
+	--Consume everything
+	if p_terminator = C_TERMINATOR_EOF then
+		v_ast_index := v_abstract_syntax_tree.count + 1;
+
+	--Look for a ';' anywhere.
+	elsif p_terminator = C_TERMINATOR_SEMI then
+		--Loop through all tokens, exit if a semicolon found.
+		for i in 1 .. v_abstract_syntax_tree.count loop
+			if v_abstract_syntax_tree(i).type = ';' then
+				v_ast_index := i + 1;
+				exit;
+			end if;
+			v_ast_index := i + 1;
 		end loop;
 
 	--Match BEGIN and END for a PLSQL_DECLARATION.
-	elsif p_terminator = C_TERMINATOR_PLSQL_DECLARE_END then
-		declare
-			v_has_entered_block boolean := false;
-			v_block_counter number := 0;
-			v_pivot_paren_counter number := 0;
-			v_prev_conc_tok_was_real_begin boolean := false;
-			v_has_nested_table boolean := false;
-			v_trigger_body_start_index number := p_trigger_body_start_index;
-		begin
-			--Build new statement and count tokens.
-			loop
-				--Increment
-				exit when p_token_index > p_old_tokens.count;
-				p_new_tokens.extend;
-				p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
+	elsif p_terminator = C_TERMINATOR_PLSQL_DECLARATION then
+		/*
+		PL/SQL Declarations must have this pattern before the first ";":
+			(null or not "START") "WITH" ("FUNCTION"|"PROCEDURE") (neither "(" nor "AS")
 
-				--Set the PIVOT parentheses counter.
-				set_pivot_paren_counter(v_pivot_paren_counter, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3);
+		This was discovered by analyzing all "with" strings in the Oracle documentation
+		text descriptions.  That is, download the library and run a command like this:
+			C:\E50529_01\SQLRF\img_text> findstr /s /i "with" *.*
 
-				--Set v_has_nested_table.
-				if
-					p_command_name in ('CREATE TABLE', 'ALTER TABLE')
-					and
-					lower(v_previous_concrete_token_2.value) = 'nested'
-					and lower(v_previous_concrete_token_1.value) = 'table'
-				then
-					v_has_nested_table := true;
+		SQL has mnay ambiguities, simply looking for "with function" would incorrectly catch these:
+			1. Hierarchical queries.  Exclude them by looking for "start" before "with".
+				select * from (select 1 function from dual)	connect by function = 1	start with function = 1;
+			2. Subquery factoring that uses "function" as a name.  Stupid, but possible.
+				with function as (select 1 a from dual) select * from function;
+				with function(a) as (select 1 a from dual) select * from function;
+			Note: "start" cannot be the name of a table, no need to worry about DML
+			statements like `insert into start with ...`.
+		*/
+		for i in 1 .. v_abstract_syntax_tree.count loop
+			if
+			(
+				(previous_value(2) is null or previous_value(2) <> 'START')
+				and previous_value(1) = 'WITH'
+				and current_value in ('FUNCTION', 'PROCEDURE')
+				and (next_value is null or next_value not in ('(', 'AS'))
+			) then
+				if current_value in ('FUNCTION', 'PROCEDURE') then
+					while function_definition or procedure_definition loop null; end loop;
 				end if;
-
-				--Detect BEGIN and END.
-				detect_begin(p_old_tokens, p_token_index, p_command_name, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table, v_trigger_body_start_index);
-				detect_end(p_old_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5, v_block_counter);
-
-				--Detect end of statement.
-				if (v_has_entered_block and v_block_counter = 0) or p_old_tokens(p_token_index).type = 'EOF' then
-					--Stop if no more tokens.
-					if p_token_index = p_old_tokens.count then
-						exit;
-					--Consume all tokens if only whitespace, comments, and EOF remain.
-					elsif only_ws_comments_eof_remain(p_old_tokens, p_token_index+1) then
-						--Consume all tokens.
-						loop
-							p_token_index := p_token_index + 1;
-							exit when p_token_index > p_old_tokens.count;
-							p_new_tokens.extend;
-							p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
-						end loop;
-					--There could be more than one function.
-					elsif has_another_plsql_declaration(p_old_tokens, p_token_index + 1) then
-						p_token_index := p_token_index + 1;
-						add_statement_consume_tokens(p_split_tokens, p_old_tokens, C_TERMINATOR_PLSQL_DECLARE_END, p_new_tokens, p_token_index, p_command_name, null);
-						return;
-					--Otherwise look for the next ';'.
-					else
-						p_token_index := p_token_index + 1;
-						add_statement_consume_tokens(p_split_tokens, p_old_tokens, C_TERMINATOR_SEMI, p_new_tokens, p_token_index, p_command_name, null);
-						return;
-					end if;
-				end if;
-
-				--Shift tokens.
-				shift_tokens_if_not_ws(p_old_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2,
-					v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
-
-				--Increment
-				p_token_index := p_token_index + 1;
-			end loop;
-		end;
-
+			elsif v_abstract_syntax_tree(v_ast_index).type = ';' then
+				v_ast_index := v_ast_index + 1;
+				exit;
+			else
+				v_ast_index := v_ast_index + 1;
+			end if;
+		end loop;
 	--Match BEGIN and END for a common PL/SQL block.
-	elsif p_terminator = C_TERMINATOR_PLSQL_MATCHED_END then
-		declare
-			v_has_entered_block boolean := false;
-			v_block_counter number := 0;
-			v_pivot_paren_counter number := 0;
-			v_prev_conc_tok_was_real_begin boolean := false;
-			v_has_nested_table boolean := false;
-			v_trigger_body_start_index number := p_trigger_body_start_index;
-		begin
-			--Build new statement and count tokens.
-			loop
-				--Increment
-				exit when p_token_index > p_old_tokens.count;
-				p_new_tokens.extend;
-				p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
-
-				--Set the PIVOT parentheses counter.
-				set_pivot_paren_counter(v_pivot_paren_counter, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3);
-
-				--Set v_has_nested_table.
-				if
-					p_command_name in ('CREATE TABLE', 'ALTER TABLE')
-					and
-					lower(v_previous_concrete_token_2.value) = 'nested'
-					and
-					lower(v_previous_concrete_token_1.value) = 'table'
-				then
-					v_has_nested_table := true;
-				end if;
-
-				--Detect BEGIN and END.
-				detect_begin(p_old_tokens, p_token_index, p_command_name, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table, v_trigger_body_start_index);
-				detect_end(p_old_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5, v_block_counter);
-
-				--Detect end of statement.
-				if (v_has_entered_block and v_block_counter = 0) or p_old_tokens(p_token_index).type = 'EOF' then
-					--Consume all tokens if only whitespace, comments, and EOF remain.
-					if only_ws_comments_eof_remain(p_old_tokens, p_token_index+1) then
-						--Consume all tokens.
-						loop
-							p_token_index := p_token_index + 1;
-							exit when p_token_index > p_old_tokens.count;
-							p_new_tokens.extend;
-							p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
-						end loop;
-						exit;
-					--Else stop here.
-					else
-						p_token_index := p_token_index + 1;
-						exit;
-					end if;
-				end if;
-
-				--Shift tokens.
-				shift_tokens_if_not_ws(p_old_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2,
-					v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
-
-				--Increment
-				p_token_index := p_token_index + 1;
-			end loop;
-		end;
-
-	--Match BEGIN and END for a PL/SQL statement that has an extra END.
-	elsif p_terminator = C_TERMINATOR_PLSQL_EXTRA_END then
-		--This is almost identical to C_TERMINATOR_PLSQL_MATCHED_END.
-		--The only difference is this code expects an extra block.
-		--TODO: Refactor for DRY.
-		declare
-			v_has_entered_block boolean := false;
-			v_block_counter number := 1;  --Start at 1, an extra END is required.
-			v_pivot_paren_counter number := 0;
-			v_prev_conc_tok_was_real_begin boolean := false;
-			v_has_nested_table boolean := false;
-			v_trigger_body_start_index number := p_trigger_body_start_index;
-
-			v_is_past_first_is_or_as boolean := false;
-			v_exit_loop boolean := false;
-		begin
-			--Build new statement and count tokens.
-			loop
-				--Increment
-				exit when p_token_index > p_old_tokens.count;
-				p_new_tokens.extend;
-				p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
-
-				--Detect the first IS or AS, and possibly an empty package.
-				track_first_isas_and_empty_pkg(v_is_past_first_is_or_as, v_exit_loop);
-				if v_exit_loop then
-					exit;
-				end if;
-
-				--Set the PIVOT parentheses counter.
-				set_pivot_paren_counter(v_pivot_paren_counter, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3);
-
-				--Set v_has_nested_table.
-				if
-					p_command_name in ('CREATE TABLE', 'ALTER TABLE')
-					and
-					lower(v_previous_concrete_token_2.value) = 'nested'
-					and
-					lower(v_previous_concrete_token_1.value) = 'table'
-				then
-					v_has_nested_table := true;
-				end if;
-
-				--Detect BEGIN and END.
-				detect_begin(p_old_tokens, p_token_index, p_command_name, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_block, v_block_counter, v_pivot_paren_counter, v_prev_conc_tok_was_real_begin, v_has_nested_table, v_trigger_body_start_index);
-				detect_end(p_old_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5, v_block_counter);
-
-				--Detect end of statement.
-				if v_block_counter = 0 or p_old_tokens(p_token_index).type = 'EOF' then
-					--Consume all tokens if only whitespace, comments, and EOF remain.
-					if only_ws_comments_eof_remain(p_old_tokens, p_token_index+1) then
-						--Consume all tokens.
-						loop
-							p_token_index := p_token_index + 1;
-							exit when p_token_index > p_old_tokens.count;
-							p_new_tokens.extend;
-							p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
-						end loop;
-						exit;
-					--Else stop here.
-					else
-						p_token_index := p_token_index + 1;
-						exit;
-					end if;
-				end if;
-
-				--Shift tokens.
-				shift_tokens_if_not_ws(p_old_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2,
-					v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
-
-				--Increment
-				p_token_index := p_token_index + 1;
-			end loop;
-		end;
-
-	--Match BEGIN and END for a PL/SQL statement that *may* have an extra END.
-	elsif p_terminator = C_TERMINATOR_PACKAGE_BODY then
-		--See the unit tests for a good set of examples of the 5 different types of package bodies.
-
-		--This is similar to C_TERMINATOR_PLSQL_MATCHED_END.
-		--TODO: Refactor for DRY.
-		declare
-			v_has_entered_block boolean := false;
-			v_block_counter number := 1;  --Start at 1, an extra END is required.
-			v_pivot_paren_counter number := 0;
-			v_prev_conc_tok_was_real_begin boolean := false;
-
-			v_is_past_first_is_or_as boolean := false;
-			v_exit_loop boolean := false;
-
-			--Not needed, only used because it's required by detect_begin.
-			v_has_nested_table boolean := false;
-			v_trigger_body_start_index number := p_trigger_body_start_index;
-		begin
-			--Build new statement and count tokens.
-			loop
-				--Increment
-				exit when p_token_index > p_old_tokens.count;
-				p_new_tokens.extend;
-				p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
-
-				--Detect the first IS or AS, and possibly an empty package.
-				track_first_isas_and_empty_pkg(v_is_past_first_is_or_as, v_exit_loop);
-				if v_exit_loop then
-					exit;
-				end if;
-
-				--Start looking for procedure|function|cursor|begin|end after the first IS|AS was found
-				if v_is_past_first_is_or_as then
-
-					--Loop until matching END; then continue.
-					--For non-external procedures or functions, or cursor with plsql_declaration.
-					if
-					(
-						(
-							(
-								lower(p_old_tokens(p_token_index).value) in ('procedure', 'function')
-								and
-								--Cursor with multiple CTEs could have one named "function as (select ...",
-								--which is not a real function.
-								lower(get_next_concrete_value_n(p_old_tokens, p_token_index, 1)) <> 'as'
-							)
-							and
-							not is_external_method(p_old_tokens, p_token_index)
-						)
-						or
-						(
-							--TODO: What about multiple functions/procedures?
-							--What about a second CTE named "function as (select 1 a from dual)"?
-							lower(p_old_tokens(p_token_index).value) in ('cursor')
-							and
-							statement_classifier.has_plsql_declaration(p_old_tokens, p_token_index)
-						)
-					)
-					then
-						--Consume until matching END.
-						declare
-							v_has_entered_sub_block boolean := false;
-							v_sub_block_counter number := 0;
-							v_prev_conc_tok_real_begin_sub boolean := false;
-						begin
-							loop
-								--Consume.
-								p_token_index := p_token_index + 1;
-								p_new_tokens.extend;
-								p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
-
-								--Detect begin and end.
-								detect_begin(p_old_tokens, p_token_index, p_command_name, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_sub_block, v_sub_block_counter, v_pivot_paren_counter, v_prev_conc_tok_real_begin_sub, v_has_nested_table, v_trigger_body_start_index);
-								detect_end(p_old_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5, v_sub_block_counter);
-
-								--Stop looking when block is over or out of tokens.
-								exit when
-								(
-									p_token_index = p_old_tokens.count
-									or
-									(
-										v_has_entered_sub_block
-										and
-										v_sub_block_counter = 0
-									)
-								);
-
-								--Shift.
-								shift_tokens_if_not_ws(p_old_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
-							end loop;
-						end;
-
-					--Ignore non-concrete tokens.
-					elsif p_old_tokens(p_token_index).type in ('whitespace', 'comment', 'EOF') then
-						null;
-
-					--Ignore labels.
-					--Putting a label between procedures is illegal but parsable.
-					elsif p_old_tokens(p_token_index).type = '<<' then
-							--Consume all tokens until the final ";".
-							loop
-								p_token_index := p_token_index + 1;
-								p_new_tokens.extend;
-								p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
-								shift_tokens_if_not_ws(p_old_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
-								exit when p_old_tokens(p_token_index).type = '>>';
-							end loop;
-
-					--Loop until matching END; and return.
-					--For BEGIN.
-					elsif lower(p_old_tokens(p_token_index).value) = 'begin' then
-						--Consume until matching END.
-						declare
-							v_has_entered_sub_block boolean := true;
-							v_sub_block_counter number := 1;
-							v_prev_conc_tok_real_begin_sub boolean := true;
-						begin
-							loop
-								--Consume.
-								p_token_index := p_token_index + 1;
-								p_new_tokens.extend;
-								p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
-
-								--Detect begin and end.
-								detect_begin(p_old_tokens, p_token_index, p_command_name, v_previous_concrete_token_1, v_previous_concrete_token_2, v_has_entered_sub_block, v_sub_block_counter, v_pivot_paren_counter, v_prev_conc_tok_real_begin_sub, v_has_nested_table, v_trigger_body_start_index);
-								detect_end(p_old_tokens, p_token_index, v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5, v_sub_block_counter);
-
-								--Stop looking when block is over or out of tokens.
-								exit when
-								(
-									p_token_index = p_old_tokens.count
-									or
-									(
-										v_has_entered_sub_block
-										and
-										v_sub_block_counter = 0
-									)
-								);
-
-								--Shift.
-								shift_tokens_if_not_ws(p_old_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
-							end loop;
-						end;
-						p_token_index := p_token_index + 1;
-						exit;
-
-					--Process END and return.
-					elsif lower(p_old_tokens(p_token_index).value) in ('end') then
-						loop
-							p_token_index := p_token_index + 1;
-							p_new_tokens.extend;
-							p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
-							exit when p_token_index = p_old_tokens.count or p_old_tokens(p_token_index).type = ';';
-						end loop;
-						p_token_index := p_token_index + 1;
-						exit;
-
-					--Loop until next semicolon and continue.
-					--For external functions and procedures, types, items, pragmas, end, and cursors without plsql_declarations.
-					else
-						loop
-							p_token_index := p_token_index + 1;
-							p_new_tokens.extend;
-							p_new_tokens(p_new_tokens.count) := p_old_tokens(p_token_index);
-							exit when p_token_index = p_old_tokens.count or p_old_tokens(p_token_index).type = ';';
-						end loop;
-					end if;
-
-				end if;
-
-				--Shift tokens.
-				shift_tokens_if_not_ws(p_old_tokens(p_token_index), v_previous_concrete_token_1, v_previous_concrete_token_2, v_previous_concrete_token_3, v_previous_concrete_token_4, v_previous_concrete_token_5);
-
-				--Increment
-				p_token_index := p_token_index + 1;
-			end loop;
-		end;
-
+	elsif p_terminator = C_TERMINATOR_PLSQL then
+		if plsql_block then null;
+		elsif create_procedure then null;
+		elsif create_function then null;
+		elsif create_package_body then null;
+		elsif create_package then null;
+		elsif create_type_body then null;
+		elsif create_trigger then null;
+		else
+			raise_application_error(-20330, 'Fatal parse error in '||p_command_name);
+		end if;
 	end if;
 
-	p_split_tokens.extend;
-	p_split_tokens(p_split_tokens.count) := p_new_tokens;
+/*
+	--DEBUG TODO
+	for i in 1 .. v_debug_lines.count loop
+		dbms_output.put_line(v_debug_lines(i));
+	end loop;
+*/
+
+	--Create a new parse tree with the new tokens.
+	<<create_parse_tree>>
+	declare
+		v_new_parse_tree token_table := token_table();
+		v_has_abstract_token boolean := false;
+	begin
+		--Special case if there are no abstract syntax tokens - add everything.
+		if v_ast_index = 1 then
+			--Create new parse tree.
+			for i in p_parse_tree_index .. p_parse_tree.count loop
+				v_new_parse_tree.extend;
+				v_new_parse_tree(v_new_parse_tree.count) := p_parse_tree(i);
+			end loop;
+
+			--Add new parse tree.
+			p_split_tokens.extend;
+			p_split_tokens(p_split_tokens.count) := v_new_parse_tree;
+
+			--Set the parse tree index to the end, plus one to stop loop.
+			p_parse_tree_index := p_parse_tree.count + 1;
+
+		--Else iterate up to the last abstract syntax token and maybe some extra whitespace.
+		else
+			--Iterate selected parse tree tokens, add them to collection.
+			for i in p_parse_tree_index .. v_map_between_parse_and_ast(v_ast_index-1) loop
+				v_new_parse_tree.extend;
+				v_new_parse_tree(v_new_parse_tree.count) := p_parse_tree(i);
+			end loop;
+
+			--Are any of the remaining tokens abstract?
+			for i in v_map_between_parse_and_ast(v_ast_index-1) + 1 .. p_parse_tree.count loop
+				if p_parse_tree(i).type not in (tokenizer.c_whitespace, tokenizer.c_comment, tokenizer.c_eof) then
+					v_has_abstract_token := true;
+					exit;
+				end if;
+			end loop;
+
+			--If no remaining tokens are abstract, add them to the new parse tree.
+			--Whitespace and comments after the last statement belong to that statement, not a new one.
+			if not v_has_abstract_token then
+				for i in v_map_between_parse_and_ast(v_ast_index-1) + 1 .. p_parse_tree.count loop
+					v_new_parse_tree.extend;
+					v_new_parse_tree(v_new_parse_tree.count) := p_parse_tree(i);
+				end loop;
+
+				--Set the parse tree index to the end, plus one to stop loop.
+				p_parse_tree_index := p_parse_tree.count + 1;
+			else
+				--Set the parse tree index based on the last AST index.
+				p_parse_tree_index := v_map_between_parse_and_ast(v_ast_index-1) + 1;
+			end if;
+
+			--Add new tree to collection of trees.
+			p_split_tokens.extend;
+			p_split_tokens(p_split_tokens.count) := v_new_parse_tree;
+		end if;
+	end;
+
 end add_statement_consume_tokens;
+
+
+--------------------------------------------------------------------------------
+--Split a token stream into statements by ";".
+function split_by_semicolon(p_tokens in token_table)
+return token_table_table is
+	v_split_tokens token_table_table := token_table_table();
+	v_command_name varchar2(4000);
+	v_parse_tree_index number := 1;
+begin
+	--Split into statements.
+	loop
+		--Classify.
+		declare
+			v_throwaway_number number;
+			v_throwaway_string varchar2(32767);
+		begin
+			statement_classifier.classify(
+				p_tokens => p_tokens,
+				p_category => v_throwaway_string,
+				p_statement_type => v_throwaway_string,
+				p_command_name => v_command_name,
+				p_command_type => v_throwaway_number,
+				p_lex_sqlcode => v_throwaway_number,
+				p_lex_sqlerrm => v_throwaway_string,
+				p_start_index => v_parse_tree_index
+			);
+		end;
+
+		--Find a terminating token based on the classification.
+		--
+		--TODO: CREATE OUTLINE, CREATE SCHEMA, and some others may also differ depending on presence of PLSQL_DECLARATION.
+		--
+		--#1: Return everything with no splitting if the statement is Invalid or Nothing.
+		--    These are probably errors but the application must decide how to handle them.
+		if v_command_name in ('Invalid', 'Nothing') then
+			add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_EOF, v_parse_tree_index, v_command_name);
+
+		--#2: Match "}" for Java code.
+		/*
+			'CREATE JAVA', if "{" is found before first ";"
+			Note: Single-line comments are different, "//".  Exclude any "", "", or "" after a
+				Create java_partial_tokenizer to lex Java statements (Based on: https://docs.oracle.com/javase/specs/jls/se7/html/jls-3.html), just need:
+					- multi-line comment
+					- single-line comment - Note Lines are terminated by the ASCII characters CR, or LF, or CR LF.
+					- character literal - don't count \'
+					- string literal - don't count \"
+					- {
+					- }
+					- other
+					- Must all files end with }?  What about packages only, or annotation only file?
+
+				CREATE JAVA CLASS USING BFILE (java_dir, 'Agent.class')
+				CREATE JAVA SOURCE NAMED "Welcome" AS public class Welcome { public static String welcome() { return "Welcome World";   } }
+				CREATE JAVA RESOURCE NAMED "appText" USING BFILE (java_dir, 'textBundle.dat')
+
+				TODO: More examples using lexical structures.
+		*/
+		elsif v_command_name in ('CREATE JAVA') then
+			--TODO
+			raise_application_error(-20000, 'CREATE JAVA is not yet supported.');
+
+		--#3: Match PLSQL_DECLARATION BEGIN and END.
+		elsif v_command_name in
+		(
+			'CREATE MATERIALIZED VIEW ', 'CREATE SCHEMA', 'CREATE TABLE', 'CREATE VIEW',
+			'DELETE', 'EXPLAIN', 'INSERT', 'SELECT', 'UPDATE', 'UPSERT'
+		) then
+			add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_PLSQL_DECLARATION, v_parse_tree_index, v_command_name);
+
+		--#4: Match PL/SQL BEGIN and END.
+		elsif v_command_name in
+		(
+			'PL/SQL EXECUTE', 'CREATE FUNCTION','CREATE PROCEDURE', 'CREATE PACKAGE',
+			'CREATE PACKAGE BODY', 'CREATE TYPE BODY', 'CREATE TRIGGER'
+		) then
+			add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_PLSQL, v_parse_tree_index, v_command_name);
+
+		--#5: Stop at first ";" for everything else.
+		else
+			add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_SEMI, v_parse_tree_index, v_command_name);
+		end if;
+
+		--Quit when there are no more tokens.
+		exit when v_parse_tree_index > p_tokens.count;
+	end loop;
+
+	--TODO: Fix line_number, column_number, first_char_position and last_char_position.
+
+	return v_split_tokens;
+end split_by_semicolon;
 
 
 --------------------------------------------------------------------------------
@@ -1138,134 +1091,6 @@ begin
 
 	return v_strings;
 end split_by_sqlplus_delimiter;
-
-
---------------------------------------------------------------------------------
---Split a token stream into statements by ";".
-function split_by_semicolon(p_tokens in token_table)
-return token_table_table is
-	v_split_tokens token_table_table := token_table_table();
-	v_command_name varchar2(4000);
-	v_temp_new_tokens token_table := token_table();
-	v_token_index number := 1;
-	v_trigger_type number;
-	v_trigger_body_start_index number;
-begin
-	--Split into statements.
-	loop
-		v_temp_new_tokens := token_table();
-
-		--Classify.
-		declare
-			v_throwaway_number number;
-			v_throwaway_string varchar2(32767);
-		begin
-			statement_classifier.classify(
-				p_tokens => p_tokens,
-				p_category => v_throwaway_string,
-				p_statement_type => v_throwaway_string,
-				p_command_name => v_command_name,
-				p_command_type => v_throwaway_number,
-				p_lex_sqlcode => v_throwaway_number,
-				p_lex_sqlerrm => v_throwaway_string,
-				p_start_index => v_token_index
-			);
-		end;
-
-		--Find a terminating token based on the classification.
-		--
-		--TODO: CREATE OUTLINE, CREATE SCHEMA, and some others may also differ depending on presence of PLSQL_DECLARATION.
-		--
-		--#1: Return everything with no splitting if the statement is Invalid or Nothing.
-		--    These are probably errors but the application must decide how to handle them.
-		if v_command_name in ('Invalid', 'Nothing') then
-			add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_EOF, v_temp_new_tokens, v_token_index, v_command_name, null);
-
-		--#2: Match "}" for Java code.
-		/*
-			'CREATE JAVA', if "{" is found before first ";"
-			Note: Single-line comments are different, "//".  Exclude any "", "", or "" after a
-				Create java_partial_tokenizer to lex Java statements (Based on: https://docs.oracle.com/javase/specs/jls/se7/html/jls-3.html), just need:
-					- multi-line comment
-					- single-line comment - Note Lines are terminated by the ASCII characters CR, or LF, or CR LF.
-					- character literal - don't count \'
-					- string literal - don't count \"
-					- {
-					- }
-					- other
-					- Must all files end with }?  What about packages only, or annotation only file?
-
-				CREATE JAVA CLASS USING BFILE (java_dir, 'Agent.class')
-				CREATE JAVA SOURCE NAMED "Welcome" AS public class Welcome { public static String welcome() { return "Welcome World";   } }
-				CREATE JAVA RESOURCE NAMED "appText" USING BFILE (java_dir, 'textBundle.dat')
-
-				TODO: More examples using lexical structures.
-		*/
-		elsif v_command_name in ('CREATE JAVA') then
-			--TODO
-			raise_application_error(-20000, 'CREATE JAVA is not yet supported.');
-
-		--#3: Match PLSQL_DECLARATION BEGIN and END.
-		elsif
-		(
-			v_command_name in ('CREATE MATERIALIZED VIEW ', 'CREATE SCHEMA', 'CREATE TABLE', 'CREATE VIEW', 'DELETE', 'EXPLAIN', 'INSERT', 'SELECT', 'UPDATE', 'UPSERT')
-			and
-			statement_classifier.has_plsql_declaration(p_tokens, v_token_index)
-		)
-		then
-			add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_PLSQL_DECLARE_END, v_temp_new_tokens, v_token_index, v_command_name, null);
-
-		--#4: Match PL/SQL BEGIN and END.
-		elsif
-		(
-			v_command_name in ('PL/SQL EXECUTE')
-			or
-			(
-				v_command_name in ('CREATE FUNCTION','CREATE PROCEDURE')
-				and
-				not is_external_method(p_tokens, v_token_index)
-			)
-		)
-		 then
-			add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_PLSQL_MATCHED_END, v_temp_new_tokens, v_token_index, v_command_name, null);
-
-		--#5: Match possibly unbalanced BEGIN and END.  Package bodies sometimes have an
-		--extra END and sometimes they have multiple balanced BEGIN/ENDs.
-		--
-		--Ignore BEGIN/END pairs inside CURSOR/FUNCTION/PROCEDURE, and then exit
-		--whenever end_count >= begin_count
-		elsif v_command_name in ('CREATE PACKAGE BODY') then
-			add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_PACKAGE_BODY, v_temp_new_tokens, v_token_index, v_command_name, null);
-
-		--#6: Stop when there is one "extra" END.
-		elsif v_command_name in ('CREATE PACKAGE', 'CREATE TYPE BODY') then
-			add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_PLSQL_EXTRA_END, v_temp_new_tokens, v_token_index, v_command_name, null);
-
-		--#7: Triggers may terminate with a matching END, an extra END, or a semicolon.
-		elsif v_command_name in ('CREATE TRIGGER') then
-			statement_classifier.get_trigger_type_body_index(p_tokens, v_trigger_type, v_trigger_body_start_index);
-
-			if v_trigger_type = statement_classifier.C_TRIGGER_TYPE_REGULAR then
-				add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_PLSQL_MATCHED_END, v_temp_new_tokens, v_token_index, v_command_name, v_trigger_body_start_index);
-			elsif v_trigger_type = statement_classifier.C_TRIGGER_TYPE_COMPOUND then
-				add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_PLSQL_EXTRA_END, v_temp_new_tokens, v_token_index, v_command_name, v_trigger_body_start_index);
-			elsif v_trigger_type = statement_classifier.C_TRIGGER_TYPE_CALL then
-				add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_SEMI, v_temp_new_tokens, v_token_index, v_command_name, v_trigger_body_start_index);
-			end if;
-
-		--#8: Stop at first ";" for everything else.
-		else
-			add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_SEMI, v_temp_new_tokens, v_token_index, v_command_name, null);
-		end if;
-
-		--Quit when there are no more tokens.
-		exit when v_token_index > p_tokens.count;
-	end loop;
-
-	--TODO: Fix line_number, column_number, first_char_position and last_char_position.
-
-	return v_split_tokens;
-end split_by_semicolon;
 
 
 --------------------------------------------------------------------------------
