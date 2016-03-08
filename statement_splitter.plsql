@@ -119,15 +119,21 @@ procedure add_statement_consume_tokens(
 	function exception_handler return boolean;
 	function expression_case_when_then return boolean;
 	function for_loop_statement return boolean;
+	function for_each_row return boolean;
 	function function_definition return boolean;
 	function if_statement return boolean;
 	function label return boolean;
 	function name return boolean;
+	function name_maybe_schema return boolean;
+	function nested_table_nt_column_of return boolean;
 	function p_end return boolean;
 	function plsql_block return boolean;
 	function procedure_definition return boolean;
+	function referencing_clause return boolean;
 	function statement_or_inline_pragma return boolean;
-
+	function trigger_edition_clause return boolean;
+	function trigger_ordering_clause return boolean;
+	function when_condition return boolean;
 
 	-------------------------------------------------------------------------------
 	--Procedures that wrap functions and ignore output.
@@ -139,12 +145,20 @@ procedure add_statement_consume_tokens(
 	procedure body is v_ignore boolean; begin v_ignore := body; end;
 	procedure declare_section is v_ignore boolean;begin v_ignore := declare_section; end;
 	procedure expression_case_when_then is v_ignore boolean; begin v_ignore := expression_case_when_then; end;
+	procedure for_each_row is v_ignore boolean; begin v_ignore := for_each_row; end;
 	procedure function_definition is v_ignore boolean; begin v_ignore := function_definition; end;
 	procedure label is v_ignore boolean; begin v_ignore := label; end;
 	procedure name is v_ignore boolean; begin v_ignore := name; end;
+	procedure name_maybe_schema is v_ignore boolean; begin v_ignore := name_maybe_schema; end;
+	procedure nested_table_nt_column_of is v_ignore boolean; begin v_ignore := nested_table_nt_column_of; end;
 	procedure p_end is v_ignore boolean; begin v_ignore := p_end; end;
 	procedure plsql_block is v_ignore boolean; begin v_ignore := plsql_block; end;
 	procedure procedure_definition is v_ignore boolean; begin v_ignore := procedure_definition; end;
+	procedure referencing_clause is v_ignore boolean; begin v_ignore := referencing_clause; end;
+	procedure statement_or_inline_pragma is v_ignore boolean; begin v_ignore := statement_or_inline_pragma; end;
+	procedure trigger_edition_clause is v_ignore boolean; begin v_ignore := trigger_edition_clause; end;
+	procedure trigger_ordering_clause is v_ignore boolean; begin v_ignore := trigger_ordering_clause; end;
+	procedure when_condition is v_ignore boolean; begin v_ignore := when_condition; end;
 
 	-------------------------------------------------------------------------------
 	--Helper functions
@@ -160,8 +174,8 @@ procedure add_statement_consume_tokens(
 		v_debug_lines.trim;
 	end;
 
-	procedure increment is begin
-		v_ast_index := v_ast_index + 1;
+	procedure increment(p_increment number default 1) is begin
+		v_ast_index := v_ast_index + p_increment;
 	end;
 
 	function get_next_(p_value varchar2) return number is begin
@@ -177,9 +191,9 @@ procedure add_statement_consume_tokens(
 		return upper(v_abstract_syntax_tree(v_ast_index).value);
 	end;
 
-	function next_value return clob is begin
+	function next_value(p_increment number default 1) return clob is begin
 		begin
-			return upper(v_abstract_syntax_tree(v_ast_index+1).value);
+			return upper(v_abstract_syntax_tree(v_ast_index+p_increment).value);
 		exception when subscript_beyond_count then
 			null;
 		end;
@@ -234,9 +248,9 @@ procedure add_statement_consume_tokens(
 	end;
 
 	function anything_in_parentheses return boolean is v_paren_counter number; begin
-		if current_value = '(' then
+		push_line('ANYTHING_IN_PARENTHESES');
+		if anything_('(') then
 			v_paren_counter := 1;
-			increment;
 			while v_paren_counter >= 1 loop
 				if current_value = '(' then
 					v_paren_counter := v_paren_counter + 1;
@@ -245,9 +259,9 @@ procedure add_statement_consume_tokens(
 				end if;
 				increment;
 			end loop;
-			push_line('ANYTHING_IN_PARENTHESES');
 			return true;
 		end if;
+		pop_line;
 		return false;
 	end;
 
@@ -295,6 +309,7 @@ procedure add_statement_consume_tokens(
 	function declare_section return boolean is begin
 		push_line('DECLARE_SECTION');
 		if current_value in ('BEGIN', 'END') then
+			pop_line;
 			return false;
 		else
 			loop
@@ -315,6 +330,7 @@ procedure add_statement_consume_tokens(
 	function body return boolean is begin
 		push_line('BODY');
 		if anything_('BEGIN') then
+			statement_or_inline_pragma;
 			while statement_or_inline_pragma loop null; end loop;
 			if anything_('EXCEPTION') then
 				while exception_handler loop null; end loop;
@@ -711,18 +727,364 @@ procedure add_statement_consume_tokens(
 		return false;
 	end;
 
-	function create_trigger return boolean is begin
-		push_line('');
-		--TODO;
-/*
-			if v_trigger_type = statement_classifier.C_TRIGGER_TYPE_REGULAR then
-				add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_PLSQL_MATCHED_END, v_parse_tree_index, v_command_name, v_trigger_body_start_index);
-			elsif v_trigger_type = statement_classifier.C_TRIGGER_TYPE_COMPOUND then
-				add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_PLSQL_EXTRA_END, v_parse_tree_index, v_command_name, v_trigger_body_start_index);
-			elsif v_trigger_type = statement_classifier.C_TRIGGER_TYPE_CALL then
-				add_statement_consume_tokens(v_split_tokens, p_tokens, C_TERMINATOR_SEMI, v_parse_tree_index, v_command_name, v_trigger_body_start_index);
+	function name_maybe_schema return boolean is begin
+		push_line('NAME_MAYBE_SCHEMA');
+		if name then
+			if anything_('.') then
+				name;
 			end if;
-*/
+			return true;
+		end if;
+		pop_line;
+		return false;
+	end;
+
+	function dml_event_clause return boolean is
+		function update_of_column return boolean is begin
+			if anything_('UPDATE') then
+				if anything_('OF') and name then
+					while anything_(',') and name loop null; end loop;
+					return true;
+				else
+					return true;
+				end if;
+			end if;
+			return false;
+		end;
+	begin
+		push_line('DML_EVENT_CLAUSE');
+		if anything_('DELETE') or anything_('INSERT') or update_of_column then
+			while anything_('OR') and (anything_('DELETE') or anything_('INSERT') or update_of_column) loop null; end loop;
+			if anything_('ON') and name_maybe_schema then
+				return true;
+			end if;
+			raise_application_error(-20330, 'Fatal parse error in DML_EVENT_CLAUSE.');
+		end if;
+		pop_line;
+		return false;
+	end;
+
+	function referencing_clause return boolean is begin
+		push_line('REFERENCING_CLAUSE');
+		if anything_('REFERENCING') then
+			if anything_('OLD') or anything_('NEW') or anything_('PARENT') then
+				anything_('AS');
+				name;
+				while anything_('OLD') or anything_('NEW') or anything_('PARENT') loop
+					anything_('AS');
+					name;
+				end loop;
+				return true;
+			end if;
+			raise_application_error(-20330, 'Fatal parse error in REFERENCING_CLAUSE.');
+		end if;
+		pop_line;
+		return false;
+	end;
+
+	function for_each_row return boolean is begin
+		push_line('FOR_EACH_ROW');
+		v_ast_index_at_start := v_ast_index;
+		if anything_('FOR') and anything_('EACH') and anything_('ROW') then
+			return true;
+		end if;
+		v_ast_index := v_ast_index_at_start;
+		pop_line;
+		return false;
+	end;
+
+	function trigger_edition_clause return boolean is begin
+		push_line('TRIGGER_EDITION_CLAUSE');
+		v_ast_index_at_start := v_ast_index;
+		if anything_('FORWARD') or anything_('REVERSE') then
+			null;
+		end if;
+		if anything_('CROSSEDITION') then
+			return true;
+		end if;
+		v_ast_index := v_ast_index_at_start;
+		pop_line;
+		return false;
+	end;
+
+	function trigger_ordering_clause return boolean is begin
+		push_line('TRIGGER_ORDERING_CLAUSE');
+		if anything_('FOLLOWS') or anything_('PRECEDES') then
+			if name_maybe_schema then
+				while anything_(',') and name_maybe_schema loop null; end loop;
+				return true;
+			end if;
+			raise_application_error(-20330, 'Fatal parse error in TRIGGER_ORDERING_CLAUSE.');
+		end if;
+		pop_line;
+		return false;
+	end;
+
+	function when_condition return boolean is begin
+		push_line('WHEN_CONDITION');
+		if anything_('WHEN') then
+			if anything_in_parentheses then
+				return true;
+			end if;
+			raise_application_error(-20330, 'Fatal parse error in WHEN_CONDITION.');
+		end if;
+		pop_line;
+		return false;
+	end;
+
+	function trigger_body return boolean is begin
+		push_line('TRIGGER_BODY');
+		if anything_('CALL') then
+			anything_up_to_and_including_(';');
+			return true;
+		elsif plsql_block then return true;
+		end if;
+		pop_line;
+		return false;
+	end;
+
+	function delete_insert_update_or return boolean is begin
+		push_line('DELETE_INSERT_UPDATE_OR');
+		if anything_('DELETE') or anything_('INSERT') or anything_('UPDATE') then
+			while anything_('OR') and (anything_('DELETE') or anything_('INSERT') or anything_('UPDATE')) loop null; end loop;
+			return true;
+		end if;
+		pop_line;
+		return false;
+	end;
+
+	function nested_table_nt_column_of return boolean is begin
+		push_line('NESTED_TABLE_NT_COLUMN_OF');
+		v_ast_index_at_start := v_ast_index;
+		if anything_('NESTED') and anything_('TABLE') and name and anything_('OF') then
+			return true;
+		end if;
+		v_ast_index := v_ast_index_at_start;
+		pop_line;
+		return false;
+	end;
+
+	function timing_point return boolean is begin
+		push_line('TIMING_POINT');
+		v_ast_index_at_start := v_ast_index;
+		if current_value = 'BEFORE' and next_value = 'STATEMENT' then
+			increment(2);
+			return true;
+		elsif current_value = 'BEFORE' and next_value = 'EACH' and next_value(2) = 'ROW' then
+			increment(3);
+			return true;
+		elsif current_value = 'AFTER' and next_value = 'STATEMENT' then
+			increment(2);
+			return true;
+		elsif current_value = 'AFTER' and next_value = 'EACH' and next_value(2) = 'ROW' then
+			increment(3);
+			return true;
+		elsif current_value = 'INSTEAD' and next_value = 'OF' and next_value(2) = 'EACH' and next_value(3) = 'ROW' then
+			increment(4);
+			return true;
+		end if;
+		v_ast_index := v_ast_index_at_start;
+		pop_line;
+		return false;
+	end;
+
+	function tps_body return boolean is begin
+		push_line('TPS_BODY');
+		if statement_or_inline_pragma then
+			while statement_or_inline_pragma loop null; end loop;
+			if anything_('EXCEPTION') then
+				while exception_handler loop null; end loop;
+			end if;
+			return true;
+		end if;
+		pop_line;
+		return false;
+	end;
+
+	function timing_point_section return boolean is begin
+		push_line('TIMING_POINT_SECTION');
+		v_ast_index_at_start := v_ast_index;
+		if timing_point and anything_('IS') and anything_('BEGIN') and tps_body and anything_('END') and timing_point and anything_(';') then
+			return true;
+		end if;
+		v_ast_index := v_ast_index_at_start;
+		pop_line;
+		return false;
+	end;
+
+	function compound_trigger_block return boolean is
+		--Similar to the regular DECLARE_SECTION but also stops at timing point keywords.
+		function declare_section return boolean is begin
+			push_line('DECLARE_SECTION');
+			if current_value in ('BEGIN', 'END', 'BEFORE', 'AFTER', 'INSTEAD') then
+				pop_line;
+				return false;
+			else
+				loop
+					if current_value in ('BEGIN', 'END', 'BEFORE', 'AFTER', 'INSTEAD') then
+						return true;
+					end if;
+
+					--Of the items in ITEM_LIST_1 and ITEM_LIST_2, only
+					--these two require any special processing.
+					if procedure_definition then null;
+					elsif function_definition then null;
+					elsif anything_up_to_and_including_(';') then null;
+					end if;
+				end loop;
+			end if;
+		end;
+		procedure declare_section is v_ignore boolean; begin v_ignore := declare_section; end;
+	begin
+		push_line('COMPOUND_TRIGGER_BLOCK');
+		if anything_('COMPOUND') and anything_('TRIGGER') then
+			declare_section;
+			if timing_point_section then
+				while timing_point_section loop null; end loop;
+				if anything_('END') then
+					name;
+					if anything_(';') then
+						return true;
+					end if;
+				end if;
+			end if;
+			raise_application_error(-20330, 'Fatal parse error in COMPOUND_TRIGGER_BLOCK.');
+		end if;
+		pop_line;
+		return false;
+	end;
+
+	function ddl_or_database_event return boolean is begin
+		push_line('DDL_OR_DATABASE_EVENT');
+		if current_value in
+		(
+			'ALTER', 'ANALYZE', 'AUDIT', 'COMMENT', 'CREATE', 'DROP', 'GRANT', 'NOAUDIT',
+			'RENAME', 'REVOKE', 'TRUNCATE', 'DDL', 'STARTUP', 'SHUTDOWN', 'DB_ROLE_CHANGE',
+			'SERVERERROR', 'LOGON', 'LOGOFF', 'SUSPEND', 'CLONE', 'UNPLUG'
+		) then
+			increment;
+			return true;
+		elsif current_value||' '|| next_value in
+		(
+			'ASSOCIATE STATISTICS', 'DISASSOCIATE STATISTICS', 'SET CONTAINER'
+		) then
+			increment(2);
+			return true;
+		end if;
+		pop_line;
+		return false;
+	end;
+
+	function simple_dml_trigger return boolean is begin
+		push_line('SIMPLE_DML_TRIGGER');
+		v_ast_index_at_start := v_ast_index;
+		if (anything_('BEFORE') or anything_('AFTER')) and dml_event_clause then
+			referencing_clause;
+			for_each_row;
+			trigger_edition_clause;
+			trigger_ordering_clause;
+			if anything_('ENABLE') or anything_('DISABLE') then
+				null;
+			end if;
+			when_condition;
+			if trigger_body then
+				return true;
+			end if;
+			raise_application_error(-20330, 'Fatal parse error in SIMPLE_DML_TRIGGER.');
+		end if;
+		v_ast_index := v_ast_index_at_start;
+		pop_line;
+		return false;
+	end;
+
+	function instead_of_dml_trigger return boolean is begin
+		push_line('INSTEAD_OF_DML_TRIGGER');
+		v_ast_index_at_start := v_ast_index;
+		if anything_('INSTEAD') and anything_('OF') and delete_insert_update_or then
+			if anything_('ON') then
+				nested_table_nt_column_of;
+				if name then
+					if anything_('.') then
+						name;
+					end if;
+					referencing_clause;
+					for_each_row;
+					trigger_edition_clause;
+					trigger_ordering_clause;
+					if anything_('ENABLE') or anything_('DISABLE') then
+						null;
+					end if;
+					if trigger_body then
+						return true;
+					end if;
+				end if;
+				raise_application_error(-20330, 'Fatal parse error in INSTEAD_OF_DML_TRIGGER.');
+			end if;
+		end if;
+		v_ast_index := v_ast_index_at_start;
+		pop_line;
+		return false;
+	end;
+
+	function compound_trigger return boolean is begin
+		push_line('COMPOUND_TRIGGER');
+		if anything_('FOR') then
+			if dml_event_clause then
+				referencing_clause;
+				trigger_edition_clause;
+				trigger_ordering_clause;
+				if anything_('ENABLE') or anything_('DISABLE') then
+					null;
+				end if;
+				when_condition;
+				if compound_trigger_block then
+					return true;
+				end if;
+			end if;
+			raise_application_error(-20330, 'Fatal parse error in COMPOUND_TRIGGER.');
+		end if;
+		pop_line;
+		return false;
+	end;
+
+	function system_trigger return boolean is begin
+		push_line('SYSTEM_TRIGGER');
+		v_ast_index_at_start := v_ast_index;
+		if (anything_('BEFORE') or anything_('AFTER') or (anything_('INSTEAD') and anything_('OF'))) and ddl_or_database_event then
+			while anything_('OR') and ddl_or_database_event loop null; end loop;
+			if anything_('ON') then
+				if anything_('DATABASE') or (anything_('PLUGGABLE') and anything_('DATABASE')) or anything_('SCHEMA') or (name and anything_('.') and anything_('SCHEMA')) then
+					trigger_ordering_clause;
+					--The manual is missing the last part of SYSTEM_TRIGGER - ENABLE|DISABLE, WHEN (CONDITION) and TRIGGER_BODY.
+					if anything_('ENABLE') or anything_('DISABLE') then
+						null;
+					end if;
+					when_condition;
+					if trigger_body then
+						return true;
+					end if;
+				end if;
+			end if;
+			raise_application_error(-20330, 'Fatal parse error in SYSTEM_TRIGGER.');
+		end if;
+		v_ast_index := v_ast_index_at_start;
+		pop_line;
+		return false;
+	end;
+
+	function create_trigger return boolean is begin
+		push_line('CREATE_TRIGGER');
+		if create_or_replace_edition and anything_('TRIGGER') and name then
+			if anything_('.') then
+				name;
+			end if;
+			if simple_dml_trigger then return true;
+			elsif instead_of_dml_trigger then return true;
+			elsif compound_trigger then return true;
+			elsif system_trigger then return true;
+			end if;
+			raise_application_error(-20330, 'Fatal parse error in CREATE_TRIGGER.');
+	end if;
 		pop_line;
 		return false;
 	end;

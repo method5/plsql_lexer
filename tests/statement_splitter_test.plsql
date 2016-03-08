@@ -441,7 +441,8 @@ begin
 	assert_equals('Package 2a', 2, v_split_statements.count);
 	assert_equals('Package 2b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
 
-	--Package with PLSQL_DECLARATION cursor.
+	--Package with PLSQL_DECLARATION cursor - Not valid in 12.1.0.2.0.
+	/*
 	--Using a PLSQL_DECLARATION in a cursor is invalid but it does compile.
 	v_statements:='
 		create or replace package test_package is
@@ -453,6 +454,7 @@ begin
 	v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
 	assert_equals('Package 3a', 2, v_split_statements.count);
 	assert_equals('Package 3b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	*/
 end test_package;
 
 
@@ -626,6 +628,11 @@ begin
 	v_statements:='create or replace trigger trigger_schema before comment or create on call.schema begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
 	assert_equals('Trigger 20a', 2, v_split_statements.count);
 	assert_equals('Trigger 20b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+
+	--system_trigger - syntax the manual leaves out
+	v_statements:='create or replace trigger trigger_schema before comment or create on jheller.schema enable when (1=1) begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	assert_equals('Trigger 21a', 2, v_split_statements.count);
+	assert_equals('Trigger 21b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
 end test_trigger;
 
 
