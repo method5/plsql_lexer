@@ -105,7 +105,8 @@ procedure add_statement_consume_tokens(
 	function anything_(p_value varchar2) return boolean;
 	function anything_before_begin return boolean;
 	function anything_in_parentheses return boolean;
-	function anything_up_to_and_including_(p_value varchar2) return boolean;
+	function anything_up_to_may_include_(p_value varchar2) return boolean;
+	function anything_up_to_must_include_(p_value varchar2) return boolean;
 	function basic_loop_statement return boolean;
 	function body return boolean;
 	function case_statement return boolean;
@@ -141,7 +142,8 @@ procedure add_statement_consume_tokens(
 	procedure anything_(p_value varchar2) is v_ignore boolean; begin v_ignore := anything_(p_value); end;
 	procedure anything_before_begin is v_ignore boolean; begin v_ignore := anything_before_begin; end;
 	procedure anything_in_parentheses is v_ignore boolean; begin v_ignore := anything_in_parentheses; end;
-	procedure anything_up_to_and_including_(p_value varchar2) is v_ignore boolean; begin v_ignore := anything_up_to_and_including_(p_value); end;
+	procedure anything_up_to_may_include_(p_value varchar2) is v_ignore boolean; begin v_ignore := anything_up_to_may_include_(p_value); end;
+	procedure anything_up_to_must_include_(p_value varchar2) is v_ignore boolean; begin v_ignore := anything_up_to_must_include_(p_value); end;
 	procedure body is v_ignore boolean; begin v_ignore := body; end;
 	procedure declare_section is v_ignore boolean;begin v_ignore := declare_section; end;
 	procedure expression_case_when_then is v_ignore boolean; begin v_ignore := expression_case_when_then; end;
@@ -226,25 +228,53 @@ procedure add_statement_consume_tokens(
 		end if;
 	end;
 
-	function anything_up_to_and_including_(p_value varchar2) return boolean is begin
-		push_line('ANYTHING_UP_TO_'||p_value);
-		loop
-			if current_value = p_value then
+	function anything_up_to_may_include_(p_value varchar2) return boolean is begin
+		push_line('ANYTHING_UP_TO_MAY_INCLUDE_'||p_value);
+		begin
+			loop
+				if current_value = p_value then
+					increment;
+					return true;
+				end if;
 				increment;
-				return true;
-			end if;
-			increment;
-		end loop;
+			end loop;
+		exception when subscript_beyond_count then return true;
+		end;
+	end;
+
+	function anything_up_to_must_include_(p_value varchar2) return boolean is begin
+		push_line('ANYTHING_UP_TO_MUST_INCLUDE_'||p_value);
+		v_ast_index_at_start := v_ast_index;
+		begin
+			loop
+				if current_value = p_value then
+					increment;
+					return true;
+				end if;
+				increment;
+			end loop;
+		exception when subscript_beyond_count then null;
+		end;
+		v_ast_index := v_ast_index_at_start;
+		pop_line;
+		return false;
 	end;
 
 	function anything_before_begin return boolean is begin
 		push_line('ANYTHING_BUT_BEGIN');
-		loop
-			if current_value = 'BEGIN' then
-				return true;
-			end if;
-			increment;
-		end loop;
+		v_ast_index_at_start := v_ast_index;
+		begin
+			loop
+				if current_value = 'BEGIN' then
+					return true;
+				end if;
+				increment;
+			end loop;
+		exception when subscript_beyond_count then null;
+		end;
+		v_ast_index := v_ast_index_at_start;
+		pop_line;
+		return false;
 	end;
 
 	function anything_in_parentheses return boolean is v_paren_counter number; begin
@@ -321,7 +351,7 @@ procedure add_statement_consume_tokens(
 				--these two require any special processing.
 				if procedure_definition then null;
 				elsif function_definition then null;
-				elsif anything_up_to_and_including_(';') then null;
+				elsif anything_up_to_may_include_(';') then null;
 				end if;
 			end loop;
 		end if;
@@ -390,7 +420,7 @@ procedure add_statement_consume_tokens(
 		elsif plsql_block then return true;
 		--Anything else
 		elsif current_value not in ('EXCEPTION', 'END', 'ELSE', 'ELSIF') then
-			return anything_up_to_and_including_(';');
+			return anything_up_to_may_include_(';');
 		else
 			pop_line;
 			return false;
@@ -414,7 +444,7 @@ procedure add_statement_consume_tokens(
 	function exception_handler return boolean is begin
 		push_line('EXCEPTION_HANDLER');
 		if current_value = 'WHEN' then
-			anything_up_to_and_including_('THEN');
+			anything_up_to_must_include_('THEN');
 			while statement_or_inline_pragma loop null; end loop;
 			return true;
 		end if;
@@ -447,7 +477,7 @@ procedure add_statement_consume_tokens(
 	function for_loop_statement return boolean is begin
 		push_line('FOR_LOOP_STATEMENT');
 		if current_value = 'FOR' and get_next_('..') < get_next_(';') then
-			anything_up_to_and_including_('LOOP');
+			anything_up_to_must_include_('LOOP');
 			while statement_or_inline_pragma loop null; end loop;
 			if current_value = 'END' then
 				increment;
@@ -608,16 +638,17 @@ procedure add_statement_consume_tokens(
 	function create_procedure return boolean is begin
 		push_line('CREATE_PROCEDURE');
 		v_ast_index_at_start := v_ast_index;
-		if create_or_replace_edition and anything_('PROCEDURE') and name then
-			if anything_('.') then
-				name;
-			end if;
+		if create_or_replace_edition and anything_('PROCEDURE') and name_maybe_schema then
 			anything_in_parentheses;
-			--TODO: Add support for external and call syntax.
-			if anything_up_to_and_including_('IS') or anything_up_to_and_including_('AS') then
-				plsql_block;
-				return true;
+			if anything_up_to_must_include_('IS') or anything_up_to_must_include_('AS') then
+				if anything_('EXTERNAL') or anything_('LANGUAGE') then
+					anything_up_to_may_include_(';');
+					return true;
+				elsif plsql_block then
+					return true;
+				end if;
 			end if;
+			raise_application_error(-20330, 'Fatal parse error in CREATE_PROCEDURE.');
 		end if;
 		v_ast_index := v_ast_index_at_start;
 		pop_line;
@@ -627,17 +658,37 @@ procedure add_statement_consume_tokens(
 	function create_function return boolean is begin
 		push_line('CREATE_FUNCTION');
 		v_ast_index_at_start := v_ast_index;
-		if create_or_replace_edition and anything_('FUNCTION') and name then
-			if anything_('.') then
-				name;
-			end if;
-			anything_in_parentheses;
-			--TODO: Add function extra processing - functions may allow an "IS".
-			--TODO: Add support for external and call syntax.
-			if anything_up_to_and_including_('IS') or anything_up_to_and_including_('AS') then
-				plsql_block;
+		if create_or_replace_edition and anything_('FUNCTION') and name_maybe_schema then
+			--Consume everything between the function name and either AGGREGATE|PIPELINED USING
+			--or the last IS/AS.
+			--This is necessary to exclude some options that may include another IS, such as
+			--expressions in the PARALLEL_ENABLE_CLAUSE.
+			loop
+				if current_value in ('AGGREGATE', 'PIPELINED') and next_value = 'USING' then
+					--This one is simple, return true.
+					increment(2);
+					anything_up_to_may_include_(';');
+					return true;
+				elsif current_value = '(' then
+					anything_in_parentheses;
+				elsif current_value in ('IS', 'AS') then
+					increment;
+					exit;
+				else
+					increment;
+				end if;
+			end loop;
+			--There must have been an IS or AS to get here:
+			if anything_('EXTERNAL') then
+				anything_up_to_may_include_(';');
 				return true;
+			elsif anything_('LANGUAGE') then
+				anything_up_to_may_include_(';');
+				return true;
+			else
+				return plsql_block;
 			end if;
+			raise_application_error(-20330, 'Fatal parse error in CREATE_FUNCTION.');
 		end if;
 		v_ast_index := v_ast_index_at_start;
 		pop_line;
@@ -647,19 +698,16 @@ procedure add_statement_consume_tokens(
 	function create_package_body return boolean is begin
 		push_line('CREATE_PACKAGE_BODY');
 		v_ast_index_at_start := v_ast_index;
-		if create_or_replace_edition and anything_('PACKAGE') and name then
-			if anything_('.') then
-				name;
-			end if;
+		if create_or_replace_edition and anything_('PACKAGE') and name_maybe_schema then
 			anything_in_parentheses;
-			if anything_up_to_and_including_('IS') or anything_up_to_and_including_('AS') then
+			if anything_up_to_must_include_('IS') or anything_up_to_must_include_('AS') then
 				loop
 					if anything_('END') then
 						name;
 						anything_(';');
 						return true;
 					else
-						anything_up_to_and_including_(';');
+						anything_up_to_may_include_(';');
 					end if;
 				end loop;
 			end if;
@@ -672,10 +720,7 @@ procedure add_statement_consume_tokens(
 	function create_package return boolean is begin
 		push_line('CREATE_PACKAGE');
 		v_ast_index_at_start := v_ast_index;
-		if create_or_replace_edition and anything_('PACKAGE') and anything_('BODY') and name then
-			if anything_('.') then
-				name;
-			end if;
+		if create_or_replace_edition and anything_('PACKAGE') and anything_('BODY') and name_maybe_schema then
 			if anything_('IS') or anything_('AS') then
 				declare_section;
 				body;
@@ -694,12 +739,9 @@ procedure add_statement_consume_tokens(
 	function create_type_body return boolean is begin
 		push_line('CREATE_TYPE_BODY');
 		v_ast_index_at_start := v_ast_index;
-		if create_or_replace_edition and anything_('TYPE') and anything_('BODY') and name then
-			if anything_('.') then
-				name;
-			end if;
+		if create_or_replace_edition and anything_('TYPE') and anything_('BODY') and name_maybe_schema then
 			anything_in_parentheses;
-			if anything_up_to_and_including_('IS') or anything_up_to_and_including_('AS') then
+			if anything_up_to_must_include_('IS') or anything_up_to_must_include_('AS') then
 				loop
 					if anything_('END') and anything_(';') then
 						return true;
@@ -716,7 +758,7 @@ procedure add_statement_consume_tokens(
 						anything_('CONSTRUCTOR');
 						function_definition;
 					else
-						anything_up_to_and_including_(';');
+						anything_up_to_may_include_(';');
 					end if;
 				end loop;
 			end if;
@@ -835,7 +877,7 @@ procedure add_statement_consume_tokens(
 	function trigger_body return boolean is begin
 		push_line('TRIGGER_BODY');
 		if anything_('CALL') then
-			anything_up_to_and_including_(';');
+			anything_up_to_may_include_(';');
 			return true;
 		elsif plsql_block then return true;
 		end if;
@@ -929,7 +971,7 @@ procedure add_statement_consume_tokens(
 					--these two require any special processing.
 					if procedure_definition then null;
 					elsif function_definition then null;
-					elsif anything_up_to_and_including_(';') then null;
+					elsif anything_up_to_may_include_(';') then null;
 					end if;
 				end loop;
 			end if;
@@ -1003,10 +1045,7 @@ procedure add_statement_consume_tokens(
 		if anything_('INSTEAD') and anything_('OF') and delete_insert_update_or then
 			if anything_('ON') then
 				nested_table_nt_column_of;
-				if name then
-					if anything_('.') then
-						name;
-					end if;
+				if name_maybe_schema then
 					referencing_clause;
 					for_each_row;
 					trigger_edition_clause;
@@ -1074,10 +1113,7 @@ procedure add_statement_consume_tokens(
 
 	function create_trigger return boolean is begin
 		push_line('CREATE_TRIGGER');
-		if create_or_replace_edition and anything_('TRIGGER') and name then
-			if anything_('.') then
-				name;
-			end if;
+		if create_or_replace_edition and anything_('TRIGGER') and name_maybe_schema then
 			if simple_dml_trigger then return true;
 			elsif instead_of_dml_trigger then return true;
 			elsif compound_trigger then return true;

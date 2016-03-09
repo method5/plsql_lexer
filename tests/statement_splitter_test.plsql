@@ -675,10 +675,13 @@ begin
 	assert_equals('Procedure and Function 5b', q'<create or replace function randomuuid return varchar2 as language java name 'RandomUUID.create() return java.lang.String';>', tokenizer.concatenate(v_split_statements(1)));
 	assert_equals('Procedure and Function 5c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
 
+	--TODO: How to handle errors?
+/*
 	--Procedure that doesn't properly end.  EOF should always end.
 	v_statements:='create procedure test_procedure is ';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
 	assert_equals('Procedure and Function 6a', 1, v_split_statements.count);
 	assert_equals('Procedure and Function 6b', 'create procedure test_procedure is ', tokenizer.concatenate(v_split_statements(1)));
+*/
 end test_proc_and_func;
 
 
