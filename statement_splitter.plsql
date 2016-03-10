@@ -90,14 +90,12 @@ procedure add_statement_consume_tokens(
 
 	type string_table is table of varchar2(32767);
 	type number_table is table of number;
-	v_debug_lines string_table := string_table();
+
+	g_debug_lines string_table := string_table();
+	g_ast_index number := 1;
 
 	v_abstract_syntax_tree token_table := token_table();
 	v_map_between_parse_and_ast number_table := number_table();
-
-	v_ast_index number := 1;
-	v_ast_index_at_start number;
-
 
 	-------------------------------------------------------------------------------
 	--Forward declarations so that functions can be in the same order as the documentation.
@@ -119,6 +117,7 @@ procedure add_statement_consume_tokens(
 	function declare_section return boolean;
 	function exception_handler return boolean;
 	function expression_case_when_then return boolean;
+	function initialize_section return boolean;
 	function for_loop_statement return boolean;
 	function for_each_row return boolean;
 	function function_definition return boolean;
@@ -149,6 +148,7 @@ procedure add_statement_consume_tokens(
 	procedure expression_case_when_then is v_ignore boolean; begin v_ignore := expression_case_when_then; end;
 	procedure for_each_row is v_ignore boolean; begin v_ignore := for_each_row; end;
 	procedure function_definition is v_ignore boolean; begin v_ignore := function_definition; end;
+	procedure initialize_section is v_ignore boolean; begin v_ignore := initialize_section; end;
 	procedure label is v_ignore boolean; begin v_ignore := label; end;
 	procedure name is v_ignore boolean; begin v_ignore := name; end;
 	procedure name_maybe_schema is v_ignore boolean; begin v_ignore := name_maybe_schema; end;
@@ -165,23 +165,34 @@ procedure add_statement_consume_tokens(
 	-------------------------------------------------------------------------------
 	--Helper functions
 	-------------------------------------------------------------------------------
-	procedure push_line(p_line varchar2) is
+	procedure push(p_line varchar2) is
 	begin
-		v_debug_lines.extend;
-		v_debug_lines(v_debug_lines.count) := p_line;
+		g_debug_lines.extend;
+		g_debug_lines(g_debug_lines.count) := p_line;
 	end;
 
-	procedure pop_line is
+	function pop(p_local_ast_before number default null, p_local_lines_before string_table default null) return boolean is
 	begin
-		v_debug_lines.trim;
+		if p_local_ast_before is null then
+			g_debug_lines.trim;
+		else
+			g_ast_index := p_local_ast_before;
+			g_debug_lines := p_local_lines_before;
+		end if;
+		return false;
+	end;
+
+	procedure pop is
+	begin
+		g_debug_lines.trim;
 	end;
 
 	procedure increment(p_increment number default 1) is begin
-		v_ast_index := v_ast_index + p_increment;
+		g_ast_index := g_ast_index + p_increment;
 	end;
 
 	function get_next_(p_value varchar2) return number is begin
-		for i in v_ast_index .. v_abstract_syntax_tree.count loop
+		for i in g_ast_index .. v_abstract_syntax_tree.count loop
 			if upper(v_abstract_syntax_tree(i).value) = p_value then
 				return i;
 			end if;
@@ -190,12 +201,12 @@ procedure add_statement_consume_tokens(
 	end;
 
 	function current_value return clob is begin
-		return upper(v_abstract_syntax_tree(v_ast_index).value);
+		return upper(v_abstract_syntax_tree(g_ast_index).value);
 	end;
 
 	function next_value(p_increment number default 1) return clob is begin
 		begin
-			return upper(v_abstract_syntax_tree(v_ast_index+p_increment).value);
+			return upper(v_abstract_syntax_tree(g_ast_index+p_increment).value);
 		exception when subscript_beyond_count then
 			null;
 		end;
@@ -203,10 +214,10 @@ procedure add_statement_consume_tokens(
 
 	function previous_value(p_decrement number) return clob is begin
 		begin
-			if v_ast_index - p_decrement <= 0 then
+			if g_ast_index - p_decrement <= 0 then
 				return null;
 			else
-				return upper(v_abstract_syntax_tree(v_ast_index - p_decrement).value);
+				return upper(v_abstract_syntax_tree(g_ast_index - p_decrement).value);
 			end if;
 		exception when subscript_beyond_count then
 			null;
@@ -214,22 +225,21 @@ procedure add_statement_consume_tokens(
 	end;
 
 	function current_type return varchar2 is begin
-		return v_abstract_syntax_tree(v_ast_index).type;
+		return v_abstract_syntax_tree(g_ast_index).type;
 	end;
 
 	function anything_(p_value varchar2) return boolean is begin
-		push_line(p_value);
+		push(p_value);
 		if current_value = p_value then
 			increment;
 			return true;
 		else
-			pop_line;
-			return false;
+			return pop;
 		end if;
 	end;
 
 	function anything_up_to_may_include_(p_value varchar2) return boolean is begin
-		push_line('ANYTHING_UP_TO_MAY_INCLUDE_'||p_value);
+		push('ANYTHING_UP_TO_MAY_INCLUDE_'||p_value);
 		begin
 			loop
 				if current_value = p_value then
@@ -242,9 +252,8 @@ procedure add_statement_consume_tokens(
 		end;
 	end;
 
-	function anything_up_to_must_include_(p_value varchar2) return boolean is begin
-		push_line('ANYTHING_UP_TO_MUST_INCLUDE_'||p_value);
-		v_ast_index_at_start := v_ast_index;
+	function anything_up_to_must_include_(p_value varchar2) return boolean is v_local_ast_before number := g_ast_index; v_local_lines_before string_table := g_debug_lines; begin
+		push('ANYTHING_UP_TO_MUST_INCLUDE_'||p_value);
 		begin
 			loop
 				if current_value = p_value then
@@ -255,14 +264,12 @@ procedure add_statement_consume_tokens(
 			end loop;
 		exception when subscript_beyond_count then null;
 		end;
-		v_ast_index := v_ast_index_at_start;
-		pop_line;
-		return false;
+
+		return pop(v_local_ast_before, v_local_lines_before);
 	end;
 
-	function anything_before_begin return boolean is begin
-		push_line('ANYTHING_BUT_BEGIN');
-		v_ast_index_at_start := v_ast_index;
+	function anything_before_begin return boolean is v_local_ast_before number := g_ast_index; v_local_lines_before string_table := g_debug_lines; begin
+		push('ANYTHING_BUT_BEGIN');
 		begin
 			loop
 				if current_value = 'BEGIN' then
@@ -272,13 +279,11 @@ procedure add_statement_consume_tokens(
 			end loop;
 		exception when subscript_beyond_count then null;
 		end;
-		v_ast_index := v_ast_index_at_start;
-		pop_line;
-		return false;
+		return pop(v_local_ast_before, v_local_lines_before);
 	end;
 
 	function anything_in_parentheses return boolean is v_paren_counter number; begin
-		push_line('ANYTHING_IN_PARENTHESES');
+		push('ANYTHING_IN_PARENTHESES');
 		if anything_('(') then
 			v_paren_counter := 1;
 			while v_paren_counter >= 1 loop
@@ -291,16 +296,14 @@ procedure add_statement_consume_tokens(
 			end loop;
 			return true;
 		end if;
-		pop_line;
-		return false;
+		return pop;
 	end;
 
 	-------------------------------------------------------------------------------
 	--Production rules that consume tokens and return true or false if rule was found.
 	-------------------------------------------------------------------------------
-	function plsql_block return boolean is begin
-		push_line('PLSQL_BLOCK');
-		v_ast_index_at_start := v_ast_index;
+	function plsql_block return boolean is v_local_ast_before number := g_ast_index; v_local_lines_before string_table := g_debug_lines; begin
+		push('PLSQL_BLOCK');
 
 		label;
 		if anything_('DECLARE') then
@@ -308,21 +311,17 @@ procedure add_statement_consume_tokens(
 			if body then
 				return true;
 			else
-				v_ast_index := v_ast_index_at_start;
-				pop_line;
-				return false;
+				return pop(v_local_ast_before, v_local_lines_before);
 			end if;
 		elsif body then
 			return true;
 		else
-			v_ast_index := v_ast_index_at_start;
-			pop_line;
-			return false;
+			return pop(v_local_ast_before, v_local_lines_before);
 		end if;
 	end;
 
 	function label return boolean is begin
-		push_line('LABEL');
+		push('LABEL');
 		if current_value = '<<' then
 			loop
 				increment;
@@ -332,15 +331,13 @@ procedure add_statement_consume_tokens(
 				end if;
 			end loop;
 		end if;
-		pop_line;
-		return false;
+		return pop;
 	end;
 
 	function declare_section return boolean is begin
-		push_line('DECLARE_SECTION');
+		push('DECLARE_SECTION');
 		if current_value in ('BEGIN', 'END') then
-			pop_line;
-			return false;
+			return pop;
 		else
 			loop
 				if current_value in ('BEGIN', 'END') then
@@ -358,7 +355,7 @@ procedure add_statement_consume_tokens(
 	end;
 
 	function body return boolean is begin
-		push_line('BODY');
+		push('BODY');
 		if anything_('BEGIN') then
 			statement_or_inline_pragma;
 			while statement_or_inline_pragma loop null; end loop;
@@ -367,49 +364,65 @@ procedure add_statement_consume_tokens(
 			end if;
 			p_end;
 			return true;
-		else
-			pop_line;
-			return false;
 		end if;
+		return pop;
+	end;
+
+	function initialize_section return boolean is begin
+		push('BODY');
+		if anything_('BEGIN') then
+			statement_or_inline_pragma;
+			while statement_or_inline_pragma loop null; end loop;
+			if anything_('EXCEPTION') then
+				while exception_handler loop null; end loop;
+			end if;
+			return true;
+		end if;
+		return pop;
 	end;
 
 	function procedure_definition return boolean is begin
-		push_line('PROCEDURE_DEFINITION');
+		push('PROCEDURE_DEFINITION');
 		--Exclude CTE queries that create a table expression named "PROCEDURE".
 		if current_value = 'PROCEDURE' and next_value not in ('AS', '(') then
 			anything_before_begin; --Don't need the header information.
 			return body;
-		else
-			pop_line;
-			return false;
 		end if;
+		return pop;
 	end;
 
 	function function_definition return boolean is begin
-		push_line('FUNCTION_DEFINITION');
+		push('FUNCTION_DEFINITION');
 		--Exclude CTE queries that create a table expression named "FUNCTION".
 		if current_value = 'FUNCTION' and next_value not in ('AS', '(') then
 			anything_before_begin; --Don't need the header information.
 			return body;
-		else
-			pop_line;
-			return false;
 		end if;
+		return pop;
 	end;
 
 	function name return boolean is begin
-		push_line('NAME');
+		push('NAME');
 		if current_type = tokenizer.c_word then
 			increment;
 			return true;
-		else
-			pop_line;
-			return false;
 		end if;
+		return pop;
+	end;
+
+	function name_maybe_schema return boolean is begin
+		push('NAME_MAYBE_SCHEMA');
+		if name then
+			if anything_('.') then
+				name;
+			end if;
+			return true;
+		end if;
+		return pop;
 	end;
 
 	function statement_or_inline_pragma return boolean is begin
-		push_line('STATEMENT_OR_INLINE_PRAGMA');
+		push('STATEMENT_OR_INLINE_PRAGMA');
 		if label then return true;
 		--Types that might have more statements:
 		elsif basic_loop_statement then return true;
@@ -421,14 +434,12 @@ procedure add_statement_consume_tokens(
 		--Anything else
 		elsif current_value not in ('EXCEPTION', 'END', 'ELSE', 'ELSIF') then
 			return anything_up_to_may_include_(';');
-		else
-			pop_line;
-			return false;
 		end if;
+		return pop;
 	end;
 
 	function p_end return boolean is begin
-		push_line('P_END');
+		push('P_END');
 		if current_value = 'END' then
 			increment;
 			name;
@@ -437,23 +448,21 @@ procedure add_statement_consume_tokens(
 			end if;
 			return true;
 		end if;
-		pop_line;
-		return false;
+		return pop;
 	end;
 
 	function exception_handler return boolean is begin
-		push_line('EXCEPTION_HANDLER');
+		push('EXCEPTION_HANDLER');
 		if current_value = 'WHEN' then
 			anything_up_to_must_include_('THEN');
 			while statement_or_inline_pragma loop null; end loop;
 			return true;
 		end if;
-		pop_line;
-		return false;
+		return pop;
 	end;
 
 	function basic_loop_statement return boolean is begin
-		push_line('BASIC_LOOP_STATEMENT');
+		push('BASIC_LOOP_STATEMENT');
 		if current_value = 'LOOP' then
 			increment;
 			while statement_or_inline_pragma loop null; end loop;
@@ -470,12 +479,11 @@ procedure add_statement_consume_tokens(
 			end if;
 			raise_application_error(-20330, 'Fatal parse error in BASIC_LOOP_STATEMENT.');
 		end if;
-		pop_line;
-		return false;
+		return pop;
 	end;
 
 	function for_loop_statement return boolean is begin
-		push_line('FOR_LOOP_STATEMENT');
+		push('FOR_LOOP_STATEMENT');
 		if current_value = 'FOR' and get_next_('..') < get_next_(';') then
 			anything_up_to_must_include_('LOOP');
 			while statement_or_inline_pragma loop null; end loop;
@@ -492,14 +500,12 @@ procedure add_statement_consume_tokens(
 			end if;
 			raise_application_error(-20330, 'Fatal parse error in FOR_LOOP_STATEMENT.');
 		else
-			pop_line;
-			return false;
+			return pop;
 		end if;
 	end;
 
-	function cursor_for_loop_statement return boolean is begin
-		push_line('CURSOR_FOR_LOOP_STATEMENT');
-		v_ast_index_at_start := v_ast_index;
+	function cursor_for_loop_statement return boolean is v_local_ast_before number := g_ast_index; v_local_lines_before string_table := g_debug_lines; begin
+		push('CURSOR_FOR_LOOP_STATEMENT');
 		if current_value = 'FOR' then
 			increment;
 			if name then
@@ -528,14 +534,12 @@ procedure add_statement_consume_tokens(
 			end if;
 			raise_application_error(-20330, 'Fatal parse error in CURSOR_FOR_LOOP_STATEMENT.');
 		else
-			v_ast_index := v_ast_index_at_start;
-			pop_line;
-			return false;
+			return pop(v_local_ast_before, v_local_lines_before);
 		end if;
 	end;
 
 	procedure case_expression is begin
-		push_line('CASE_EXPRESSION');
+		push('CASE_EXPRESSION');
 		loop
 			if anything_('CASE') then
 				case_expression;
@@ -546,11 +550,11 @@ procedure add_statement_consume_tokens(
 				increment;
 			end if;
 		end loop;
-		pop_line;
+		pop;
 	end;
 
 	function expression_case_when_then return boolean is begin
-		push_line('EXPRESSION_CASE_WHEN_THEN');
+		push('EXPRESSION_CASE_WHEN_THEN');
 		loop
 			if current_value = 'CASE' then
 				case_expression;
@@ -560,12 +564,11 @@ procedure add_statement_consume_tokens(
 				increment;
 			end if;
 		end loop;
-		pop_line;
-		return false;
+		return pop;
 	end;
 
 	function case_statement return boolean is begin
-		push_line('CASE_STATEMENT');
+		push('CASE_STATEMENT');
 		if anything_('CASE') then
 			--Searched case.
 			if current_value = 'WHEN' then
@@ -595,13 +598,12 @@ procedure add_statement_consume_tokens(
 				raise_application_error(-20330, 'Fatal parse error in SIMPLE_CASE_STATEMENT.');
 			end if;
 		else
-			pop_line;
-			return false;
+			return pop;
 		end if;
 	end;
 
 	function if_statement return boolean is begin
-		push_line('IF_STATEMENT');
+		push('IF_STATEMENT');
 		if anything_('IF') then
 			if expression_case_when_then and anything_('THEN') then
 				while statement_or_inline_pragma loop null; end loop;
@@ -617,13 +619,11 @@ procedure add_statement_consume_tokens(
 			end if;
 			raise_application_error(-20330, 'Fatal parse error in IF_STATEMENT.');
 		end if;
-		pop_line;
-		return false;
+		return pop;
 	end;
 
 	function create_or_replace_edition return boolean is begin
-		push_line('CREATE_OR_REPLACE_EDITION');
-		v_ast_index := v_ast_index_at_start;
+		push('CREATE_OR_REPLACE_EDITION');
 		if anything_('CREATE') then
 			anything_('OR');
 			anything_('REPLACE');
@@ -631,13 +631,11 @@ procedure add_statement_consume_tokens(
 			anything_('NONEDITIONABLE');
 			return true;
 		end if;
-		pop_line;
-		return false;
+		return pop;
 	end;
 
-	function create_procedure return boolean is begin
-		push_line('CREATE_PROCEDURE');
-		v_ast_index_at_start := v_ast_index;
+	function create_procedure return boolean is v_local_ast_before number := g_ast_index; v_local_lines_before string_table := g_debug_lines; begin
+		push('CREATE_PROCEDURE');
 		if create_or_replace_edition and anything_('PROCEDURE') and name_maybe_schema then
 			anything_in_parentheses;
 			if anything_up_to_must_include_('IS') or anything_up_to_must_include_('AS') then
@@ -650,14 +648,11 @@ procedure add_statement_consume_tokens(
 			end if;
 			raise_application_error(-20330, 'Fatal parse error in CREATE_PROCEDURE.');
 		end if;
-		v_ast_index := v_ast_index_at_start;
-		pop_line;
-		return false;
+		return pop(v_local_ast_before, v_local_lines_before);
 	end;
 
-	function create_function return boolean is begin
-		push_line('CREATE_FUNCTION');
-		v_ast_index_at_start := v_ast_index;
+	function create_function return boolean is v_local_ast_before number := g_ast_index; v_local_lines_before string_table := g_debug_lines; begin
+		push('CREATE_FUNCTION');
 		if create_or_replace_edition and anything_('FUNCTION') and name_maybe_schema then
 			--Consume everything between the function name and either AGGREGATE|PIPELINED USING
 			--or the last IS/AS.
@@ -690,14 +685,11 @@ procedure add_statement_consume_tokens(
 			end if;
 			raise_application_error(-20330, 'Fatal parse error in CREATE_FUNCTION.');
 		end if;
-		v_ast_index := v_ast_index_at_start;
-		pop_line;
-		return false;
+		return pop(v_local_ast_before, v_local_lines_before);
 	end;
 
-	function create_package_body return boolean is begin
-		push_line('CREATE_PACKAGE_BODY');
-		v_ast_index_at_start := v_ast_index;
+	function create_package return boolean is v_local_ast_before number := g_ast_index; v_local_lines_before string_table := g_debug_lines; begin
+		push('CREATE_PACKAGE');
 		if create_or_replace_edition and anything_('PACKAGE') and name_maybe_schema then
 			anything_in_parentheses;
 			if anything_up_to_must_include_('IS') or anything_up_to_must_include_('AS') then
@@ -712,18 +704,15 @@ procedure add_statement_consume_tokens(
 				end loop;
 			end if;
 		end if;
-		v_ast_index := v_ast_index_at_start;
-		pop_line;
-		return false;
+		return pop(v_local_ast_before, v_local_lines_before);
 	end;
 
-	function create_package return boolean is begin
-		push_line('CREATE_PACKAGE');
-		v_ast_index_at_start := v_ast_index;
+	function create_package_body return boolean is v_local_ast_before number := g_ast_index; v_local_lines_before string_table := g_debug_lines; begin
+		push('CREATE_PACKAGE_BODY');
 		if create_or_replace_edition and anything_('PACKAGE') and anything_('BODY') and name_maybe_schema then
 			if anything_('IS') or anything_('AS') then
 				declare_section;
-				body;
+				initialize_section;
 				if anything_('END') then
 					name;
 					anything_(';');
@@ -731,14 +720,11 @@ procedure add_statement_consume_tokens(
 				end if;
 			end if;
 		end if;
-		v_ast_index := v_ast_index_at_start;
-		pop_line;
-		return false;
+		return pop(v_local_ast_before, v_local_lines_before);
 	end;
 
-	function create_type_body return boolean is begin
-		push_line('CREATE_TYPE_BODY');
-		v_ast_index_at_start := v_ast_index;
+	function create_type_body return boolean is v_local_ast_before number := g_ast_index; v_local_lines_before string_table := g_debug_lines; begin
+		push('CREATE_TYPE_BODY');
 		if create_or_replace_edition and anything_('TYPE') and anything_('BODY') and name_maybe_schema then
 			anything_in_parentheses;
 			if anything_up_to_must_include_('IS') or anything_up_to_must_include_('AS') then
@@ -764,21 +750,7 @@ procedure add_statement_consume_tokens(
 			end if;
 			raise_application_error(-20330, 'Fatal parse error in CREATE_TYPE_BODY.');
 		end if;
-		v_ast_index := v_ast_index_at_start;
-		pop_line;
-		return false;
-	end;
-
-	function name_maybe_schema return boolean is begin
-		push_line('NAME_MAYBE_SCHEMA');
-		if name then
-			if anything_('.') then
-				name;
-			end if;
-			return true;
-		end if;
-		pop_line;
-		return false;
+		return pop(v_local_ast_before, v_local_lines_before);
 	end;
 
 	function dml_event_clause return boolean is
@@ -794,7 +766,7 @@ procedure add_statement_consume_tokens(
 			return false;
 		end;
 	begin
-		push_line('DML_EVENT_CLAUSE');
+		push('DML_EVENT_CLAUSE');
 		if anything_('DELETE') or anything_('INSERT') or update_of_column then
 			while anything_('OR') and (anything_('DELETE') or anything_('INSERT') or update_of_column) loop null; end loop;
 			if anything_('ON') and name_maybe_schema then
@@ -802,12 +774,11 @@ procedure add_statement_consume_tokens(
 			end if;
 			raise_application_error(-20330, 'Fatal parse error in DML_EVENT_CLAUSE.');
 		end if;
-		pop_line;
-		return false;
+		return pop;
 	end;
 
 	function referencing_clause return boolean is begin
-		push_line('REFERENCING_CLAUSE');
+		push('REFERENCING_CLAUSE');
 		if anything_('REFERENCING') then
 			if anything_('OLD') or anything_('NEW') or anything_('PARENT') then
 				anything_('AS');
@@ -820,37 +791,30 @@ procedure add_statement_consume_tokens(
 			end if;
 			raise_application_error(-20330, 'Fatal parse error in REFERENCING_CLAUSE.');
 		end if;
-		pop_line;
-		return false;
+		return pop;
 	end;
 
-	function for_each_row return boolean is begin
-		push_line('FOR_EACH_ROW');
-		v_ast_index_at_start := v_ast_index;
+	function for_each_row return boolean is v_local_ast_before number := g_ast_index; v_local_lines_before string_table := g_debug_lines; begin
+		push('FOR_EACH_ROW');
 		if anything_('FOR') and anything_('EACH') and anything_('ROW') then
 			return true;
 		end if;
-		v_ast_index := v_ast_index_at_start;
-		pop_line;
-		return false;
+		return pop(v_local_ast_before, v_local_lines_before);
 	end;
 
-	function trigger_edition_clause return boolean is begin
-		push_line('TRIGGER_EDITION_CLAUSE');
-		v_ast_index_at_start := v_ast_index;
+	function trigger_edition_clause return boolean is v_local_ast_before number := g_ast_index; v_local_lines_before string_table := g_debug_lines; begin
+		push('TRIGGER_EDITION_CLAUSE');
 		if anything_('FORWARD') or anything_('REVERSE') then
 			null;
 		end if;
 		if anything_('CROSSEDITION') then
 			return true;
 		end if;
-		v_ast_index := v_ast_index_at_start;
-		pop_line;
-		return false;
+		return pop(v_local_ast_before, v_local_lines_before);
 	end;
 
 	function trigger_ordering_clause return boolean is begin
-		push_line('TRIGGER_ORDERING_CLAUSE');
+		push('TRIGGER_ORDERING_CLAUSE');
 		if anything_('FOLLOWS') or anything_('PRECEDES') then
 			if name_maybe_schema then
 				while anything_(',') and name_maybe_schema loop null; end loop;
@@ -858,57 +822,49 @@ procedure add_statement_consume_tokens(
 			end if;
 			raise_application_error(-20330, 'Fatal parse error in TRIGGER_ORDERING_CLAUSE.');
 		end if;
-		pop_line;
-		return false;
+		return pop;
 	end;
 
 	function when_condition return boolean is begin
-		push_line('WHEN_CONDITION');
+		push('WHEN_CONDITION');
 		if anything_('WHEN') then
 			if anything_in_parentheses then
 				return true;
 			end if;
 			raise_application_error(-20330, 'Fatal parse error in WHEN_CONDITION.');
 		end if;
-		pop_line;
-		return false;
+		return pop;
 	end;
 
 	function trigger_body return boolean is begin
-		push_line('TRIGGER_BODY');
+		push('TRIGGER_BODY');
 		if anything_('CALL') then
 			anything_up_to_may_include_(';');
 			return true;
 		elsif plsql_block then return true;
 		end if;
-		pop_line;
-		return false;
+		return pop;
 	end;
 
 	function delete_insert_update_or return boolean is begin
-		push_line('DELETE_INSERT_UPDATE_OR');
+		push('DELETE_INSERT_UPDATE_OR');
 		if anything_('DELETE') or anything_('INSERT') or anything_('UPDATE') then
 			while anything_('OR') and (anything_('DELETE') or anything_('INSERT') or anything_('UPDATE')) loop null; end loop;
 			return true;
 		end if;
-		pop_line;
-		return false;
+		return pop;
 	end;
 
-	function nested_table_nt_column_of return boolean is begin
-		push_line('NESTED_TABLE_NT_COLUMN_OF');
-		v_ast_index_at_start := v_ast_index;
+	function nested_table_nt_column_of return boolean is v_local_ast_before number := g_ast_index; v_local_lines_before string_table := g_debug_lines; begin
+		push('NESTED_TABLE_NT_COLUMN_OF');
 		if anything_('NESTED') and anything_('TABLE') and name and anything_('OF') then
 			return true;
 		end if;
-		v_ast_index := v_ast_index_at_start;
-		pop_line;
-		return false;
+		return pop(v_local_ast_before, v_local_lines_before);
 	end;
 
-	function timing_point return boolean is begin
-		push_line('TIMING_POINT');
-		v_ast_index_at_start := v_ast_index;
+	function timing_point return boolean is v_local_ast_before number := g_ast_index; v_local_lines_before string_table := g_debug_lines; begin
+		push('TIMING_POINT');
 		if current_value = 'BEFORE' and next_value = 'STATEMENT' then
 			increment(2);
 			return true;
@@ -925,13 +881,11 @@ procedure add_statement_consume_tokens(
 			increment(4);
 			return true;
 		end if;
-		v_ast_index := v_ast_index_at_start;
-		pop_line;
-		return false;
+		return pop(v_local_ast_before, v_local_lines_before);
 	end;
 
 	function tps_body return boolean is begin
-		push_line('TPS_BODY');
+		push('TPS_BODY');
 		if statement_or_inline_pragma then
 			while statement_or_inline_pragma loop null; end loop;
 			if anything_('EXCEPTION') then
@@ -939,28 +893,23 @@ procedure add_statement_consume_tokens(
 			end if;
 			return true;
 		end if;
-		pop_line;
-		return false;
+		return pop;
 	end;
 
-	function timing_point_section return boolean is begin
-		push_line('TIMING_POINT_SECTION');
-		v_ast_index_at_start := v_ast_index;
+	function timing_point_section return boolean is v_local_ast_before number := g_ast_index; v_local_lines_before string_table := g_debug_lines; begin
+		push('TIMING_POINT_SECTION');
 		if timing_point and anything_('IS') and anything_('BEGIN') and tps_body and anything_('END') and timing_point and anything_(';') then
 			return true;
 		end if;
-		v_ast_index := v_ast_index_at_start;
-		pop_line;
-		return false;
+		return pop(v_local_ast_before, v_local_lines_before);
 	end;
 
 	function compound_trigger_block return boolean is
 		--Similar to the regular DECLARE_SECTION but also stops at timing point keywords.
 		function declare_section return boolean is begin
-			push_line('DECLARE_SECTION');
+			push('DECLARE_SECTION');
 			if current_value in ('BEGIN', 'END', 'BEFORE', 'AFTER', 'INSTEAD') then
-				pop_line;
-				return false;
+				return pop;
 			else
 				loop
 					if current_value in ('BEGIN', 'END', 'BEFORE', 'AFTER', 'INSTEAD') then
@@ -978,7 +927,7 @@ procedure add_statement_consume_tokens(
 		end;
 		procedure declare_section is v_ignore boolean; begin v_ignore := declare_section; end;
 	begin
-		push_line('COMPOUND_TRIGGER_BLOCK');
+		push('COMPOUND_TRIGGER_BLOCK');
 		if anything_('COMPOUND') and anything_('TRIGGER') then
 			declare_section;
 			if timing_point_section then
@@ -992,12 +941,11 @@ procedure add_statement_consume_tokens(
 			end if;
 			raise_application_error(-20330, 'Fatal parse error in COMPOUND_TRIGGER_BLOCK.');
 		end if;
-		pop_line;
-		return false;
+		return pop;
 	end;
 
 	function ddl_or_database_event return boolean is begin
-		push_line('DDL_OR_DATABASE_EVENT');
+		push('DDL_OR_DATABASE_EVENT');
 		if current_value in
 		(
 			'ALTER', 'ANALYZE', 'AUDIT', 'COMMENT', 'CREATE', 'DROP', 'GRANT', 'NOAUDIT',
@@ -1013,13 +961,11 @@ procedure add_statement_consume_tokens(
 			increment(2);
 			return true;
 		end if;
-		pop_line;
-		return false;
+		return pop;
 	end;
 
-	function simple_dml_trigger return boolean is begin
-		push_line('SIMPLE_DML_TRIGGER');
-		v_ast_index_at_start := v_ast_index;
+	function simple_dml_trigger return boolean is v_local_ast_before number := g_ast_index; v_local_lines_before string_table := g_debug_lines; begin
+		push('SIMPLE_DML_TRIGGER');
 		if (anything_('BEFORE') or anything_('AFTER')) and dml_event_clause then
 			referencing_clause;
 			for_each_row;
@@ -1034,14 +980,11 @@ procedure add_statement_consume_tokens(
 			end if;
 			raise_application_error(-20330, 'Fatal parse error in SIMPLE_DML_TRIGGER.');
 		end if;
-		v_ast_index := v_ast_index_at_start;
-		pop_line;
-		return false;
+		return pop(v_local_ast_before, v_local_lines_before);
 	end;
 
-	function instead_of_dml_trigger return boolean is begin
-		push_line('INSTEAD_OF_DML_TRIGGER');
-		v_ast_index_at_start := v_ast_index;
+	function instead_of_dml_trigger return boolean is v_local_ast_before number := g_ast_index; v_local_lines_before string_table := g_debug_lines; begin
+		push('INSTEAD_OF_DML_TRIGGER');
 		if anything_('INSTEAD') and anything_('OF') and delete_insert_update_or then
 			if anything_('ON') then
 				nested_table_nt_column_of;
@@ -1060,13 +1003,11 @@ procedure add_statement_consume_tokens(
 				raise_application_error(-20330, 'Fatal parse error in INSTEAD_OF_DML_TRIGGER.');
 			end if;
 		end if;
-		v_ast_index := v_ast_index_at_start;
-		pop_line;
-		return false;
+		return pop(v_local_ast_before, v_local_lines_before);
 	end;
 
 	function compound_trigger return boolean is begin
-		push_line('COMPOUND_TRIGGER');
+		push('COMPOUND_TRIGGER');
 		if anything_('FOR') then
 			if dml_event_clause then
 				referencing_clause;
@@ -1082,13 +1023,11 @@ procedure add_statement_consume_tokens(
 			end if;
 			raise_application_error(-20330, 'Fatal parse error in COMPOUND_TRIGGER.');
 		end if;
-		pop_line;
-		return false;
+		return pop;
 	end;
 
-	function system_trigger return boolean is begin
-		push_line('SYSTEM_TRIGGER');
-		v_ast_index_at_start := v_ast_index;
+	function system_trigger return boolean is v_local_ast_before number := g_ast_index; v_local_lines_before string_table := g_debug_lines; begin
+		push('SYSTEM_TRIGGER');
 		if (anything_('BEFORE') or anything_('AFTER') or (anything_('INSTEAD') and anything_('OF'))) and ddl_or_database_event then
 			while anything_('OR') and ddl_or_database_event loop null; end loop;
 			if anything_('ON') then
@@ -1106,13 +1045,11 @@ procedure add_statement_consume_tokens(
 			end if;
 			raise_application_error(-20330, 'Fatal parse error in SYSTEM_TRIGGER.');
 		end if;
-		v_ast_index := v_ast_index_at_start;
-		pop_line;
-		return false;
+		return pop(v_local_ast_before, v_local_lines_before);
 	end;
 
 	function create_trigger return boolean is begin
-		push_line('CREATE_TRIGGER');
+		push('CREATE_TRIGGER');
 		if create_or_replace_edition and anything_('TRIGGER') and name_maybe_schema then
 			if simple_dml_trigger then return true;
 			elsif instead_of_dml_trigger then return true;
@@ -1121,8 +1058,7 @@ procedure add_statement_consume_tokens(
 			end if;
 			raise_application_error(-20330, 'Fatal parse error in CREATE_TRIGGER.');
 	end if;
-		pop_line;
-		return false;
+		return pop;
 	end;
 
 
@@ -1143,17 +1079,17 @@ begin
 	--
 	--Consume everything
 	if p_terminator = C_TERMINATOR_EOF then
-		v_ast_index := v_abstract_syntax_tree.count + 1;
+		g_ast_index := v_abstract_syntax_tree.count + 1;
 
 	--Look for a ';' anywhere.
 	elsif p_terminator = C_TERMINATOR_SEMI then
 		--Loop through all tokens, exit if a semicolon found.
 		for i in 1 .. v_abstract_syntax_tree.count loop
 			if v_abstract_syntax_tree(i).type = ';' then
-				v_ast_index := i + 1;
+				g_ast_index := i + 1;
 				exit;
 			end if;
-			v_ast_index := i + 1;
+			g_ast_index := i + 1;
 		end loop;
 
 	--Match BEGIN and END for a PLSQL_DECLARATION.
@@ -1186,11 +1122,11 @@ begin
 				if current_value in ('FUNCTION', 'PROCEDURE') then
 					while function_definition or procedure_definition loop null; end loop;
 				end if;
-			elsif v_abstract_syntax_tree(v_ast_index).type = ';' then
-				v_ast_index := v_ast_index + 1;
+			elsif v_abstract_syntax_tree(g_ast_index).type = ';' then
+				g_ast_index := g_ast_index + 1;
 				exit;
 			else
-				v_ast_index := v_ast_index + 1;
+				g_ast_index := g_ast_index + 1;
 			end if;
 		end loop;
 	--Match BEGIN and END for a common PL/SQL block.
@@ -1209,8 +1145,8 @@ begin
 
 /*
 	--DEBUG TODO
-	for i in 1 .. v_debug_lines.count loop
-		dbms_output.put_line(v_debug_lines(i));
+	for i in 1 .. g_debug_lines.count loop
+		dbms_output.put_line(g_debug_lines(i));
 	end loop;
 */
 
@@ -1221,7 +1157,7 @@ begin
 		v_has_abstract_token boolean := false;
 	begin
 		--Special case if there are no abstract syntax tokens - add everything.
-		if v_ast_index = 1 then
+		if g_ast_index = 1 then
 			--Create new parse tree.
 			for i in p_parse_tree_index .. p_parse_tree.count loop
 				v_new_parse_tree.extend;
@@ -1238,13 +1174,13 @@ begin
 		--Else iterate up to the last abstract syntax token and maybe some extra whitespace.
 		else
 			--Iterate selected parse tree tokens, add them to collection.
-			for i in p_parse_tree_index .. v_map_between_parse_and_ast(v_ast_index-1) loop
+			for i in p_parse_tree_index .. v_map_between_parse_and_ast(g_ast_index-1) loop
 				v_new_parse_tree.extend;
 				v_new_parse_tree(v_new_parse_tree.count) := p_parse_tree(i);
 			end loop;
 
 			--Are any of the remaining tokens abstract?
-			for i in v_map_between_parse_and_ast(v_ast_index-1) + 1 .. p_parse_tree.count loop
+			for i in v_map_between_parse_and_ast(g_ast_index-1) + 1 .. p_parse_tree.count loop
 				if p_parse_tree(i).type not in (tokenizer.c_whitespace, tokenizer.c_comment, tokenizer.c_eof) then
 					v_has_abstract_token := true;
 					exit;
@@ -1254,7 +1190,7 @@ begin
 			--If no remaining tokens are abstract, add them to the new parse tree.
 			--Whitespace and comments after the last statement belong to that statement, not a new one.
 			if not v_has_abstract_token then
-				for i in v_map_between_parse_and_ast(v_ast_index-1) + 1 .. p_parse_tree.count loop
+				for i in v_map_between_parse_and_ast(g_ast_index-1) + 1 .. p_parse_tree.count loop
 					v_new_parse_tree.extend;
 					v_new_parse_tree(v_new_parse_tree.count) := p_parse_tree(i);
 				end loop;
@@ -1263,7 +1199,7 @@ begin
 				p_parse_tree_index := p_parse_tree.count + 1;
 			else
 				--Set the parse tree index based on the last AST index.
-				p_parse_tree_index := v_map_between_parse_and_ast(v_ast_index-1) + 1;
+				p_parse_tree_index := v_map_between_parse_and_ast(g_ast_index-1) + 1;
 			end if;
 
 			--Add new tree to collection of trees.

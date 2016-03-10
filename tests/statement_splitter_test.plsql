@@ -742,6 +742,8 @@ begin
 	assert_equals('Package Body 4.5b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
 
 	--#5: Two sets of matched BEGINs and ENDs - from CURSORS and methods.
+	/*
+	--This is not valid in 12.1.0.2.
 	v_statements:='
 		create or replace package body test_package is
 			cursor my_cursor is with function test_function return number is begin return 1; end; select test_function from dual;
@@ -751,10 +753,13 @@ begin
 		end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
 	assert_equals('Package Body 5a', 2, v_split_statements.count);
 	assert_equals('Package Body 5b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	*/
 
 	--#5.5: Sets of matched BEGINs and ENDs - from CURSORS with multiple plsql_declarations
 	-- and a SQL WITH named "function".  The SQL statements are valid, although it's an
 	-- invalid (but parsable) package body.
+	/*
+	--This is not valid in 12.1.0.2.
 	v_statements:='
 		create or replace package body test_package is
 			cursor my_cursor is with function test_function1 return number is begin return 1; end; function test_function2 return number is begin return 2; end; select test_function1() from dual;
@@ -764,6 +769,7 @@ begin
 		end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
 	assert_equals('Package Body 5.5a', 2, v_split_statements.count);
 	assert_equals('Package Body 5.5b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	*/
 
 	--#6: Items only.
 	v_statements:=q'<
@@ -910,6 +916,8 @@ procedure test_dynamic_sql is
 	sql_cursor sys_refcursor;
 	v_split_statements token_table_table := token_table_table();
 begin
+	--TODO: Also test source code.
+
 	--Test statements in GV$SQL.
 	--Takes 171 seconds on my PC.
 	open sql_cursor for
