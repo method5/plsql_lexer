@@ -1,4 +1,4 @@
-`PLSQL_LEXER` 0.2.9
+`PLSQL_LEXER` 0.2.10
 ============
 
 PL/SQL Lexer is a toolkit for solving real-world language problems, in PL/SQL.
@@ -34,7 +34,7 @@ See the individual packages for details on each procedure.
 
 - **STATEMENT_SPLITTER**  Split multiple statements into individual statements based on a terminator.
 
-	Split statements like SQL*Plus and drop the delimiter.  Delimiters must be on a line with only whitespace.  Like SQL*Plus, delimiters may be counted even they are inside a string or comment:
+	Split statements like SQL*Plus and drop the delimiter.  Delimiters must be on a line with only whitespace.  Delimiters may be counted even if they are inside a string or comment:
 
 		function split_by_sqlplus_delimiter(
 			p_statements        in clob,
@@ -53,6 +53,11 @@ See the individual packages for details on each procedure.
 			p_statements        in clob,
 			p_sqlplus_delimiter in varchar2 default '/'
 		) return token_table_table;
+
+    The package may throw one of these custom exceptions:
+    -20000, The SQL*Plus delimiter cannot be NULL.
+    -20001, The SQL*Plus delimiter cannot contain whitespace.
+    -20002, Fatal parse error in X around line #Y, column #Z of the original string.
 
 - **STATEMENT_CLASSIFIER** - Classify a statement as DDL, PL/SQL, SELECT, ALTER, etc.
 

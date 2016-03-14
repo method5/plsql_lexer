@@ -204,6 +204,13 @@ procedure add_statement_consume_tokens(
 		return upper(v_abstract_syntax_tree(g_ast_index).value);
 	end;
 
+	procedure parse_error(p_syntax_type varchar2) is begin
+		raise_application_error(-20002, 'Fatal parse error in '||p_syntax_type||' around line #'||
+			v_abstract_syntax_tree(g_ast_index).line_number||', column #'||
+			v_abstract_syntax_tree(g_ast_index).column_number||' of the original string.');
+
+	end;
+
 	function next_value(p_increment number default 1) return clob is begin
 		begin
 			return upper(v_abstract_syntax_tree(g_ast_index+p_increment).value);
@@ -477,7 +484,7 @@ procedure add_statement_consume_tokens(
 					end if;
 				end if;
 			end if;
-			raise_application_error(-20330, 'Fatal parse error in BASIC_LOOP_STATEMENT.');
+			parse_error('BASIC_LOOP_STATEMENT');
 		end if;
 		return pop;
 	end;
@@ -498,7 +505,7 @@ procedure add_statement_consume_tokens(
 					end if;
 				end if;
 			end if;
-			raise_application_error(-20330, 'Fatal parse error in FOR_LOOP_STATEMENT.');
+			parse_error('FOR_LOOP_STATEMENT');
 		else
 			return pop;
 		end if;
@@ -532,7 +539,7 @@ procedure add_statement_consume_tokens(
 					end if;
 				end if;
 			end if;
-			raise_application_error(-20330, 'Fatal parse error in CURSOR_FOR_LOOP_STATEMENT.');
+			parse_error('CURSOR_FOR_LOOP_STATEMENT');
 		else
 			return pop(v_local_ast_before, v_local_lines_before);
 		end if;
@@ -581,7 +588,7 @@ procedure add_statement_consume_tokens(
 				if anything_('END') and anything_('CASE') and (name or not name) and anything_(';') then
 					return true;
 				end if;
-				raise_application_error(-20330, 'Fatal parse error in SEARCHED_CASE_STATEMENT.');
+				parse_error('SEARCHED_CASE_STATEMENT');
 			--Simple case.
 			else
 				if expression_case_when_then then
@@ -595,7 +602,7 @@ procedure add_statement_consume_tokens(
 						return true;
 					end if;
 				end if;
-				raise_application_error(-20330, 'Fatal parse error in SIMPLE_CASE_STATEMENT.');
+				parse_error('SIMPLE_CASE_STATEMENT');
 			end if;
 		else
 			return pop;
@@ -617,7 +624,7 @@ procedure add_statement_consume_tokens(
 					return true;
 				end if;
 			end if;
-			raise_application_error(-20330, 'Fatal parse error in IF_STATEMENT.');
+			parse_error('IF_STATEMENT');
 		end if;
 		return pop;
 	end;
@@ -646,7 +653,7 @@ procedure add_statement_consume_tokens(
 					return true;
 				end if;
 			end if;
-			raise_application_error(-20330, 'Fatal parse error in CREATE_PROCEDURE.');
+			parse_error('CREATE_PROCEDURE');
 		end if;
 		return pop(v_local_ast_before, v_local_lines_before);
 	end;
@@ -683,7 +690,7 @@ procedure add_statement_consume_tokens(
 			else
 				return plsql_block;
 			end if;
-			raise_application_error(-20330, 'Fatal parse error in CREATE_FUNCTION.');
+			parse_error('CREATE_FUNCTION');
 		end if;
 		return pop(v_local_ast_before, v_local_lines_before);
 	end;
@@ -748,7 +755,7 @@ procedure add_statement_consume_tokens(
 					end if;
 				end loop;
 			end if;
-			raise_application_error(-20330, 'Fatal parse error in CREATE_TYPE_BODY.');
+			parse_error('CREATE_TYPE_BODY');
 		end if;
 		return pop(v_local_ast_before, v_local_lines_before);
 	end;
@@ -772,7 +779,7 @@ procedure add_statement_consume_tokens(
 			if anything_('ON') and name_maybe_schema then
 				return true;
 			end if;
-			raise_application_error(-20330, 'Fatal parse error in DML_EVENT_CLAUSE.');
+			parse_error('DML_EVENT_CLAUSE');
 		end if;
 		return pop;
 	end;
@@ -789,7 +796,7 @@ procedure add_statement_consume_tokens(
 				end loop;
 				return true;
 			end if;
-			raise_application_error(-20330, 'Fatal parse error in REFERENCING_CLAUSE.');
+			parse_error('REFERENCING_CLAUSE');
 		end if;
 		return pop;
 	end;
@@ -820,7 +827,7 @@ procedure add_statement_consume_tokens(
 				while anything_(',') and name_maybe_schema loop null; end loop;
 				return true;
 			end if;
-			raise_application_error(-20330, 'Fatal parse error in TRIGGER_ORDERING_CLAUSE.');
+			parse_error('TRIGGER_ORDERING_CLAUSE');
 		end if;
 		return pop;
 	end;
@@ -831,7 +838,7 @@ procedure add_statement_consume_tokens(
 			if anything_in_parentheses then
 				return true;
 			end if;
-			raise_application_error(-20330, 'Fatal parse error in WHEN_CONDITION.');
+			parse_error('WHEN_CONDITION');
 		end if;
 		return pop;
 	end;
@@ -939,7 +946,7 @@ procedure add_statement_consume_tokens(
 					end if;
 				end if;
 			end if;
-			raise_application_error(-20330, 'Fatal parse error in COMPOUND_TRIGGER_BLOCK.');
+			parse_error('COMPOUND_TRIGGER_BLOCK');
 		end if;
 		return pop;
 	end;
@@ -978,7 +985,7 @@ procedure add_statement_consume_tokens(
 			if trigger_body then
 				return true;
 			end if;
-			raise_application_error(-20330, 'Fatal parse error in SIMPLE_DML_TRIGGER.');
+			parse_error('SIMPLE_DML_TRIGGER');
 		end if;
 		return pop(v_local_ast_before, v_local_lines_before);
 	end;
@@ -1000,7 +1007,7 @@ procedure add_statement_consume_tokens(
 						return true;
 					end if;
 				end if;
-				raise_application_error(-20330, 'Fatal parse error in INSTEAD_OF_DML_TRIGGER.');
+				parse_error('INSTEAD_OF_DML_TRIGGER');
 			end if;
 		end if;
 		return pop(v_local_ast_before, v_local_lines_before);
@@ -1021,7 +1028,7 @@ procedure add_statement_consume_tokens(
 					return true;
 				end if;
 			end if;
-			raise_application_error(-20330, 'Fatal parse error in COMPOUND_TRIGGER.');
+			parse_error('COMPOUND_TRIGGER');
 		end if;
 		return pop;
 	end;
@@ -1043,7 +1050,7 @@ procedure add_statement_consume_tokens(
 					end if;
 				end if;
 			end if;
-			raise_application_error(-20330, 'Fatal parse error in SYSTEM_TRIGGER.');
+			parse_error('SYSTEM_TRIGGER');
 		end if;
 		return pop(v_local_ast_before, v_local_lines_before);
 	end;
@@ -1056,7 +1063,7 @@ procedure add_statement_consume_tokens(
 			elsif compound_trigger then return true;
 			elsif system_trigger then return true;
 			end if;
-			raise_application_error(-20330, 'Fatal parse error in CREATE_TRIGGER.');
+			parse_error('CREATE_TRIGGER');
 	end if;
 		return pop;
 	end;
@@ -1077,81 +1084,83 @@ begin
 
 	--Find the last AST token index.
 	--
-	--Consume everything
-	if p_terminator = C_TERMINATOR_EOF then
-		g_ast_index := v_abstract_syntax_tree.count + 1;
+	begin
+		--Consume everything
+		if p_terminator = C_TERMINATOR_EOF then
+			g_ast_index := v_abstract_syntax_tree.count + 1;
 
-	--Look for a ';' anywhere.
-	elsif p_terminator = C_TERMINATOR_SEMI then
-		--Loop through all tokens, exit if a semicolon found.
-		for i in 1 .. v_abstract_syntax_tree.count loop
-			if v_abstract_syntax_tree(i).type = ';' then
-				g_ast_index := i + 1;
-				exit;
-			end if;
-			g_ast_index := i + 1;
-		end loop;
-
-	--Match BEGIN and END for a PLSQL_DECLARATION.
-	elsif p_terminator = C_TERMINATOR_PLSQL_DECLARATION then
-		/*
-		PL/SQL Declarations must have this pattern before the first ";":
-			(null or not "START") "WITH" ("FUNCTION"|"PROCEDURE") (neither "(" nor "AS")
-
-		This was discovered by analyzing all "with" strings in the Oracle documentation
-		text descriptions.  That is, download the library and run a command like this:
-			C:\E50529_01\SQLRF\img_text> findstr /s /i "with" *.*
-
-		SQL has mnay ambiguities, simply looking for "with function" would incorrectly catch these:
-			1. Hierarchical queries.  Exclude them by looking for "start" before "with".
-				select * from (select 1 function from dual)	connect by function = 1	start with function = 1;
-			2. Subquery factoring that uses "function" as a name.  Stupid, but possible.
-				with function as (select 1 a from dual) select * from function;
-				with function(a) as (select 1 a from dual) select * from function;
-			Note: "start" cannot be the name of a table, no need to worry about DML
-			statements like `insert into start with ...`.
-		*/
-		for i in 1 .. v_abstract_syntax_tree.count loop
-			if
-			(
-				(previous_value(2) is null or previous_value(2) <> 'START')
-				and previous_value(1) = 'WITH'
-				and current_value in ('FUNCTION', 'PROCEDURE')
-				and (next_value is null or next_value not in ('(', 'AS'))
-			) then
-				if current_value in ('FUNCTION', 'PROCEDURE') then
-					while function_definition or procedure_definition loop null; end loop;
+		--Look for a ';' anywhere.
+		elsif p_terminator = C_TERMINATOR_SEMI then
+			--Loop through all tokens, exit if a semicolon found.
+			for i in 1 .. v_abstract_syntax_tree.count loop
+				if v_abstract_syntax_tree(i).type = ';' then
+					g_ast_index := i + 1;
+					exit;
 				end if;
-			elsif v_abstract_syntax_tree(g_ast_index).type = ';' then
-				g_ast_index := g_ast_index + 1;
-				exit;
-			else
-				g_ast_index := g_ast_index + 1;
-			end if;
-		end loop;
-	--Match BEGIN and END for a common PL/SQL block.
-	elsif p_terminator = C_TERMINATOR_PLSQL then
-		if plsql_block then null;
-		elsif create_procedure then null;
-		elsif create_function then null;
-		elsif create_package_body then null;
-		elsif create_package then null;
-		elsif create_type_body then null;
-		elsif create_trigger then null;
-		else
-			raise_application_error(-20330, 'Fatal parse error in '||p_command_name);
-		end if;
-	end if;
+				g_ast_index := i + 1;
+			end loop;
 
-/*
-	--DEBUG TODO
-	for i in 1 .. g_debug_lines.count loop
-		dbms_output.put_line(g_debug_lines(i));
-	end loop;
-*/
+		--Match BEGIN and END for a PLSQL_DECLARATION.
+		elsif p_terminator = C_TERMINATOR_PLSQL_DECLARATION then
+			/*
+			PL/SQL Declarations must have this pattern before the first ";":
+				(null or not "START") "WITH" ("FUNCTION"|"PROCEDURE") (neither "(" nor "AS")
+
+			This was discovered by analyzing all "with" strings in the Oracle documentation
+			text descriptions.  That is, download the library and run a command like this:
+				C:\E50529_01\SQLRF\img_text> findstr /s /i "with" *.*
+
+			SQL has mnay ambiguities, simply looking for "with function" would incorrectly catch these:
+				1. Hierarchical queries.  Exclude them by looking for "start" before "with".
+					select * from (select 1 function from dual)	connect by function = 1	start with function = 1;
+				2. Subquery factoring that uses "function" as a name.  Stupid, but possible.
+					with function as (select 1 a from dual) select * from function;
+					with function(a) as (select 1 a from dual) select * from function;
+				Note: "start" cannot be the name of a table, no need to worry about DML
+				statements like `insert into start with ...`.
+			*/
+			for i in 1 .. v_abstract_syntax_tree.count loop
+				if
+				(
+					(previous_value(2) is null or previous_value(2) <> 'START')
+					and previous_value(1) = 'WITH'
+					and current_value in ('FUNCTION', 'PROCEDURE')
+					and (next_value is null or next_value not in ('(', 'AS'))
+				) then
+					if current_value in ('FUNCTION', 'PROCEDURE') then
+						while function_definition or procedure_definition loop null; end loop;
+					end if;
+				elsif v_abstract_syntax_tree(g_ast_index).type = ';' then
+					g_ast_index := g_ast_index + 1;
+					exit;
+				else
+					g_ast_index := g_ast_index + 1;
+				end if;
+			end loop;
+		--Match BEGIN and END for a common PL/SQL block.
+		elsif p_terminator = C_TERMINATOR_PLSQL then
+			if plsql_block then null;
+			elsif create_procedure then null;
+			elsif create_function then null;
+			elsif create_package_body then null;
+			elsif create_package then null;
+			elsif create_type_body then null;
+			elsif create_trigger then null;
+			else
+				parse_error(p_command_name);
+			end if;
+		end if;
+	exception when subscript_beyond_count then
+		--If a token was expected but not found just return everything up to that point.
+		null;
+	end;
+
+	--Helpful for debugging:
+	--for i in 1 .. g_debug_lines.count loop
+	--	dbms_output.put_line(g_debug_lines(i));
+	--end loop;
 
 	--Create a new parse tree with the new tokens.
-	<<create_parse_tree>>
 	declare
 		v_new_parse_tree token_table := token_table();
 		v_has_abstract_token boolean := false;
@@ -1269,7 +1278,7 @@ begin
 		*/
 		elsif v_command_name in ('CREATE JAVA') then
 			--TODO
-			raise_application_error(-20000, 'CREATE JAVA is not yet supported.');
+			raise_application_error(-29999, 'CREATE JAVA is not yet supported.');
 
 		--#3: Match PLSQL_DECLARATION BEGIN and END.
 		elsif v_command_name in

@@ -25,6 +25,7 @@ c_type_body              constant number := power(2, 6);
 c_trigger                constant number := power(2, 7);
 c_proc_and_func          constant number := power(2, 8);
 c_package_body           constant number := power(2, 9);
+c_metadata               constant number := power(2, 10);
 
 c_sqlplus_delim          constant number := power(2, 30);
 c_sqlplus_delim_and_semi constant number := power(2, 31);
@@ -32,7 +33,7 @@ c_sqlplus_delim_and_semi constant number := power(2, 31);
 
 c_static_tests  constant number := c_errors+c_simple+c_plsql_declaration
 	+c_plsql_block+c_package+c_type_body+c_trigger+c_proc_and_func+c_package_body
-	+c_sqlplus_delim+c_sqlplus_delim_and_semi;
+	+c_metadata+c_sqlplus_delim+c_sqlplus_delim_and_semi;
 
 c_dynamic_sql constant number := power(2, 51);
 c_dynamic_plsql constant number := power(2, 52);
@@ -80,12 +81,21 @@ end assert_equals;
 
 --------------------------------------------------------------------------------
 procedure test_errors is
+	v_statements clob;
+	v_split_statements token_table_table := token_table_table();
 begin
-	--TODO:
-	--Return everything for Invalid or Nothing.
+	v_statements:='begin null;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	assert_equals('Incompleted PLSQL Block 1a', 1, v_split_statements.count);
+	assert_equals('Incompleted PLSQL Block 1b', v_statements, tokenizer.concatenate(v_split_statements(1)));
+
+	v_statements:='create function f1 return asdf is begin null; ';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	assert_equals('Incompleted PLSQL Block 2a', 1, v_split_statements.count);
+	assert_equals('Incompleted PLSQL Block 2b', v_statements, tokenizer.concatenate(v_split_statements(1)));
 
 	--TODO
-	null;
+	--v_statements:='begin loop null; end NOT_LOOP;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	--assert_equals('Incompleted PLSQL Block 3a', 1, v_split_statements.count);
+	--assert_equals('Incompleted PLSQL Block 3b', v_statements, tokenizer.concatenate(v_split_statements(1)));
 end test_errors;
 
 
@@ -908,6 +918,14 @@ end test_sqlplus_delim_and_semi;
 
 
 --------------------------------------------------------------------------------
+procedure test_metadata is
+begin
+	--TODO:
+	null;
+end test_metadata;
+
+
+--------------------------------------------------------------------------------
 procedure test_dynamic_sql is
 	type clob_table is table of clob;
 	type string_table is table of varchar2(100);
@@ -1041,6 +1059,7 @@ begin
 	if bitand(p_tests, c_package_body)           > 0 then test_package_body;           end if;
 	if bitand(p_tests, c_sqlplus_delim)          > 0 then test_sqlplus_delim;          end if;
 	if bitand(p_tests, c_sqlplus_delim_and_semi) > 0 then test_sqlplus_delim_and_semi; end if;
+	if bitand(p_tests, c_metadata)               > 0 then test_metadata;               end if;
 
 	if bitand(p_tests, c_dynamic_sql)            > 0 then test_dynamic_sql;            end if;
 	if bitand(p_tests, c_dynamic_plsql)          > 0 then test_dynamic_plsql;          end if;
