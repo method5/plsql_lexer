@@ -919,8 +919,22 @@ end test_sqlplus_delim_and_semi;
 
 --------------------------------------------------------------------------------
 procedure test_metadata is
+	v_statements clob;
+	v_split_statements token_table_table := token_table_table();
+
+	function concat_metadata(p_token in token) return varchar2 is
+	begin
+		return
+			p_token.line_number||','||
+			p_token.column_number||','||
+			p_token.first_char_position||','||
+			p_token.last_char_position;
+	end;
 begin
-	--TODO:
+	v_statements:='select * from dual;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	assert_equals('Metadata 1', '1,1,1,6|1,1,1,6', concat_metadata(v_split_statements(1)(1)) || '|' || concat_metadata(v_split_statements(2)(1)));
+
+	--TODO: More unit tests.
 	null;
 end test_metadata;
 

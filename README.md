@@ -1,4 +1,4 @@
-`PLSQL_LEXER` 0.2.10
+`PLSQL_LEXER` 0.2.11
 ============
 
 PL/SQL Lexer is a toolkit for solving real-world language problems, in PL/SQL.

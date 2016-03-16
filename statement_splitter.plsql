@@ -1221,6 +1221,58 @@ end add_statement_consume_tokens;
 
 
 --------------------------------------------------------------------------------
+--Fix line_number, column_number, first_char_position and last_char_position.
+function adjust_metadata(p_split_tokens in token_table_table) return token_table_table is
+	v_new_split_tokens token_table_table := token_table_table();
+	v_new_tokens token_table := token_table();
+	v_line_number_difference number;
+	v_column_number_difference number;
+	v_first_char_position_diff number;
+	v_last_char_position_diff number;
+begin
+	--Loop through split tokens.
+	for i in 1 .. p_split_tokens.count loop
+		v_new_split_tokens.extend;
+		--Keep the first token collection the same.
+		if i = 1 then
+			v_new_split_tokens(i) := p_split_tokens(i);
+		--Shift numbers for other token tables.
+		else
+			--Reset token table.
+			v_new_tokens := token_table();
+
+			--Get differences based on the first token.
+			v_line_number_difference := p_split_tokens(i)(1).line_number - 1;
+			v_column_number_difference := p_split_tokens(i)(1).column_number - 1;
+			v_first_char_position_diff := p_split_tokens(i)(1).first_char_position - 1;
+			v_last_char_position_diff := p_split_tokens(i)(1).first_char_position - 1;
+
+			--Loop through tokens and create new adjusted values.
+			for token_index in 1 .. p_split_tokens(i).count loop
+				--Create new token with adjusted values.
+				v_new_tokens.extend;
+				v_new_tokens(v_new_tokens.count) := token(
+					p_split_tokens(i)(token_index).type,
+					p_split_tokens(i)(token_index).value,
+					p_split_tokens(i)(token_index).line_number - v_line_number_difference,
+					p_split_tokens(i)(token_index).column_number - v_column_number_difference,
+					p_split_tokens(i)(token_index).first_char_position - v_first_char_position_diff,
+					p_split_tokens(i)(token_index).last_char_position - v_last_char_position_diff,
+					p_split_tokens(i)(token_index).sqlcode,
+					p_split_tokens(i)(token_index).sqlerrm
+				);
+			end loop;
+
+			--Add new token collection.
+			v_new_split_tokens(i) := v_new_tokens;
+		end if;
+	end loop;
+
+	return v_new_split_tokens;
+end adjust_metadata;
+
+
+--------------------------------------------------------------------------------
 --Split a token stream into statements by ";".
 function split_by_semicolon(p_tokens in token_table)
 return token_table_table is
@@ -1305,7 +1357,8 @@ begin
 		exit when v_parse_tree_index > p_tokens.count;
 	end loop;
 
-	--TODO: Fix line_number, column_number, first_char_position and last_char_position.
+	--Fix line_number, column_number, first_char_position and last_char_position.
+	v_split_tokens := adjust_metadata(v_split_tokens);
 
 	return v_split_tokens;
 end split_by_semicolon;
