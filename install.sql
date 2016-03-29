@@ -69,11 +69,11 @@ create or replace type token_table_table is table of token_table;
 --#5: Install packages.
 prompt Installing packages...
 
-start tokenizer.plsql
-start statement_classifier.plsql
-start statement_splitter.plsql
-start statement_feedback.plsql
-start statement_terminator.plsql
+start packages/tokenizer.plsql
+start packages/statement_classifier.plsql
+start packages/statement_splitter.plsql
+start packages/statement_feedback.plsql
+start packages/statement_terminator.plsql
 
 
 --#6: Verify installation and print success message.
