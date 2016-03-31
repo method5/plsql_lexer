@@ -2,11 +2,7 @@ create or replace package statement_splitter is
 --Copyright (C) 2015 Jon Heller.  This program is licensed under the LGPLv3.
 
 function split_by_sqlplus_delimiter(p_statements in clob, p_sqlplus_delimiter in varchar2 default '/') return clob_table;
-
---DO NOT USE THE BELOW FUNCTION YET, IT HAS SOME SERIOUS PROBLEMS.
 function split_by_semicolon(p_tokens in token_table) return token_table_table;
-
---DO NOT USE THE BELOW FUNCTION YET, IT HAS SOME SERIOUS PROBLEMS.
 function split_by_sqlplus_del_and_semi(p_statements in clob, p_sqlplus_delimiter in varchar2 default '/') return token_table_table;
 
 /*

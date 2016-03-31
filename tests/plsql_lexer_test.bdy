@@ -6,6 +6,7 @@ create or replace package body plsql_lexer_test is
 --This should be fairly quick and does about 95% of the testing.
 procedure run_static_tests is
 begin
+	misplaced_hints_test.run(p_tests => misplaced_hints_test.c_static_tests);
 	statement_classifier_test.run(p_tests => statement_classifier_test.c_static_tests);
 	statement_feedback_test.run(p_tests => statement_feedback_test.c_static_tests);
 	statement_splitter_test.run(p_tests => statement_splitter_test.c_static_tests);

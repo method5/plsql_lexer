@@ -26,8 +26,13 @@ begin
 	select listagg(type_name, ',') within group (order by type_name)
 	into v_installed_types
 	from all_types
-	where type_name in ('CLOB_TABLE', 'VARCHAR2_TABLE',
-		'TOKEN', 'TOKEN_TABLE', 'TOKEN_TABLE_TABLE')
+	where type_name in
+		(
+			'CLOB_TABLE', 'VARCHAR2_TABLE',
+			'TOKEN', 'TOKEN_TABLE', 'TOKEN_TABLE_TABLE',
+			'MISPLACED_HINTS_CODE_TYPE', 'MISPLACED_HINTS_CODE_TABLE',
+			'MISPLACED_HINTS_SCHEMA_TYPE', 'MISPLACED_HINTS_SCHEMA_TABLE'
+		)
 		and owner = sys_context('userenv', 'current_schema');
 
 	if v_installed_types is not null then
@@ -41,29 +46,7 @@ end;
 
 --#4: Install types.
 prompt Installing types...
-create or replace type clob_table is table of clob;
-/
-create or replace type varchar2_table is table of varchar2(1 char);
-/
-create or replace type token is object
-(
-	type                varchar2(4000), --String to represent token type.  See the constants in TOKENIZER.
-	value               clob,           --The text of the token.
-	line_number         number,         --The line number the token starts at - useful for printing warning and error information.
-	column_number       number,         --The column number the token starts at - useful for printing warning and error information.
-	first_char_position number,         --First character position of token in the whole string - useful for inserting before a token.
-	last_char_position  number,         --Last character position of token in the whole string  - useful for inserting after a token.
-	sqlcode             number,         --Error code of serious parsing problem.
-	sqlerrm             varchar2(4000)  --Error message of serious parsing problem.
-);
-/
---Use VARRAY because it is guaranteed to maintain order.
-create or replace type token_table is varray(2147483647) of token;
-/
---Use TABLE here to avoid an ORA-7445 error.
---TODO: Can I use a varray of a smaller size to avoid the error?
-create or replace type token_table_table is table of token_table;
-/
+start types.sql
 
 
 --#5: Install packages.
@@ -74,6 +57,7 @@ start packages/statement_classifier.plsql
 start packages/statement_splitter.plsql
 start packages/statement_feedback.plsql
 start packages/statement_terminator.plsql
+start packages/misplaced_hints.plsql
 
 
 --#6: Verify installation and print success message.
@@ -86,7 +70,7 @@ column object_type format a13;
 
 select owner, object_name, object_type
 from all_objects
-where object_name in ('TOKENIZER', 'STATEMENT_CLASSIFIER', 'STATEMENT_SPLITTER', 'STATEMENT_FEEDBACK', 'STATEMENT_TERMINATOR')
+where object_name in ('TOKENIZER', 'STATEMENT_CLASSIFIER', 'STATEMENT_SPLITTER', 'STATEMENT_FEEDBACK', 'STATEMENT_TERMINATOR', 'MISPLACED_HINTS')
 	and owner = sys_context('userenv', 'current_schema')
 	and status <> 'VALID';
 
@@ -98,7 +82,7 @@ begin
 	select count(*)
 	into v_count
 	from all_objects
-	where object_name in ('TOKENIZER', 'STATEMENT_CLASSIFIER', 'STATEMENT_SPLITTER', 'STATEMENT_FEEDBACK', 'STATEMENT_TERMINATOR')
+	where object_name in ('TOKENIZER', 'STATEMENT_CLASSIFIER', 'STATEMENT_SPLITTER', 'STATEMENT_FEEDBACK', 'STATEMENT_TERMINATOR', 'MISPLACED_HINTS')
 		and owner = sys_context('userenv', 'current_schema')
 		and status <> 'VALID';
 

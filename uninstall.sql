@@ -30,7 +30,12 @@ declare
 	exception when v_object_does_not_exist then null;
 	end drop_object_ignore_dne_error;
 begin
-	--Drop objects, in reverse order so dependent objects are dropped first.
+	--Drop types, in reverse order so dependent objects are dropped first.
+	drop_object_ignore_dne_error('drop type misplaced_hints_schema_table');
+	drop_object_ignore_dne_error('drop type misplaced_hints_schema_type');
+	drop_object_ignore_dne_error('drop type misplaced_hints_code_table');
+	drop_object_ignore_dne_error('drop type misplaced_hints_code_type');
+
 	drop_object_ignore_dne_error('drop type clob_table');
 	drop_object_ignore_dne_error('drop type varchar2_table');
 	drop_object_ignore_dne_error('drop type token_table_table');
@@ -43,6 +48,7 @@ begin
 	drop_object_ignore_dne_error('drop package statement_splitter');
 	drop_object_ignore_dne_error('drop package statement_feedback');
 	drop_object_ignore_dne_error('drop package statement_terminator');
+	drop_object_ignore_dne_error('drop package misplaced_hints');
 
 	--Drop unit test packages.
 	drop_object_ignore_dne_error('drop package plsql_lexer_test');
@@ -51,6 +57,7 @@ begin
 	drop_object_ignore_dne_error('drop package statement_splitter_test');
 	drop_object_ignore_dne_error('drop package statement_terminator_test');
 	drop_object_ignore_dne_error('drop package tokenizer_test');
+	drop_object_ignore_dne_error('drop package misplaced_hints_test');
 end;
 /
 

@@ -24,6 +24,7 @@ start tests/statement_feedback_test.plsql
 start tests/statement_splitter_test.plsql
 start tests/statement_terminator_test.plsql
 start tests/tokenizer_test.plsql
+start tests/misplaced_hints_test.plsql
 --Separate spec and body because of circular dependency.
 start tests/plsql_lexer_test.bdy
 
@@ -39,7 +40,7 @@ column object_type format a13;
 select owner, object_name, object_type
 from all_objects
 where object_name in ('TOKENIZER_TEST', 'STATEMENT_CLASSIFIER_TEST', 'STATEMENT_FEEDBACK_TEST',
-		'STATEMENT_SPLITTER_TEST', 'STATEMENT_TERMINATOR_TEST', 'PLSQL_LEXER_TEST')
+		'STATEMENT_SPLITTER_TEST', 'STATEMENT_TERMINATOR_TEST', 'PLSQL_LEXER_TEST', 'MISPLACED_HINTS_TEST')
 	and owner = sys_context('userenv', 'current_schema')
 	and status <> 'VALID';
 
@@ -52,7 +53,7 @@ begin
 	into v_count
 	from all_objects
 	where object_name in ('TOKENIZER_TEST', 'STATEMENT_CLASSIFIER_TEST', 'STATEMENT_CLASSIFIER_TEST',
-			'STATEMENT_SPLITTER_TEST', 'STATEMENT_TERMINATOR_TEST', 'PLSQL_LEXER_TEST')
+			'STATEMENT_SPLITTER_TEST', 'STATEMENT_TERMINATOR_TEST', 'PLSQL_LEXER_TEST', 'MISPLACED_HINTS_TEST')
 		and owner = sys_context('userenv', 'current_schema')
 		and status <> 'VALID';
 
