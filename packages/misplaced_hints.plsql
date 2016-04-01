@@ -151,7 +151,7 @@ begin
 	--Loop through all objects owned by that schema.
 	for objects in
 	(
-		--Convert DBA_OBJECTS.OBJECT_TYPE to DBMS_METADATA object type.
+		--Convert ALL_OBJECTS.OBJECT_TYPE to DBMS_METADATA object type.
 		--Based on http://stackoverflow.com/a/10886633/409172
 		select
 			owner,
@@ -168,7 +168,7 @@ begin
 				'MATERIALIZED VIEW', 'MATERIALIZED_VIEW',
 				object_type
 			) object_type
-		from dba_objects 
+		from all_objects
 		where owner = upper(trim(p_schema))
 			--These objects are included with other object types.
 			and object_type not in ('INDEX PARTITION','INDEX SUBPARTITION', 'LOB','LOB PARTITION','TABLE PARTITION','TABLE SUBPARTITION')

@@ -1,6 +1,6 @@
 create or replace package tokenizer is
 --Copyright (C) 2015 Jon Heller.  This program is licensed under the LGPLv3.
-C_VERSION constant varchar2(10) := '0.6.1';
+C_VERSION constant varchar2(10) := '0.6.2';
 
 --Main functions:
 function tokenize(p_source in clob) return token_table;
@@ -148,9 +148,6 @@ create or replace package body tokenizer is
 
 g_chars varchar2_table := varchar2_table();
 g_last_char varchar2(1 char);
---Ideally this would be a CLOB but VARCHAR2 performs much better.
---It's extemely unlikely, but possible, for whitespace or text to be more than 32K.
-g_token_text varchar2(32767);
 g_line_number number;
 g_column_number number;
 g_last_char_position number;
@@ -287,6 +284,13 @@ end track_row_pattern_matching;
 function get_token return token is
 	v_quote_delimiter varchar2(1 char);
 
+	--Ideally this would be a CLOB but VARCHAR2 performs much better.
+	--It's extemely unlikely, but possible, for whitespace or text to be more than 32K.
+	v_token_text varchar2(32767);
+	--Some types, like multi-line comments, can realisitically be larger than 32k.
+	v_token_clob clob;
+
+
 	v_line_number number;
 	v_column_number number;
 	v_first_char_position number;
@@ -308,110 +312,110 @@ begin
 
 	--Whitespace - don't throw it out, it may contain a hint or help with pretty printing.
 	if is_lexical_whitespace(g_last_char) then
-		g_token_text := g_last_char;
+		v_token_text := g_last_char;
 		loop
 			g_last_char := get_char;
 			exit when not is_lexical_whitespace(g_last_char);
-			g_token_text := g_token_text || g_last_char;
+			v_token_text := v_token_text || g_last_char;
 		end loop;
-		return token(c_whitespace, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
+		return token(c_whitespace, v_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
 	end if;
 
 	--Single line comment.
 	if g_last_char = '-' and look_ahead(1) = '-' then
-		g_token_text := g_last_char || get_char;
+		v_token_text := g_last_char || get_char;
 		loop
 			g_last_char := get_char;
 			--chr(13) by itself does not count.
 			exit when g_last_char = chr(10) or g_last_char is null;
-			g_token_text := g_token_text || g_last_char;
+			v_token_text := v_token_text || g_last_char;
 		end loop;
-		return token(c_comment, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
+		return token(c_comment, v_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
 	end if;
 
-	--Multi-line comment.
+	--Multi-line comment.  Use CLOB instead of VARCHAR2 to hold data.
 	if g_last_char = '/' and look_ahead(1) = '*' then
-		g_token_text := g_last_char || get_char;
+		v_token_clob := g_last_char || get_char;
 		loop
 			g_last_char := get_char;
 			if g_last_char = '*' and look_ahead(1) = '/' then
-				g_token_text := g_token_text || g_last_char;
+				v_token_clob := v_token_clob || g_last_char;
 				g_last_char := get_char;
-				g_token_text := g_token_text || g_last_char;
+				v_token_clob := v_token_clob || g_last_char;
 				g_last_char := get_char;
 				exit;
 			end if;
 			if look_ahead(1) is null then
-				g_token_text := g_token_text || g_last_char;
+				v_token_clob := v_token_clob || g_last_char;
 				g_last_char := get_char;
-				return token(c_comment, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, -01742, 'comment not terminated properly');
+				return token(c_comment, v_token_clob, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, -01742, 'comment not terminated properly');
 			end if;
-			g_token_text := g_token_text || g_last_char;
+			v_token_clob := v_token_clob || g_last_char;
 		end loop;
-		return token(c_comment, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
+		return token(c_comment, v_token_clob, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
 	end if;
 
 	--Text.
 	if g_last_char = '''' then
-		g_token_text := g_last_char;
+		v_token_text := g_last_char;
 		loop
 			g_last_char := get_char;
 			--Ignore escaped strings.
 			if g_last_char = '''' and look_ahead(1) = '''' then
-				g_token_text := g_token_text || g_last_char;
+				v_token_text := v_token_text || g_last_char;
 				g_last_char := get_char;
-				g_token_text := g_token_text || g_last_char;
+				v_token_text := v_token_text || g_last_char;
 				g_last_char := get_char;
 			elsif g_last_char = '''' and (look_ahead(1) is null or look_ahead(1) <> '''') then
-				g_token_text := g_token_text || g_last_char;
+				v_token_text := v_token_text || g_last_char;
 				g_last_char := get_char;
 				exit;
 			elsif look_ahead(1) is null then
-				g_token_text := g_token_text || g_last_char;
+				v_token_text := v_token_text || g_last_char;
 				g_last_char := get_char;
-				return token(c_text, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, -01756, 'quoted string not properly terminated');
+				return token(c_text, v_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, -01756, 'quoted string not properly terminated');
 			end if;
-			g_token_text := g_token_text || g_last_char;
+			v_token_text := v_token_text || g_last_char;
 		end loop;
-		return token(c_text, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
+		return token(c_text, v_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
 	end if;
 
 	--Nvarchar text.
 	if lower(g_last_char) = 'n' and look_ahead(1) = '''' then
 		--Consume 2 characters: n and the quote.
-		g_token_text := g_last_char;
+		v_token_text := g_last_char;
 		g_last_char := get_char;
-		g_token_text := g_token_text||g_last_char;
+		v_token_text := v_token_text||g_last_char;
 		loop
 			g_last_char := get_char;
 			--Ignore escaped strings.
 			if g_last_char = '''' and look_ahead(1) = '''' then
-				g_token_text := g_token_text || g_last_char;
+				v_token_text := v_token_text || g_last_char;
 				g_last_char := get_char;
-				g_token_text := g_token_text || g_last_char;
+				v_token_text := v_token_text || g_last_char;
 				g_last_char := get_char;
 			elsif g_last_char = '''' and (look_ahead(1) is null or look_ahead(1) <> '''') then
-				g_token_text := g_token_text || g_last_char;
+				v_token_text := v_token_text || g_last_char;
 				g_last_char := get_char;
 				exit;
 			elsif look_ahead(1) is null then
-				g_token_text := g_token_text || g_last_char;
+				v_token_text := v_token_text || g_last_char;
 				g_last_char := get_char;
-				return token(c_text, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, -01756, 'quoted string not properly terminated');
+				return token(c_text, v_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, -01756, 'quoted string not properly terminated');
 			end if;
-			g_token_text := g_token_text || g_last_char;
+			v_token_text := v_token_text || g_last_char;
 		end loop;
-		return token(c_text, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
+		return token(c_text, v_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
 	end if;
 
 	--Alternative quoting mechanism.
 	if lower(g_last_char) = 'q' and look_ahead(1) = '''' then
 		--Consume 3 characters: q, quote, and the quote delimiter.
-		g_token_text := g_last_char;
+		v_token_text := g_last_char;
 		g_last_char := get_char;
-		g_token_text := g_token_text||g_last_char;
+		v_token_text := v_token_text||g_last_char;
 		g_last_char := get_char;
-		g_token_text := g_token_text||g_last_char;
+		v_token_text := v_token_text||g_last_char;
 		--The ending delimiter is different in a few cases.
 		v_quote_delimiter := case g_last_char
 			when '[' then ']'
@@ -427,39 +431,39 @@ begin
 				--"Alternative quotes (q'#...#') cannot use spaces, tabs, or carriage returns as delimiters".
 				--(The error says carriage return, but testing indicates they really mean newlines)
 				if g_last_char in (chr(9), chr(10), chr(32)) then
-					g_token_text := g_token_text || g_last_char;
+					v_token_text := v_token_text || g_last_char;
 					g_last_char := get_char;
-					g_token_text := g_token_text || g_last_char;
+					v_token_text := v_token_text || g_last_char;
 					g_last_char := get_char;
-					return token(c_text, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, -00911, 'invalid character');
+					return token(c_text, v_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, -00911, 'invalid character');
 				end if;
 
-				g_token_text := g_token_text || g_last_char;
+				v_token_text := v_token_text || g_last_char;
 				g_last_char := get_char;
-				g_token_text := g_token_text || g_last_char;
+				v_token_text := v_token_text || g_last_char;
 				g_last_char := get_char;
 				exit;
 			end if;
 			if look_ahead(1) is null then
-				g_token_text := g_token_text || g_last_char;
+				v_token_text := v_token_text || g_last_char;
 				g_last_char := get_char;
-				return token(c_text, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, -01756, 'quoted string not properly terminated');
+				return token(c_text, v_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, -01756, 'quoted string not properly terminated');
 			end if;
-			g_token_text := g_token_text || g_last_char;
+			v_token_text := v_token_text || g_last_char;
 		end loop;
-		return token(c_text, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
+		return token(c_text, v_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
 	end if;
 
 	--Nvarchar alternative quoting mechanism.
 	if lower(g_last_char) = 'n' and lower(look_ahead(1)) = 'q' and look_ahead(2) = '''' then
 		--Consume 4 characters: n, q, quote, and the quote delimiter.
-		g_token_text := g_last_char;
+		v_token_text := g_last_char;
 		g_last_char := get_char;
-		g_token_text := g_token_text||g_last_char;
+		v_token_text := v_token_text||g_last_char;
 		g_last_char := get_char;
-		g_token_text := g_token_text||g_last_char;
+		v_token_text := v_token_text||g_last_char;
 		g_last_char := get_char;
-		g_token_text := g_token_text||g_last_char;
+		v_token_text := v_token_text||g_last_char;
 		--The ending delimiter is different in a few cases.
 		v_quote_delimiter := case g_last_char
 			when '[' then ']'
@@ -475,27 +479,27 @@ begin
 				--"Alternative quotes (q'#...#') cannot use spaces, tabs, or carriage returns as delimiters".
 				--(The error says carriage return, but also includes newlines)
 				if g_last_char in (chr(9), chr(10), chr(32)) then
-					g_token_text := g_token_text || g_last_char;
+					v_token_text := v_token_text || g_last_char;
 					g_last_char := get_char;
-					g_token_text := g_token_text || g_last_char;
+					v_token_text := v_token_text || g_last_char;
 					g_last_char := get_char;
-					return token(c_text, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, -00911, 'invalid character');
+					return token(c_text, v_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, -00911, 'invalid character');
 				end if;
 
-				g_token_text := g_token_text || g_last_char;
+				v_token_text := v_token_text || g_last_char;
 				g_last_char := get_char;
-				g_token_text := g_token_text || g_last_char;
+				v_token_text := v_token_text || g_last_char;
 				g_last_char := get_char;
 				exit;
 			end if;
 			if look_ahead(1) is null then
-				g_token_text := g_token_text || g_last_char;
+				v_token_text := v_token_text || g_last_char;
 				g_last_char := get_char;
-				return token(c_text, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, -01756, 'quoted string not properly terminated');
+				return token(c_text, v_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, -01756, 'quoted string not properly terminated');
 			end if;
-			g_token_text := g_token_text || g_last_char;
+			v_token_text := v_token_text || g_last_char;
 		end loop;
-		return token(c_text, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
+		return token(c_text, v_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
 	end if;
 
 	--Numeric.
@@ -510,18 +514,18 @@ begin
 			--Note: Combining classes, anchors, and regexp_substr positions other than 1 do not always work.
 			--Note: This won't work with numbers larger than 1K characters,
 			--a ridiculous number that would cause a runtime error, but is theoretically valid.
-			g_token_text := regexp_substr(
+			v_token_text := regexp_substr(
 				v_substring,
 				'^([0-9]+\.[0-9]+|\.[0-9]+|[0-9]+)((e|E)(\+|-)?[0-9]+)?(f|F|d|D)?');
 		end;
 
 		--Advance the characters.
 		--Regular "length" is fine here since numerics cannot be more than one code point.
-		g_last_char_position := g_last_char_position + length(g_token_text) - 1;
-		g_column_number := g_column_number + length(g_token_text) - 1;
+		g_last_char_position := g_last_char_position + length(v_token_text) - 1;
+		g_column_number := g_column_number + length(v_token_text) - 1;
 
 		g_last_char := get_char;
-		return token(c_numeric, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
+		return token(c_numeric, v_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
 	end if;
 
 	--Word - quoted identifier.  Note that quoted identifiers are not escaped.
@@ -530,28 +534,28 @@ begin
 	--Database links have different rules, like 128 bytes instead of 30, and we
 	--won't know if it's a database link name until parse time.
 	if g_last_char = '"' then
-		g_token_text := g_last_char;
+		v_token_text := g_last_char;
 		loop
 			g_last_char := get_char;
 			if g_last_char = '"'then
-				g_token_text := g_token_text || g_last_char;
+				v_token_text := v_token_text || g_last_char;
 				g_last_char := get_char;
 				exit;
 			end if;
 			if look_ahead(1) is null then
-				g_token_text := g_token_text || g_last_char;
+				v_token_text := v_token_text || g_last_char;
 				g_last_char := get_char;
-				return token(c_word, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, -01740, 'missing double quote in identifier');
+				return token(c_word, v_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, -01740, 'missing double quote in identifier');
 			end if;
-			g_token_text := g_token_text || g_last_char;
+			v_token_text := v_token_text || g_last_char;
 		end loop;
-		return token(c_word, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
+		return token(c_word, v_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
 	end if;
 
 	--Word.
 	--Starts with alpha (in any language!), may contain number, "_", "$", and "#".
 	if is_alpha(g_last_char) then
-		g_token_text := g_last_char;
+		v_token_text := g_last_char;
 		loop
 			g_last_char := get_char;
 
@@ -566,81 +570,81 @@ begin
 				end if;
 			end if;
 
-			g_token_text := g_token_text || g_last_char;
+			v_token_text := v_token_text || g_last_char;
 		end loop;
-		return token(c_word, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
+		return token(c_word, v_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
 	end if;
 
 	--Inquiry Directive.
 	--Starts with $$ alpha (in any language!), may contain number, "_", "$", and "#".
 	if g_last_char = '$' and look_ahead(1) = '$' and is_alpha(look_ahead(2)) then
-		g_token_text := g_last_char || get_char;
-		g_token_text := g_token_text || get_char;
+		v_token_text := g_last_char || get_char;
+		v_token_text := v_token_text || get_char;
 		loop
 			g_last_char := get_char;
 			if g_last_char is null or not is_alpha_numeric_or__#$(g_last_char) then
 				exit;
 			end if;
-			g_token_text := g_token_text || g_last_char;
+			v_token_text := v_token_text || g_last_char;
 		end loop;
-		return token(c_inquiry_directive, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
+		return token(c_inquiry_directive, v_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
 	end if;
 
 	--Preprocessor Control Token.
 	--Starts with $ alpha (in any language!), may contain number, "_", "$", and "#".
 	if g_last_char = '$' and is_alpha(look_ahead(1)) then
-		g_token_text := g_last_char || get_char;
+		v_token_text := g_last_char || get_char;
 		loop
 			g_last_char := get_char;
 			if g_last_char is null or not is_alpha_numeric_or__#$(g_last_char) then
 				exit;
 			end if;
-			g_token_text := g_token_text || g_last_char;
+			v_token_text := v_token_text || g_last_char;
 		end loop;
-		return token(c_preprocessor_control_token, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
+		return token(c_preprocessor_control_token, v_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
 	end if;
 
 	--3-character punctuation operators.
 	--12c Row Pattern Quantifiers introduced a lot of regular-expression operators.
 	if g_last_char||look_ahead(1)||look_ahead(2) in (',}?') then
-		g_token_text := g_last_char || get_char || get_char;
+		v_token_text := g_last_char || get_char || get_char;
 		g_last_char := get_char;
-		return token(g_token_text, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
+		return token(v_token_text, v_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
 	end if;
 
 	--2-character punctuation operators.
 	--Ignore the IBM "not" character - it's in the manual but is only supported
 	--on obsolete platforms: http://stackoverflow.com/q/9305925/409172
 	if g_last_char||look_ahead(1) in ('~=','!=','^=','<>',':=','=>','>=','<=','<<','>>','{-','-}','*?','+?','??',',}','}?','{,','..') then
-		g_token_text := g_last_char || get_char;
+		v_token_text := g_last_char || get_char;
 		g_last_char := get_char;
-		return token(g_token_text, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
+		return token(v_token_text, v_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
 	end if;
 
 	if g_last_char||look_ahead(1) in ('**','||') and g_pattern_paren_count = 0 then
-		g_token_text := g_last_char || get_char;
+		v_token_text := g_last_char || get_char;
 		g_last_char := get_char;
-		return token(g_token_text, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
+		return token(v_token_text, v_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
 	end if;
 
 	--1-character punctuation operators.
 	if g_last_char in ('@','%','^','*','(',')','-','+','=','[',']','{','}','|',':',';','<',',','>','.','/','?') then
-		g_token_text := g_last_char;
+		v_token_text := g_last_char;
 		g_last_char := get_char;
-		return token(g_token_text, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
+		return token(v_token_text, v_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
 	end if;
 
 	--"$" only counts as "$" inside row pattern matching.
 	if g_last_char = '$' and g_pattern_paren_count > 0 then
-		g_token_text := g_last_char;
+		v_token_text := g_last_char;
 		g_last_char := get_char;
-		return token(g_token_text, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
+		return token(v_token_text, v_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
 	end if;
 
 	--Unexpected - everything else.
-	g_token_text := g_last_char;
+	v_token_text := g_last_char;
 	g_last_char := get_char;
-	return token(c_unexpected, g_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
+	return token(c_unexpected, v_token_text, v_line_number, v_column_number, v_first_char_position, g_last_char_position-1, null, null);
 end get_token;
 
 

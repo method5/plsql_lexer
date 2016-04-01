@@ -131,6 +131,7 @@ end test_whitespace;
 
 --------------------------------------------------------------------------------
 procedure test_comment is
+	v_clob clob;
 begin
 	assert_equals('comment: 1a', 'whitespace comment EOF', lex('  --asdf'));
 	assert_equals('comment: 1b', '--asdf', get_value_n('  --asdf', 2));
@@ -145,6 +146,8 @@ begin
 	assert_equals('comment: 9a', 'comment EOF', lex('/*'));
 	assert_equals('comment: 9b', '-1742', to_char(get_sqlcode_n('/*', 1)));
 	assert_equals('comment: 9c', 'comment not terminated properly', get_sqlerrm_n('/*', 1));
+	--Comments may be larger than 32767.
+	assert_equals('comment: 10', 'whitespace comment EOF', lex(' /*'||lpad('A', 32767, 'A')||'*/'));
 end test_comment;
 
 
