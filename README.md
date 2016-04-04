@@ -1,102 +1,42 @@
-`PLSQL_LEXER` 0.3.1
+`PLSQL_LEXER` 0.3.2
 ============
 
-PL/SQL Lexer is a toolkit for solving real-world language problems, in PL/SQL.
+PL/SQL Lexer solves real-world language problems, in PL/SQL.
 
-## Procedures
+## Packages and Types
 
-See the individual packages for details on each procedure.
+**Main Package**
 
+ - *TOKENIZER* - Convert statements into PL/SQL tokens and tokens back into strings.
 
-- **TOKENIZER** - Converts statements into PL/SQL tokens, and tokens back into strings.
+**Script Execution Packages**
 
-	Create tokens for SQL and PL/SQL statements:
+ - *STATEMENT_CLASSIFIER* - Classify a statement as DDL, PL/SQL, SELECT, ALTER, etc.
+ - *STATEMENT_FEEDBACK* - Get a message similar to SQL*Plus feedback messages.  For example "0 rows created".
+ - *STATEMENT_SPLITTER* - Split multiple statements into individual statements based on a terminator.
+ - *STATEMENT_TERMINATOR* - Remove unnecessary terminating semicolon and SQL*Plus delimiters.  This prepares a statement to run as dynamic SQL.
 
-		function tokenize(p_source clob) return token_table;
+**Code Analysis Packages**
 
-	Create a CLOB from tokens:
+ - *MISPLACED_HINTS* - Find hint in the wrong place.  For example, `insert into /*+ append */ ...` is incorrect because the hint should be placed immediately after the `insert`.
 
-		function concatenate(p_tokens in token_table) return clob;
+See the top of each file in the packages directory for more thorough documentation.
 
-	Tokens are the central data structure of this program.  This is the TOKEN type specification:
+**Types**
 
-		create or replace type token is object
-		(
-			type                varchar2(4000), --String to represent token type.  See the constants in TOKENIZER.
-			value               clob,           --The text of the token.
-			line_number         number,         --The line number the token starts at - useful for printing warning and error information.
-			column_number       number,         --The column number the token starts at - useful for printing warning and error information.
-			first_char_position number,         --First character position of token in the whole string - useful for inserting before a token.
-			last_char_position  number,         --Last character position of token in the whole string  - useful for inserting after a token.
-			sqlcode             number,         --Error code of serious parsing problem.
-			sqlerrm             varchar2(4000)  --Error message of serious parsing problem.
-		);
+See the file types.sql for all the type definitions.  The most important type that's central to all programs is TOKEN:
 
-- **STATEMENT_SPLITTER**  Split multiple statements into individual statements based on a terminator.
-
-	Split statements like SQL*Plus and drop the delimiter.  Delimiters must be on a line with only whitespace.  Delimiters may be counted even if they are inside a string or comment:
-
-		function split_by_sqlplus_delimiter(
-			p_statements        in clob,
-			p_sqlplus_delimiter in varchar2 default '/'
-		) return clob_table;
-		
-	Split statements terminated by semicolons but keeps the final semicolon:
-
-		function split_by_semicolon(
-			p_tokens in token_table
-		) return token_table_table;
-
-	Split statements like SQL*Plus and then also split by semicolon:
-
-		function split_by_sqlplus_del_and_semi(
-			p_statements        in clob,
-			p_sqlplus_delimiter in varchar2 default '/'
-		) return token_table_table;
-
-    The package may throw one of these custom exceptions:
-
-        -20000, The SQL*Plus delimiter cannot be NULL.
-        -20001, The SQL*Plus delimiter cannot contain whitespace.
-        -20002, Fatal parse error in X around line #Y, column #Z of the original string.
-
-- **STATEMENT_CLASSIFIER** - Classify a statement as DDL, PL/SQL, SELECT, ALTER, etc.
-
-		procedure classify(
-			p_tokens          in token_table,
-			p_category       out varchar2,
-			p_statement_type out varchar2,
-			p_command_name   out varchar2,
-			p_command_type   out number,
-			p_lex_sqlcode    out number,
-			p_lex_sqlerrm    out varchar2,
-			p_start_index     in number default 1
-		);
-
-- **STATEMENT_FEEDBACK** - Get a message similar to SQL*Plus feedback messages.
-
-		procedure get_feedback_message(
-			p_tokens                   in token_table,
-			p_rowcount                 in number,
-			p_success_message         out varchar2,
-			p_compile_warning_message out varchar2
-		);
-
-- **STATEMENT_TERMINATOR** - Remove unnecessary terminating semicolon and SQL*Plus delimiters.  This prepares a statement to run as dynamic SQL.
-
-		function remove_semicolon(
-			p_tokens in token_table
-		) return token_table;
-
-		function remove_sqlplus_delimiter(
-			p_tokens in token_table,
-			p_sqlplus_delimiter in varchar2 default '/'
-		) return token_table;
-
-		function remove_sqlplus_del_and_semi(
-			p_tokens in token_table,
-			p_sqlplus_delimiter in varchar2 default '/'
-		) return token_table;
+	create or replace type token is object
+	(
+		type                varchar2(4000), --String to represent token type.  See the constants in TOKENIZER.
+		value               clob,           --The text of the token.
+		line_number         number,         --The line number the token starts at - useful for printing warning and error information.
+		column_number       number,         --The column number the token starts at - useful for printing warning and error information.
+		first_char_position number,         --First character position of token in the whole string - useful for inserting before a token.
+		last_char_position  number,         --Last character position of token in the whole string  - useful for inserting after a token.
+		sqlcode             number,         --Error code of serious parsing problem.
+		sqlerrm             varchar2(4000)  --Error message of serious parsing problem.
+	);
 
 ## How to Install
 
