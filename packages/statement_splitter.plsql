@@ -93,6 +93,10 @@ procedure add_statement_consume_tokens(
 	v_abstract_syntax_tree token_table := token_table();
 	v_map_between_parse_and_ast number_table := number_table();
 
+	--Holds return value of optional functions.
+	g_optional boolean;
+
+
 	-------------------------------------------------------------------------------
 	--Forward declarations so that functions can be in the same order as the documentation.
 	-------------------------------------------------------------------------------
@@ -130,33 +134,6 @@ procedure add_statement_consume_tokens(
 	function trigger_edition_clause return boolean;
 	function trigger_ordering_clause return boolean;
 	function when_condition return boolean;
-
-	-------------------------------------------------------------------------------
-	--Procedures that wrap functions and ignore output.
-	-------------------------------------------------------------------------------
-	procedure anything_(p_value varchar2) is v_ignore boolean; begin v_ignore := anything_(p_value); end;
-	procedure anything_before_begin is v_ignore boolean; begin v_ignore := anything_before_begin; end;
-	procedure anything_in_parentheses is v_ignore boolean; begin v_ignore := anything_in_parentheses; end;
-	procedure anything_up_to_may_include_(p_value varchar2) is v_ignore boolean; begin v_ignore := anything_up_to_may_include_(p_value); end;
-	procedure anything_up_to_must_include_(p_value varchar2) is v_ignore boolean; begin v_ignore := anything_up_to_must_include_(p_value); end;
-	procedure body is v_ignore boolean; begin v_ignore := body; end;
-	procedure declare_section is v_ignore boolean;begin v_ignore := declare_section; end;
-	procedure expression_case_when_then is v_ignore boolean; begin v_ignore := expression_case_when_then; end;
-	procedure for_each_row is v_ignore boolean; begin v_ignore := for_each_row; end;
-	procedure function_definition is v_ignore boolean; begin v_ignore := function_definition; end;
-	procedure initialize_section is v_ignore boolean; begin v_ignore := initialize_section; end;
-	procedure label is v_ignore boolean; begin v_ignore := label; end;
-	procedure name is v_ignore boolean; begin v_ignore := name; end;
-	procedure name_maybe_schema is v_ignore boolean; begin v_ignore := name_maybe_schema; end;
-	procedure nested_table_nt_column_of is v_ignore boolean; begin v_ignore := nested_table_nt_column_of; end;
-	procedure p_end is v_ignore boolean; begin v_ignore := p_end; end;
-	procedure plsql_block is v_ignore boolean; begin v_ignore := plsql_block; end;
-	procedure procedure_definition is v_ignore boolean; begin v_ignore := procedure_definition; end;
-	procedure referencing_clause is v_ignore boolean; begin v_ignore := referencing_clause; end;
-	procedure statement_or_inline_pragma is v_ignore boolean; begin v_ignore := statement_or_inline_pragma; end;
-	procedure trigger_edition_clause is v_ignore boolean; begin v_ignore := trigger_edition_clause; end;
-	procedure trigger_ordering_clause is v_ignore boolean; begin v_ignore := trigger_ordering_clause; end;
-	procedure when_condition is v_ignore boolean; begin v_ignore := when_condition; end;
 
 	-------------------------------------------------------------------------------
 	--Helper functions
@@ -308,9 +285,9 @@ procedure add_statement_consume_tokens(
 	function plsql_block return boolean is v_local_ast_before number := g_ast_index; v_local_lines_before string_table := g_debug_lines; begin
 		push('PLSQL_BLOCK');
 
-		label;
+		g_optional := label;
 		if anything_('DECLARE') then
-			declare_section;
+			g_optional := declare_section;
 			if body then
 				return true;
 			else
@@ -360,12 +337,12 @@ procedure add_statement_consume_tokens(
 	function body return boolean is begin
 		push('BODY');
 		if anything_('BEGIN') then
-			statement_or_inline_pragma;
+			g_optional := statement_or_inline_pragma;
 			while statement_or_inline_pragma loop null; end loop;
 			if anything_('EXCEPTION') then
 				while exception_handler loop null; end loop;
 			end if;
-			p_end;
+			g_optional := p_end;
 			return true;
 		end if;
 		return pop;
@@ -374,7 +351,7 @@ procedure add_statement_consume_tokens(
 	function initialize_section return boolean is begin
 		push('BODY');
 		if anything_('BEGIN') then
-			statement_or_inline_pragma;
+			g_optional := statement_or_inline_pragma;
 			while statement_or_inline_pragma loop null; end loop;
 			if anything_('EXCEPTION') then
 				while exception_handler loop null; end loop;
@@ -388,7 +365,7 @@ procedure add_statement_consume_tokens(
 		push('PROCEDURE_DEFINITION');
 		--Exclude CTE queries that create a table expression named "PROCEDURE".
 		if current_value = 'PROCEDURE' and next_value not in ('AS', '(') then
-			anything_before_begin; --Don't need the header information.
+			g_optional := anything_before_begin; --Don't need the header information.
 			return body;
 		end if;
 		return pop;
@@ -398,7 +375,7 @@ procedure add_statement_consume_tokens(
 		push('FUNCTION_DEFINITION');
 		--Exclude CTE queries that create a table expression named "FUNCTION".
 		if current_value = 'FUNCTION' and next_value not in ('AS', '(') then
-			anything_before_begin; --Don't need the header information.
+			g_optional := anything_before_begin; --Don't need the header information.
 			return body;
 		end if;
 		return pop;
@@ -417,7 +394,7 @@ procedure add_statement_consume_tokens(
 		push('NAME_MAYBE_SCHEMA');
 		if name then
 			if anything_('.') then
-				name;
+				g_optional := name;
 			end if;
 			return true;
 		end if;
@@ -445,7 +422,7 @@ procedure add_statement_consume_tokens(
 		push('P_END');
 		if current_value = 'END' then
 			increment;
-			name;
+			g_optional := name;
 			if current_type = ';' then
 				increment;
 			end if;
@@ -457,7 +434,7 @@ procedure add_statement_consume_tokens(
 	function exception_handler return boolean is begin
 		push('EXCEPTION_HANDLER');
 		if current_value = 'WHEN' then
-			anything_up_to_must_include_('THEN');
+			g_optional := anything_up_to_must_include_('THEN');
 			while statement_or_inline_pragma loop null; end loop;
 			return true;
 		end if;
@@ -473,7 +450,7 @@ procedure add_statement_consume_tokens(
 				increment;
 				if current_value = 'LOOP' then
 					increment;
-					name;
+					g_optional := name;
 					if current_value = ';' then
 						increment;
 						return true;
@@ -488,13 +465,13 @@ procedure add_statement_consume_tokens(
 	function for_loop_statement return boolean is begin
 		push('FOR_LOOP_STATEMENT');
 		if current_value = 'FOR' and get_next_('..') < get_next_(';') then
-			anything_up_to_must_include_('LOOP');
+			g_optional := anything_up_to_must_include_('LOOP');
 			while statement_or_inline_pragma loop null; end loop;
 			if current_value = 'END' then
 				increment;
 				if current_value = 'LOOP' then
 					increment;
-					name;
+					g_optional := name;
 					if current_value = ';' then
 						increment;
 						return true;
@@ -514,9 +491,9 @@ procedure add_statement_consume_tokens(
 			if name then
 				if current_value = 'IN' then
 					increment;
-					name;
+					g_optional := name;
 					if current_value = '(' then
-						anything_in_parentheses;
+						g_optional := anything_in_parentheses;
 						if current_value = 'LOOP' then
 							increment;
 							while statement_or_inline_pragma loop null; end loop;
@@ -524,7 +501,7 @@ procedure add_statement_consume_tokens(
 								increment;
 								if current_value = 'LOOP' then
 									increment;
-									name;
+									g_optional := name;
 									if current_value = ';' then
 										increment;
 										return true;
@@ -628,10 +605,10 @@ procedure add_statement_consume_tokens(
 	function create_or_replace_edition return boolean is begin
 		push('CREATE_OR_REPLACE_EDITION');
 		if anything_('CREATE') then
-			anything_('OR');
-			anything_('REPLACE');
-			anything_('EDITIONABLE');
-			anything_('NONEDITIONABLE');
+			g_optional := anything_('OR');
+			g_optional := anything_('REPLACE');
+			g_optional := anything_('EDITIONABLE');
+			g_optional := anything_('NONEDITIONABLE');
 			return true;
 		end if;
 		return pop;
@@ -640,10 +617,10 @@ procedure add_statement_consume_tokens(
 	function create_procedure return boolean is v_local_ast_before number := g_ast_index; v_local_lines_before string_table := g_debug_lines; begin
 		push('CREATE_PROCEDURE');
 		if create_or_replace_edition and anything_('PROCEDURE') and name_maybe_schema then
-			anything_in_parentheses;
+			g_optional := anything_in_parentheses;
 			if anything_up_to_must_include_('IS') or anything_up_to_must_include_('AS') then
 				if anything_('EXTERNAL') or anything_('LANGUAGE') then
-					anything_up_to_may_include_(';');
+					g_optional := anything_up_to_may_include_(';');
 					return true;
 				elsif plsql_block then
 					return true;
@@ -665,10 +642,10 @@ procedure add_statement_consume_tokens(
 				if current_value in ('AGGREGATE', 'PIPELINED') and next_value = 'USING' then
 					--This one is simple, return true.
 					increment(2);
-					anything_up_to_may_include_(';');
+					g_optional := anything_up_to_may_include_(';');
 					return true;
 				elsif current_value = '(' then
-					anything_in_parentheses;
+					g_optional := anything_in_parentheses;
 				elsif current_value in ('IS', 'AS') then
 					increment;
 					exit;
@@ -678,10 +655,10 @@ procedure add_statement_consume_tokens(
 			end loop;
 			--There must have been an IS or AS to get here:
 			if anything_('EXTERNAL') then
-				anything_up_to_may_include_(';');
+				g_optional := anything_up_to_may_include_(';');
 				return true;
 			elsif anything_('LANGUAGE') then
-				anything_up_to_may_include_(';');
+				g_optional := anything_up_to_may_include_(';');
 				return true;
 			else
 				return plsql_block;
@@ -694,15 +671,15 @@ procedure add_statement_consume_tokens(
 	function create_package return boolean is v_local_ast_before number := g_ast_index; v_local_lines_before string_table := g_debug_lines; begin
 		push('CREATE_PACKAGE');
 		if create_or_replace_edition and anything_('PACKAGE') and name_maybe_schema then
-			anything_in_parentheses;
+			g_optional := anything_in_parentheses;
 			if anything_up_to_must_include_('IS') or anything_up_to_must_include_('AS') then
 				loop
 					if anything_('END') then
-						name;
-						anything_(';');
+						g_optional := name;
+						g_optional := anything_(';');
 						return true;
 					else
-						anything_up_to_may_include_(';');
+						g_optional := anything_up_to_may_include_(';');
 					end if;
 				end loop;
 			end if;
@@ -714,11 +691,11 @@ procedure add_statement_consume_tokens(
 		push('CREATE_PACKAGE_BODY');
 		if create_or_replace_edition and anything_('PACKAGE') and anything_('BODY') and name_maybe_schema then
 			if anything_('IS') or anything_('AS') then
-				declare_section;
-				initialize_section;
+				g_optional := declare_section;
+				g_optional := initialize_section;
 				if anything_('END') then
-					name;
-					anything_(';');
+					g_optional := name;
+					g_optional := anything_(';');
 					return true;
 				end if;
 			end if;
@@ -729,25 +706,25 @@ procedure add_statement_consume_tokens(
 	function create_type_body return boolean is v_local_ast_before number := g_ast_index; v_local_lines_before string_table := g_debug_lines; begin
 		push('CREATE_TYPE_BODY');
 		if create_or_replace_edition and anything_('TYPE') and anything_('BODY') and name_maybe_schema then
-			anything_in_parentheses;
+			g_optional := anything_in_parentheses;
 			if anything_up_to_must_include_('IS') or anything_up_to_must_include_('AS') then
 				loop
 					if anything_('END') and anything_(';') then
 						return true;
 					elsif current_value in ('MAP', 'ORDER', 'MEMBER') then
-						anything_('MAP');
-						anything_('ORDER');
-						anything_('MEMBER');
+						g_optional := anything_('MAP');
+						g_optional := anything_('ORDER');
+						g_optional := anything_('MEMBER');
 						if procedure_definition or function_definition then
 							null;
 						end if;
 					elsif current_value in ('FINAL', 'INSTANTIABLE', 'CONSTRUCTOR') then
-						anything_('FINAL');
-						anything_('INSTANTIABLE');
-						anything_('CONSTRUCTOR');
-						function_definition;
+						g_optional := anything_('FINAL');
+						g_optional := anything_('INSTANTIABLE');
+						g_optional := anything_('CONSTRUCTOR');
+						g_optional := function_definition;
 					else
-						anything_up_to_may_include_(';');
+						g_optional := anything_up_to_may_include_(';');
 					end if;
 				end loop;
 			end if;
@@ -784,11 +761,11 @@ procedure add_statement_consume_tokens(
 		push('REFERENCING_CLAUSE');
 		if anything_('REFERENCING') then
 			if anything_('OLD') or anything_('NEW') or anything_('PARENT') then
-				anything_('AS');
-				name;
+				g_optional := anything_('AS');
+				g_optional := name;
 				while anything_('OLD') or anything_('NEW') or anything_('PARENT') loop
-					anything_('AS');
-					name;
+					g_optional := anything_('AS');
+					g_optional := name;
 				end loop;
 				return true;
 			end if;
@@ -842,7 +819,7 @@ procedure add_statement_consume_tokens(
 	function trigger_body return boolean is begin
 		push('TRIGGER_BODY');
 		if anything_('CALL') then
-			anything_up_to_may_include_(';');
+			g_optional := anything_up_to_may_include_(';');
 			return true;
 		elsif plsql_block then return true;
 		end if;
@@ -928,15 +905,14 @@ procedure add_statement_consume_tokens(
 				end loop;
 			end if;
 		end;
-		procedure declare_section is v_ignore boolean; begin v_ignore := declare_section; end;
 	begin
 		push('COMPOUND_TRIGGER_BLOCK');
 		if anything_('COMPOUND') and anything_('TRIGGER') then
-			declare_section;
+			g_optional := declare_section;
 			if timing_point_section then
 				while timing_point_section loop null; end loop;
 				if anything_('END') then
-					name;
+					g_optional := name;
 					if anything_(';') then
 						return true;
 					end if;
@@ -970,14 +946,14 @@ procedure add_statement_consume_tokens(
 	function simple_dml_trigger return boolean is v_local_ast_before number := g_ast_index; v_local_lines_before string_table := g_debug_lines; begin
 		push('SIMPLE_DML_TRIGGER');
 		if (anything_('BEFORE') or anything_('AFTER')) and dml_event_clause then
-			referencing_clause;
-			for_each_row;
-			trigger_edition_clause;
-			trigger_ordering_clause;
+			g_optional := referencing_clause;
+			g_optional := for_each_row;
+			g_optional := trigger_edition_clause;
+			g_optional := trigger_ordering_clause;
 			if anything_('ENABLE') or anything_('DISABLE') then
 				null;
 			end if;
-			when_condition;
+			g_optional := when_condition;
 			if trigger_body then
 				return true;
 			end if;
@@ -990,12 +966,12 @@ procedure add_statement_consume_tokens(
 		push('INSTEAD_OF_DML_TRIGGER');
 		if anything_('INSTEAD') and anything_('OF') and delete_insert_update_or then
 			if anything_('ON') then
-				nested_table_nt_column_of;
+				g_optional := nested_table_nt_column_of;
 				if name_maybe_schema then
-					referencing_clause;
-					for_each_row;
-					trigger_edition_clause;
-					trigger_ordering_clause;
+					g_optional := referencing_clause;
+					g_optional := for_each_row;
+					g_optional := trigger_edition_clause;
+					g_optional := trigger_ordering_clause;
 					if anything_('ENABLE') or anything_('DISABLE') then
 						null;
 					end if;
@@ -1013,13 +989,13 @@ procedure add_statement_consume_tokens(
 		push('COMPOUND_TRIGGER');
 		if anything_('FOR') then
 			if dml_event_clause then
-				referencing_clause;
-				trigger_edition_clause;
-				trigger_ordering_clause;
+				g_optional := referencing_clause;
+				g_optional := trigger_edition_clause;
+				g_optional := trigger_ordering_clause;
 				if anything_('ENABLE') or anything_('DISABLE') then
 					null;
 				end if;
-				when_condition;
+				g_optional := when_condition;
 				if compound_trigger_block then
 					return true;
 				end if;
@@ -1035,12 +1011,12 @@ procedure add_statement_consume_tokens(
 			while anything_('OR') and ddl_or_database_event loop null; end loop;
 			if anything_('ON') then
 				if anything_('DATABASE') or (anything_('PLUGGABLE') and anything_('DATABASE')) or anything_('SCHEMA') or (name and anything_('.') and anything_('SCHEMA')) then
-					trigger_ordering_clause;
+					g_optional := trigger_ordering_clause;
 					--The manual is missing the last part of SYSTEM_TRIGGER - ENABLE|DISABLE, WHEN (CONDITION) and TRIGGER_BODY.
 					if anything_('ENABLE') or anything_('DISABLE') then
 						null;
 					end if;
-					when_condition;
+					g_optional := when_condition;
 					if trigger_body then
 						return true;
 					end if;
