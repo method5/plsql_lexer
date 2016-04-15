@@ -31,6 +31,8 @@ connect by parent_id = prior id;
 P_SOURCE - The SQL or PL/SQL statement to parse.
 P_USER   - The user who runs the statement or owns the object.  Used for object resolution.
 
+Raises: ORA-20123 for parse errors.  The SQLERRM contains the production rule and expected values.
+
 Returns  - NODE_TABLE (todo)
 
 --TODO: Put these in installer if this ever works.
@@ -1326,9 +1328,6 @@ begin
 	end if;
 end match_terminal;
 
-
-
-
 function next_value(p_increment number default 1) return clob is begin
 	begin
 		return upper(g_ast_tokens(g_ast_token_index+p_increment).value);
@@ -1348,7 +1347,6 @@ function previous_value(p_decrement number) return clob is begin
 		null;
 	end;
 end;
-
 
 --Purpose: Determine which reserved words are truly reserved.
 --V$RESERVED_WORD.RESERVED is not reliable so we must use dynamic SQL and catch
@@ -1375,7 +1373,6 @@ begin
 
 	return v_reserved_words;
 end;
-
 
 --Purpose: Remove the SUBQUERY node, re-number descendents to fill in gap, return parent id. 
 --ASSUMPTIONS: 
@@ -1404,7 +1401,101 @@ begin
 	g_nodes := v_new_nodes;
 
 	return v_subquery_node_id - 1;
-end;
+end remove_extra_subquery;
+
+--------------------------------------------------------------------------------
+--Purpose: Get the line up to a specific token.
+function get_line_up_until_error(p_tokens token_table, p_token_error_index number) return varchar2 is
+	v_newline_position number;
+	v_line clob;
+
+	--DBMS_INSTR does not allow negative positions so we must loop through to find the last.
+	function find_last_newline_position(p_clob in clob) return number is
+		v_nth number := 1;
+		v_new_newline_position number;
+		v_previous_newline_position number;
+	begin
+		v_previous_newline_position := dbms_lob.instr(lob_loc => p_clob, pattern => chr(10), nth => v_nth);
+
+		loop
+			v_nth := v_nth + 1;
+			v_new_newline_position := dbms_lob.instr(lob_loc => p_clob, pattern => chr(10), nth => v_nth);
+
+			if v_new_newline_position = 0 then
+				return v_previous_newline_position;
+			else
+				v_previous_newline_position := v_new_newline_position;
+			end if;
+		end loop;
+	end find_last_newline_position;
+begin
+	--Get text before index token and after previous newline.
+	for i in reverse 1 .. p_token_error_index loop
+		--Look for the last newline.
+		v_newline_position := find_last_newline_position(p_tokens(i).value);
+
+		--Get everything after newline if there is one, and exit.
+		if v_newline_position > 0 then
+			--(If the last character is a newline, the +1 will return null, which is what we want anyway.)
+			v_line := dbms_lob.substr(lob_loc => p_tokens(i).value, offset => v_newline_position + 1) || v_line;
+			exit;
+		--Add entire string to the line if there was no newline.
+		else
+			v_line := p_tokens(i).value || v_line;
+		end if;
+	end loop;
+
+	--Only return the first 4K bytes of data, to fit in SQL varchar2(4000). 
+	return substrb(cast(substr(v_line, 1, 4000) as varchar2), 1, 4000);
+end get_line_up_until_error;
+
+--Purpose: Raise exception with information about the error.
+--ASSUMES: All production rules are coded as functions on a line like: function%return boolean is%
+procedure parse_error(p_error_expected_items varchar2, p_line_number number) is
+	v_production_rule varchar2(4000);
+	v_parse_tree_token_index number;
+
+
+begin
+	--Find the production rule the error line occurred on.
+	select production_rule
+	into v_production_rule
+	from
+	(
+		--Find the production rule based on the function name.
+		--ASSUMES a consistent coding style.
+		--(Irony alert - this is exactly the kind of hack this program is built to avoid.)
+		select
+			row_number() over (order by line desc) last_when_1,
+			replace(regexp_replace(text, 'function ([^\(]+).*', '\1'), chr(10)) production_rule
+		from user_source
+		where name = $$plsql_unit
+			and type = 'PACKAGE BODY'
+			and line <= p_line_number
+			--Assumes coding style.
+			and lower(text) like 'function%return boolean is%'
+	) function_names
+	where last_when_1 = 1;
+
+	--Find the last token examined.
+	begin
+		v_parse_tree_token_index := g_map_between_parse_and_ast(g_ast_token_index);
+	exception when subscript_beyond_count then
+		v_parse_tree_token_index := g_map_between_parse_and_ast(g_ast_token_index-1);
+	end;
+
+	--Raise an error with some information about the rule.
+	raise_application_error(-20123,
+		'Error in line '||g_nodes(g_nodes.count).lexer_token.line_number||', '||
+		'column '||to_char(g_nodes(g_nodes.count).lexer_token.last_char_position+1)||':'||chr(10)||
+		get_line_up_until_error(g_parse_tree_tokens, v_parse_tree_token_index)||'<-- ERROR HERE'||chr(10)||
+		'Error in '||v_production_rule||', expected one of: '||p_error_expected_items
+	);
+--Just in case a function cannot be found.
+exception when no_data_found then
+	raise_application_error(-20000, 'Could not find function for line number '||p_line_number||'.');
+end parse_error;
+
 
 
 
@@ -1533,10 +1624,10 @@ begin
 				g_optional := t_alias(v_new_node_id);
 				return true;				
 			else
-				raise_application_error(-20000, '")" expected.');
+				parse_error('")"', $$plsql_line);
 			end if;
 		else
-			raise_application_error(-20000, 'query_table_expression expected.');
+			parse_error('query_table_expression', $$plsql_line);
 			return pop;
 		end if;
 	elsif query_table_expression(v_new_node_id) then
@@ -1545,7 +1636,7 @@ begin
 		g_optional := t_alias(v_new_node_id);
 		return true;				
 	else
-		raise_application_error(-20000, 'ONLY(query_table_expression), query_table_expression, or containers_clause expected.');
+		parse_error('ONLY(query_table_expression), query_table_expression, or containers_clause', $$plsql_line);
 		return pop;
 	end if;
 end table_reference;
@@ -1614,7 +1705,7 @@ begin
 							) then
 								null;
 							else
-								raise_application_error(-20000, 'table_reference, join_clause, or ( join_clause ) expected.');
+								parse_error('table_reference, join_clause, or ( join_clause )', $$plsql_line);
 							end if;
 						else
 							exit;
@@ -1627,13 +1718,13 @@ begin
 					g_optional := model_clause(v_new_node_id);
 					return true;
 				else
-					raise_application_error(-20000, 'table_reference, join_clause, or ( join_clause ) expected.');
+					parse_error('table_reference, join_clause, or ( join_clause )', $$plsql_line);
 				end if;
 			else
-				raise_application_error(-20000, 'FROM expected.');
+				parse_error('FROM', $$plsql_line);
 			end if;
 		else
-			raise_application_error(-20000, 'select_list expected.');
+			parse_error('select_list', $$plsql_line);
 		end if;
 	else
 		return pop;
@@ -1657,8 +1748,7 @@ begin
 				g_optional := row_limiting_clause(v_new_node_id);
 				return true;
 			else
-				--ERROR: ')' expected
-				raise_application_error(-20000, 'ERROR - todo');
+				parse_error('")"', $$plsql_line);
 			end if;
 		else
 			return pop;
@@ -1666,8 +1756,7 @@ begin
 
 	--First or second branch of diagram.
 	else
-		--ASSUME it's a subquery (middle branch)
-		--TODO: new value?
+		--Assume it's a subquery (middle branch)
 		v_new_node_id := push(C_SUBQUERY, v_new_node_id);
 
 		if query_block(v_new_node_id) then
@@ -1685,8 +1774,7 @@ begin
 						if subquery(v_new_node_id) then
 							null;
 						else
-							--ERROR: Subquery expected.
-							raise_application_error(-20000, 'ERROR - todo');
+							parse_error('subquery', $$plsql_line);
 						end if;
 					else
 						exit when true;						
