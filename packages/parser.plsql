@@ -11,7 +11,10 @@ create or replace package parser is
 --This package is experimental and does not work yet.
 
 
-function parse(p_source in clob, p_user in varchar2) return node_table;
+function parse(
+		p_source        in clob,
+		p_user          in varchar2 default user
+) return node_table;
 
 /*
 
@@ -1532,9 +1535,30 @@ end with_clause;
 --However, a comment in a specific format in the right place should count as a node.
 --This means that occasionally we need to search through the parse tokens.
 function hint(p_parent_id number) return boolean is
+	v_parse_token_index number;
 begin
-	--TODO
-	return true;
+	push(C_HINT, p_parent_id);
+
+	--Use "-1" to start at previous node and then iterate forward.
+	v_parse_token_index := g_map_between_parse_and_ast(g_ast_token_index-1);
+	dbms_output.put_line('Parse token index: '||v_parse_token_index);
+
+	--Start from parse tree token after the last node.
+	for i in v_parse_token_index+1 .. g_parse_tree_tokens.count loop
+		--False if an abstract token is found
+		if g_parse_tree_tokens(i).type not in (tokenizer.c_whitespace, tokenizer.c_comment, tokenizer.c_eof) then
+			return pop;
+		--True if it's a hint.
+		elsif g_parse_tree_tokens(i).type = tokenizer.c_comment and substr(g_parse_tree_tokens(i).value, 1, 3) in ('--+', '/*+') then
+			--Replace node that points to abstract token with node that points to comment.
+			g_nodes(g_nodes.count) := node(id => g_nodes.count, type => C_HINT, parent_id => p_parent_id, lexer_token => g_parse_tree_tokens(i));
+			return true;
+		end if;
+	end loop;
+
+	return pop;
+exception when subscript_beyond_count then
+	return pop;
 end hint;
 
 function select_list(p_parent_id number) return boolean is
@@ -1827,8 +1851,14 @@ end select_statement;
 
 This link has a good introduction to recursive descent parsers: https://www.cis.upenn.edu/~matuszek/General/recursive-descent-parsing.html)
 */
-function parse(p_source in clob, p_user in varchar2 ) return node_table is
+function parse(
+		p_source        in clob,
+		p_user          in varchar2 default user
+) return node_table is
 begin
+	--Check input.
+	--TODO
+
 	--Reset values, tokenize input.
 	g_nodes := node_table();
 	g_ast_tokens := token_table();
