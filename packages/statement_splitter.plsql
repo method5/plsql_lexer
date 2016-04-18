@@ -383,7 +383,7 @@ procedure add_statement_consume_tokens(
 
 	function name return boolean is begin
 		push('NAME');
-		if current_type = tokenizer.c_word then
+		if current_type = plsql_lexer.c_word then
 			increment;
 			return true;
 		end if;
@@ -1045,7 +1045,7 @@ begin
 	--Convert parse tree into abstract syntax tree by removing whitespace, comment, and EOF.
 	--Also create a map between the two.
 	for i in p_parse_tree_index .. p_parse_tree.count loop
-		if p_parse_tree(i).type not in (tokenizer.c_whitespace, tokenizer.c_comment, tokenizer.c_eof) then
+		if p_parse_tree(i).type not in (plsql_lexer.c_whitespace, plsql_lexer.c_comment, plsql_lexer.c_eof) then
 			v_abstract_syntax_tree.extend;
 			v_abstract_syntax_tree(v_abstract_syntax_tree.count) := p_parse_tree(i);
 
@@ -1162,7 +1162,7 @@ begin
 
 			--Are any of the remaining tokens abstract?
 			for i in v_map_between_parse_and_ast(g_ast_index-1) + 1 .. p_parse_tree.count loop
-				if p_parse_tree(i).type not in (tokenizer.c_whitespace, tokenizer.c_comment, tokenizer.c_eof) then
+				if p_parse_tree(i).type not in (plsql_lexer.c_whitespace, plsql_lexer.c_comment, plsql_lexer.c_eof) then
 					v_has_abstract_token := true;
 					exit;
 				end if;
@@ -1342,7 +1342,7 @@ end split_by_semicolon;
 --although the line may contain whitespace before and after the delimiter.
 --The delimiter and whitespace on the same line are included with the first statement.
 function split_by_sqlplus_delimiter(p_statements in clob, p_sqlplus_delimiter in varchar2 default '/') return clob_table is
-	v_chars varchar2_table := tokenizer.get_varchar2_table_from_clob(p_statements);
+	v_chars varchar2_table := plsql_lexer.get_varchar2_table_from_clob(p_statements);
 	v_delimiter_size number := nvl(lengthc(p_sqlplus_delimiter), 0);
 	v_char_index number := 0;
 	v_string clob;
@@ -1370,7 +1370,7 @@ function split_by_sqlplus_delimiter(p_statements in clob, p_sqlplus_delimiter in
 			if v_chars(i) = chr(10) then
 				return true;
 			--False if non-whitespace is found.
-			elsif not tokenizer.is_lexical_whitespace(v_chars(i)) then
+			elsif not plsql_lexer.is_lexical_whitespace(v_chars(i)) then
 				return false;
 			end if;
 		end loop;
@@ -1387,7 +1387,7 @@ begin
 	end if;
 	--Throw an error if the delimiter contains whitespace.
 	for i in 1 .. lengthc(p_sqlplus_delimiter) loop
-		if tokenizer.is_lexical_whitespace(substrc(p_sqlplus_delimiter, i, 1)) then
+		if plsql_lexer.is_lexical_whitespace(substrc(p_sqlplus_delimiter, i, 1)) then
 			raise_application_error(-20001, 'The SQL*Plus delimiter cannot contain whitespace.');
 		end if;
 	end loop;
@@ -1411,7 +1411,7 @@ begin
 				v_strings(v_strings.count) := v_string;
 				exit;
 			--Continue if it's still whitespace.
-			elsif tokenizer.is_lexical_whitespace(v_chars(v_char_index)) then
+			elsif plsql_lexer.is_lexical_whitespace(v_chars(v_char_index)) then
 				v_string := v_string || v_chars(v_char_index);
 			--Split string if delimiter is found.
 			elsif get_next_n_chars(v_delimiter_size) = p_sqlplus_delimiter and only_ws_before_next_newline then
@@ -1425,7 +1425,7 @@ begin
 				loop
 					v_string := v_string || v_chars(v_char_index);
 					v_char_index := v_char_index + 1;
-					exit when v_char_index = v_chars.count or not tokenizer.is_lexical_whitespace(v_chars(v_char_index));
+					exit when v_char_index = v_chars.count or not plsql_lexer.is_lexical_whitespace(v_chars(v_char_index));
 				end loop;
 
 				--Remove extra increment.
@@ -1477,7 +1477,7 @@ begin
 		v_split_token_tables :=
 			v_split_token_tables
 			multiset union
-			split_by_semicolon(tokenizer.tokenize(v_split_statements(i)));
+			split_by_semicolon(plsql_lexer.lex(v_split_statements(i)));
 	end loop;
 
 	--Return the statements.

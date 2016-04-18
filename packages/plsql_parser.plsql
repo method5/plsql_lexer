@@ -1,4 +1,4 @@
-create or replace package parser is
+create or replace package plsql_parser is
 --Copyright (C) 2016 Jon Heller.  This program is licensed under the LGPLv3.
 
 --  _____   ____    _   _  ____ _______   _    _  _____ ______  __     ________ _______ 
@@ -1229,7 +1229,7 @@ C_ZONEMAP_REFRESH_CLAUSE         constant varchar2(100) := 'zonemap_refresh_clau
 
 end;
 /
-create or replace package body parser is
+create or replace package body plsql_parser is
 --  _____   ____    _   _  ____ _______   _    _  _____ ______  __     ________ _______ 
 -- |  __ \ / __ \  | \ | |/ __ \__   __| | |  | |/ ____|  ____| \ \   / /  ____|__   __|
 -- | |  | | |  | | |  \| | |  | | | |    | |  | | (___ | |__     \ \_/ /| |__     | |   
@@ -1546,10 +1546,10 @@ begin
 	--Start from parse tree token after the last node.
 	for i in v_parse_token_index+1 .. g_parse_tree_tokens.count loop
 		--False if an abstract token is found
-		if g_parse_tree_tokens(i).type not in (tokenizer.c_whitespace, tokenizer.c_comment, tokenizer.c_eof) then
+		if g_parse_tree_tokens(i).type not in (plsql_lexer.c_whitespace, plsql_lexer.c_comment, plsql_lexer.c_eof) then
 			return pop;
 		--True if it's a hint.
-		elsif g_parse_tree_tokens(i).type = tokenizer.c_comment and substr(g_parse_tree_tokens(i).value, 1, 3) in ('--+', '/*+') then
+		elsif g_parse_tree_tokens(i).type = plsql_lexer.c_comment and substr(g_parse_tree_tokens(i).value, 1, 3) in ('--+', '/*+') then
 			--Replace node that points to abstract token with node that points to comment.
 			g_nodes(g_nodes.count) := node(id => g_nodes.count, type => C_HINT, parent_id => p_parent_id, lexer_token => g_parse_tree_tokens(i));
 			return true;
@@ -1578,7 +1578,7 @@ function t_alias(p_parent_id number) return boolean is
 begin
 	push(C_T_ALIAS, p_parent_id);
 
-	if current_type = tokenizer.c_word and current_value not member of g_reserved_words then
+	if current_type = plsql_lexer.c_word and current_value not member of g_reserved_words then
 		increment;
 		return true;
 	else
@@ -1590,7 +1590,7 @@ function query_name(p_parent_id number) return boolean is
 begin
 	push(C_QUERY_NAME, p_parent_id);
 
-	if current_type = tokenizer.c_word and current_value not member of g_reserved_words then
+	if current_type = plsql_lexer.c_word and current_value not member of g_reserved_words then
 		increment;
 		return true;
 	else
@@ -1863,7 +1863,7 @@ begin
 	g_nodes := node_table();
 	g_ast_tokens := token_table();
 	g_ast_token_index := 1;
-	g_parse_tree_tokens := tokenizer.tokenize(p_source);
+	g_parse_tree_tokens := plsql_lexer.lex(p_source);
 	if g_reserved_words is null then
 		g_reserved_words := get_reserved_words;
 	end if;
@@ -1871,7 +1871,7 @@ begin
 	--Convert parse tree into abstract syntax tree by removing whitespace, comment, and EOF.
 	--Also create a map between the two.
 	for i in 1 .. g_parse_tree_tokens.count loop
-		if g_parse_tree_tokens(i).type not in (tokenizer.c_whitespace, tokenizer.c_comment, tokenizer.c_eof) then
+		if g_parse_tree_tokens(i).type not in (plsql_lexer.c_whitespace, plsql_lexer.c_comment, plsql_lexer.c_eof) then
 			g_ast_tokens.extend;
 			g_ast_tokens(g_ast_tokens.count) := g_parse_tree_tokens(i);
 

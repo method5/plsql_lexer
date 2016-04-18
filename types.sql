@@ -1,5 +1,5 @@
 --------------------------------------------------------------------------------
--- Used by tokenizer.
+-- Used by PLSQL_LEXER
 --------------------------------------------------------------------------------
 create or replace type clob_table is table of clob;
 /
@@ -7,7 +7,7 @@ create or replace type varchar2_table is table of varchar2(1 char);
 /
 create or replace type token is object
 (
-	type                varchar2(4000), --String to represent token type.  See the constants in TOKENIZER.
+	type                varchar2(4000), --String to represent token type.  See the constants in PLSQL_LEXER.
 	value               clob,           --The text of the token.
 	line_number         number,         --The line number the token starts at - useful for printing warning and error information.
 	column_number       number,         --The column number the token starts at - useful for printing warning and error information.

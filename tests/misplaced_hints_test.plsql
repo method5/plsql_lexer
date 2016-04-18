@@ -151,9 +151,9 @@ begin
 
 	--Print easy to read pass or fail message.
 	if g_failed_count = 0 then
-		dbms_output.put_line(plsql_lexer_test.C_PASS_MESSAGE);
+		dbms_output.put_line(unit_tests.C_PASS_MESSAGE);
 	else
-		dbms_output.put_line(plsql_lexer_test.C_FAIL_MESSAGE);
+		dbms_output.put_line(unit_tests.C_FAIL_MESSAGE);
 	end if;
 end run;
 

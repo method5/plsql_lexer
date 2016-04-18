@@ -83,7 +83,7 @@ procedure classify(p_statement clob, p_output out output_rec, p_start_index in n
 	v_lex_sqlcode number;
 	v_lex_sqlerrm varchar2(4000);
 begin
-	statement_classifier.classify(tokenizer.tokenize(p_statement),
+	statement_classifier.classify(plsql_lexer.lex(p_statement),
 		v_category,v_statement_type,v_command_name,v_command_type,v_lex_sqlcode,v_lex_sqlerrm,p_start_index);
 
 	p_output.category := v_category;
@@ -107,7 +107,7 @@ function get_sqlerrm(p_statement clob) return varchar2 is
 	v_lex_sqlcode number;
 	v_lex_sqlerrm varchar2(4000);
 begin
-	statement_classifier.classify(tokenizer.tokenize(p_statement),
+	statement_classifier.classify(plsql_lexer.lex(p_statement),
 		v_category,v_statement_type,v_command_name,v_command_type,v_lex_sqlcode,v_lex_sqlerrm);
 	return null;
 exception when others then
@@ -803,7 +803,7 @@ procedure test_has_plsql_declaration is
 
 	function has_declaration(p_statement clob, p_token_start_index number default 1) return varchar2 is
 	begin
-		if statement_classifier.has_plsql_declaration(tokenizer.tokenize(p_statement), p_token_start_index) then
+		if statement_classifier.has_plsql_declaration(plsql_lexer.lex(p_statement), p_token_start_index) then
 
 			return 'TRUE';
 		else
@@ -891,7 +891,7 @@ begin
 
 			g_test_count := g_test_count + 1;
 
-			statement_classifier.classify(tokenizer.tokenize(v_sql_fulltexts(i))
+			statement_classifier.classify(plsql_lexer.lex(v_sql_fulltexts(i))
 				,v_category, v_statement_type, v_command_name, v_command_type, v_lex_sqlcode, v_lex_sqlerrm);
 			if v_command_type = v_command_types(i) and v_command_name = v_command_names(i) then
 				g_passed_count := g_passed_count + 1;
@@ -944,9 +944,9 @@ begin
 
 	--Print easy to read pass or fail message.
 	if g_failed_count = 0 then
-		dbms_output.put_line(plsql_lexer_test.C_PASS_MESSAGE);
+		dbms_output.put_line(unit_tests.C_PASS_MESSAGE);
 	else
-		dbms_output.put_line(plsql_lexer_test.C_FAIL_MESSAGE);
+		dbms_output.put_line(unit_tests.C_FAIL_MESSAGE);
 	end if;
 end run;
 

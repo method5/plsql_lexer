@@ -27,7 +27,11 @@ declare
 	procedure drop_object_ignore_dne_error(p_drop_sql in varchar2) is
 	begin
 		execute immediate p_drop_sql;
-	exception when v_object_does_not_exist then null;
+	exception
+		when v_object_does_not_exist then null;
+		when others then
+			raise_application_error(-20000, 'Error with this drop statement: '||p_drop_sql||chr(10)||
+				sqlerrm||chr(10)||dbms_utility.format_call_stack);
 	end drop_object_ignore_dne_error;
 begin
 	--Drop types, in reverse order so dependent objects are dropped first.
@@ -43,7 +47,7 @@ begin
 	drop_object_ignore_dne_error('drop type token');
 
 	--Drop regular packages.
-	drop_object_ignore_dne_error('drop package tokenizer');
+	drop_object_ignore_dne_error('drop package plsql_lexer');
 	drop_object_ignore_dne_error('drop package statement_classifier');
 	drop_object_ignore_dne_error('drop package statement_splitter');
 	drop_object_ignore_dne_error('drop package statement_feedback');
@@ -56,7 +60,7 @@ begin
 	drop_object_ignore_dne_error('drop package statement_feedback_test');
 	drop_object_ignore_dne_error('drop package statement_splitter_test');
 	drop_object_ignore_dne_error('drop package statement_terminator_test');
-	drop_object_ignore_dne_error('drop package tokenizer_test');
+	drop_object_ignore_dne_error('drop package plsql_lexer_test');
 	drop_object_ignore_dne_error('drop package misplaced_hints_test');
 end;
 /

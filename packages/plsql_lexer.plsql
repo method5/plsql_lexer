@@ -1,9 +1,9 @@
-create or replace package tokenizer is
+create or replace package plsql_lexer is
 --Copyright (C) 2015 Jon Heller.  This program is licensed under the LGPLv3.
-C_VERSION constant varchar2(10) := '0.6.2';
+C_VERSION constant varchar2(10) := '0.7.0';
 
 --Main functions:
-function tokenize(p_source in clob) return token_table;
+function lex(p_source in clob) return token_table;
 function concatenate(p_tokens in token_table) return clob;
 
 --Helper functions useful for some tools:
@@ -51,7 +51,7 @@ The most important output is a Token type:
 
 create or replace type token is object
 (
-	type                varchar2(4000), --String to represent token type.  See the constants in TOKENIZER.
+	type                varchar2(4000), --String to represent token type.  See the constants in PLSQL_LEXER.
 	value               clob,           --The text of the token.
 	line_number         number,         --The line number the token starts at - useful for printing warning and error information.
 	column_number       number,         --The column number the token starts at - useful for printing warning and error information.
@@ -71,7 +71,7 @@ create or replace type token is object
 == Example ==
 
 begin
-	dbms_output.put_line(tokenizer.print_tokens(tokenizer.tokenize(
+	dbms_output.put_line(plsql_lexer.print_tokens(plsql_lexer.lex(
 		'select * from dual;'
 	)));
 end;
@@ -142,7 +142,7 @@ C_unexpected                 constant varchar2(10) := 'unexpected';
 
 end;
 /
-create or replace package body tokenizer is
+create or replace package body plsql_lexer is
 
 --Globals
 
@@ -280,7 +280,7 @@ end track_row_pattern_matching;
 --------------------------------------------------------------------------------
 --Return the next token from a string.
 --Type is one of: EOF, whitespace, comment, text, numeric, word, or special characters.
---See the package specification for some information on the tokenizer.
+--See the package specification for some information on the lexer.
 function get_token return token is
 	v_quote_delimiter varchar2(1 char);
 
@@ -650,7 +650,7 @@ end get_token;
 
 --------------------------------------------------------------------------------
 --Convert a string into a VARRAY of tokens.
-function tokenize(p_source clob) return token_table is
+function lex(p_source clob) return token_table is
 	v_token token;
 	v_tokens token_table := token_table();
 begin
@@ -678,7 +678,7 @@ begin
 
 	--Return them.
 	return v_tokens;
-end tokenize;
+end lex;
 
 
 --------------------------------------------------------------------------------

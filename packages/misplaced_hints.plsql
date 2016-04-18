@@ -98,7 +98,7 @@ function get_misplaced_hints_in_code(p_text in clob) return misplaced_hints_code
 	v_bad_hints misplaced_hints_code_table := misplaced_hints_code_table();
 begin
 	--Convert to tokens.
-	v_tokens := tokenizer.tokenize(p_text);
+	v_tokens := plsql_lexer.lex(p_text);
 
 	--Loop through all tokens and build a table of bad hints.
 	for v_hint_index in 1 .. v_tokens.count loop
@@ -106,7 +106,7 @@ begin
 		--Examine token stream if this token is a comment and a hint.
 		if
 		(
-			v_tokens(v_hint_index).type = tokenizer.c_comment
+			v_tokens(v_hint_index).type = plsql_lexer.c_comment
 			and
 			(
 				v_tokens(v_hint_index).value like '/*+%'
@@ -119,7 +119,7 @@ begin
 				if v_non_whitespace_index <= 0 then
 					exit;
 				--Stop at first non-whitespace.
-				elsif v_tokens(v_non_whitespace_index).type <> tokenizer.c_whitespace then
+				elsif v_tokens(v_non_whitespace_index).type <> plsql_lexer.c_whitespace then
 					--Add to bad tokens if it's not the right SQL keyword.
 					if upper(v_tokens(v_non_whitespace_index).value) not in ('SELECT', 'INSERT', 'UPDATE', 'DELETE', 'MERGE') then
 						v_bad_hints.extend;

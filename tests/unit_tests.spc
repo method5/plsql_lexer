@@ -1,4 +1,4 @@
-create or replace package plsql_lexer_test is
+create or replace package unit_tests is
 --Copyright (C) 2015 Jon Heller.  This program is licensed under the LGPLv3.
 
 /*

@@ -77,7 +77,7 @@ procedure classify(p_statement clob, p_output out output_rec, p_start_index in n
 	v_lex_sqlcode number;
 	v_lex_sqlerrm varchar2(4000);
 begin
-	statement_classifier.classify(tokenizer.tokenize(p_statement),
+	statement_classifier.classify(plsql_lexer.lex(p_statement),
 		v_category,v_statement_type,v_command_name,v_command_type,v_lex_sqlcode,v_lex_sqlerrm,p_start_index);
 
 	p_output.category := v_category;
@@ -96,7 +96,7 @@ end classify;
 procedure feedback(p_statement clob, p_success out varchar2, p_warning out varchar2, p_rowcount in number default null) is
 begin
 	statement_feedback.get_feedback_message(
-		p_tokens => tokenizer.tokenize(p_statement),
+		p_tokens => plsql_lexer.lex(p_statement),
 		p_rowcount => p_rowcount,
 		p_success_message => p_success,
 		p_compile_warning_message => p_warning
@@ -770,9 +770,9 @@ begin
 
 	--Print easy to read pass or fail message.
 	if g_failed_count = 0 then
-		dbms_output.put_line(plsql_lexer_test.C_PASS_MESSAGE);
+		dbms_output.put_line(unit_tests.C_PASS_MESSAGE);
 	else
-		dbms_output.put_line(plsql_lexer_test.C_FAIL_MESSAGE);
+		dbms_output.put_line(unit_tests.C_FAIL_MESSAGE);
 	end if;
 end run;
 

@@ -65,15 +65,15 @@ end assert_equals;
 --------------------------------------------------------------------------------
 function get_wo_semi(p_statement clob) return clob is
 begin
-	return tokenizer.concatenate(statement_terminator.remove_semicolon(p_tokens => tokenizer.tokenize(p_source => p_statement)));
+	return plsql_lexer.concatenate(statement_terminator.remove_semicolon(p_tokens => plsql_lexer.lex(p_source => p_statement)));
 end get_wo_semi;
 
 
 --------------------------------------------------------------------------------
 function get_wo_sqlplus(p_statement clob, p_delimiter in varchar2 default '/') return clob is
 begin
-	return tokenizer.concatenate(statement_terminator.remove_sqlplus_delimiter(
-		p_tokens => tokenizer.tokenize(p_statement),
+	return plsql_lexer.concatenate(statement_terminator.remove_sqlplus_delimiter(
+		p_tokens => plsql_lexer.lex(p_statement),
 		p_sqlplus_delimiter => p_delimiter));
 end get_wo_sqlplus;
 
@@ -81,8 +81,8 @@ end get_wo_sqlplus;
 --------------------------------------------------------------------------------
 function get_wo_sqlplus_and_semi(p_statement clob, p_delimiter in varchar2 default '/') return clob is
 begin
-	return tokenizer.concatenate(statement_terminator.remove_sqlplus_del_and_semi(
-		p_tokens => tokenizer.tokenize(p_source => p_statement),
+	return plsql_lexer.concatenate(statement_terminator.remove_sqlplus_del_and_semi(
+		p_tokens => plsql_lexer.lex(p_source => p_statement),
 		p_sqlplus_delimiter => p_delimiter));
 end get_wo_sqlplus_and_semi;
 
@@ -105,27 +105,27 @@ begin
 	assert_equals('Only remove one semi 1', 'select * from dual;', get_wo_semi(v_statement));
 
 	--Smallest example.
-	v_tokens := statement_terminator.remove_semicolon(tokenizer.tokenize('commit'));
+	v_tokens := statement_terminator.remove_semicolon(plsql_lexer.lex('commit'));
 	assert_equals('Small commit 1.', '2', v_tokens.count);
-	v_tokens := statement_terminator.remove_semicolon(tokenizer.tokenize('commit;'));
+	v_tokens := statement_terminator.remove_semicolon(plsql_lexer.lex('commit;'));
 	assert_equals('Small commit 1.', '2', v_tokens.count);
 
 	--Null.
-	v_tokens := statement_terminator.remove_semicolon(tokenizer.tokenize(null));
+	v_tokens := statement_terminator.remove_semicolon(plsql_lexer.lex(null));
 	assert_equals('NULL 1.', '1', v_tokens.count);
-	assert_equals('NULL 2.', tokenizer.c_eof, v_tokens(1).type);
+	assert_equals('NULL 2.', plsql_lexer.c_eof, v_tokens(1).type);
 
 	--line_number, column_number, first_char_position, last_char_position.
-	v_tokens := statement_terminator.remove_semicolon(tokenizer.tokenize('commit'||chr(10)||';'||chr(10)||'--asdf'));
+	v_tokens := statement_terminator.remove_semicolon(plsql_lexer.lex('commit'||chr(10)||';'||chr(10)||'--asdf'));
 	assert_equals('Whitespace is concatenated 1.', '4', v_tokens.count);
-	assert_equals('Whitespace is concatenated 2.', tokenizer.c_comment, v_tokens(3).type);
+	assert_equals('Whitespace is concatenated 2.', plsql_lexer.c_comment, v_tokens(3).type);
 	assert_equals('Whitespace is concatenated 3.', '2', lengthc(v_tokens(2).value));
 	assert_equals('Line number stays the same 1.', 3, v_tokens(3).line_number);
 	assert_equals('Column number 1.', 1, v_tokens(3).column_number);
 	assert_equals('First char position 1.', 9, v_tokens(3).first_char_position);
 	assert_equals('Last char position 1.', 14, v_tokens(3).last_char_position);
 
-	v_tokens := statement_terminator.remove_semicolon(tokenizer.tokenize('commit;--asdf'));
+	v_tokens := statement_terminator.remove_semicolon(plsql_lexer.lex('commit;--asdf'));
 	assert_equals('Column number shrinks on same line 1.', 7, v_tokens(2).column_number);
 end test_semicolon;
 
@@ -918,7 +918,7 @@ begin
 
 			g_test_count := g_test_count + 1;
 
-			if v_sql_fulltexts(i) = tokenizer.concatenate(statement_terminator.remove_semicolon(tokenizer.tokenize(v_sql_fulltexts(i)))) then
+			if v_sql_fulltexts(i) = plsql_lexer.concatenate(statement_terminator.remove_semicolon(plsql_lexer.lex(v_sql_fulltexts(i)))) then
 				g_passed_count := g_passed_count + 1;
 			else
 				g_failed_count := g_failed_count + 1;
@@ -964,9 +964,9 @@ begin
 
 	--Print easy to read pass or fail message.
 	if g_failed_count = 0 then
-		dbms_output.put_line(plsql_lexer_test.C_PASS_MESSAGE);
+		dbms_output.put_line(unit_tests.C_PASS_MESSAGE);
 	else
-		dbms_output.put_line(plsql_lexer_test.C_FAIL_MESSAGE);
+		dbms_output.put_line(unit_tests.C_FAIL_MESSAGE);
 	end if;
 end run;
 

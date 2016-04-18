@@ -1,4 +1,4 @@
-`PLSQL_LEXER` 0.3.3
+`PLSQL_LEXER` 0.4.0
 ============
 
 PL/SQL Lexer solves real-world language problems, in PL/SQL.
@@ -7,7 +7,7 @@ PL/SQL Lexer solves real-world language problems, in PL/SQL.
 
 **Main Package**
 
- - *TOKENIZER* - Convert statements into PL/SQL tokens and tokens back into strings.
+ - *PLSQL_LEXER* - Convert statements into PL/SQL tokens and tokens back into strings.
 
 **Script Execution Packages**
 
@@ -28,7 +28,7 @@ See the file types.sql for all the type definitions.  The most important type th
 
 	create or replace type token is object
 	(
-		type                varchar2(4000), --String to represent token type.  See the constants in TOKENIZER.
+		type                varchar2(4000), --String to represent token type.  See the constants in PLSQL_LEXER.
 		value               clob,           --The text of the token.
 		line_number         number,         --The line number the token starts at - useful for printing warning and error information.
 		column_number       number,         --The column number the token starts at - useful for printing warning and error information.
@@ -94,7 +94,7 @@ After following the installation steps above this code should be runnable:
 	begin
 		--Tokenize and split the string into multiple statements.
 		v_split_statements := statement_splitter.split_by_semicolon(
-			tokenizer.tokenize(v_statements));
+			plsql_lexer.lex(v_statements));
 
 		--Loop through the statements.
 		for i in 1 .. v_split_statements.count loop
@@ -112,7 +112,7 @@ After following the installation steps above this code should be runnable:
 			--For debugging, print the statement and COMMAND_NAME.
 			dbms_output.put_line(chr(10)||'Statement '||i||' : '||
 				replace(replace(
-					tokenizer.concatenate(v_split_statements(i))
+					plsql_lexer.concatenate(v_split_statements(i))
 				,chr(10)), chr(9)));
 			dbms_output.put_line('Command Name: '||v_command_name);
 
@@ -126,7 +126,7 @@ After following the installation steps above this code should be runnable:
 				dbms_output.put_line('Warning     : Could not classify this statement, '||
 					'please check for a typo: '||
 					replace(replace(substr(
-						tokenizer.concatenate(v_split_statements(i))
+						plsql_lexer.concatenate(v_split_statements(i))
 					, 1, 30), chr(10)), chr(9)));
 			--Warning message if "Nothing"
 			elsif v_command_name = 'Nothing' then
@@ -138,7 +138,7 @@ After following the installation steps above this code should be runnable:
 					v_compile_warning_message varchar2(4000);
 				begin
 					--Remove extra semicolons and run.
-					execute immediate to_clob(tokenizer.concatenate(
+					execute immediate to_clob(plsql_lexer.concatenate(
 						statement_terminator.remove_semicolon(
 							p_tokens => v_split_statements(i))));
 					--Get the feedback message.
@@ -186,8 +186,7 @@ Results:
 
 Version 1.0.0 may be ready after these steps:
 
-1. Fix/refactor statement splitter bug, more unit tests.
-2. Thoroughly test by using code in other project I'm trying to open source?
+1. Thoroughly test by using code in other project I'm trying to open source?
 
 
 ## License

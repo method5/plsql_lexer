@@ -1,4 +1,4 @@
-create or replace package body plsql_lexer_test is
+create or replace package body unit_tests is
 --Copyright (C) 2015 Jon Heller.  This program is licensed under the LGPLv3.
 
 --------------------------------------------------------------------------------
@@ -11,7 +11,7 @@ begin
 	statement_feedback_test.run(p_tests => statement_feedback_test.c_static_tests);
 	statement_splitter_test.run(p_tests => statement_splitter_test.c_static_tests);
 	statement_terminator_test.run(p_tests => statement_terminator_test.c_static_tests);
-	tokenizer_test.run(p_tests => tokenizer_test.c_static_tests);
+	plsql_lexer_test.run(p_tests => plsql_lexer_test.c_static_tests);
 end;
 
 --------------------------------------------------------------------------------
@@ -24,7 +24,7 @@ begin
 	--statement_feedback_test.run(p_tests => statement_feedback_test.c_dynamic_tests);
 	statement_splitter_test.run(p_tests => statement_splitter_test.c_dynamic_tests);
 	statement_terminator_test.run(p_tests => statement_terminator_test.c_dynamic_tests);
-	tokenizer_test.run(p_tests => tokenizer_test.c_dynamic_tests);
+	plsql_lexer_test.run(p_tests => plsql_lexer_test.c_dynamic_tests);
 end;
 
 --------------------------------------------------------------------------------

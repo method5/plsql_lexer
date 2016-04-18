@@ -18,15 +18,15 @@ prompt
 
 --#3: Install packages.
 prompt Installing packages...
-start tests/plsql_lexer_test.spc
+start tests/unit_tests.spc
 start tests/statement_classifier_test.plsql
 start tests/statement_feedback_test.plsql
 start tests/statement_splitter_test.plsql
 start tests/statement_terminator_test.plsql
-start tests/tokenizer_test.plsql
+start tests/plsql_lexer_test.plsql
 start tests/misplaced_hints_test.plsql
 --Separate spec and body because of circular dependency.
-start tests/plsql_lexer_test.bdy
+start tests/unit_tests.bdy
 
 
 --#4: Verify installation.
@@ -39,8 +39,8 @@ column object_type format a13;
 
 select owner, object_name, object_type
 from all_objects
-where object_name in ('TOKENIZER_TEST', 'STATEMENT_CLASSIFIER_TEST', 'STATEMENT_FEEDBACK_TEST',
-		'STATEMENT_SPLITTER_TEST', 'STATEMENT_TERMINATOR_TEST', 'PLSQL_LEXER_TEST', 'MISPLACED_HINTS_TEST')
+where object_name in ('PLSQL_LEXER_TEST', 'STATEMENT_CLASSIFIER_TEST', 'STATEMENT_FEEDBACK_TEST',
+		'STATEMENT_SPLITTER_TEST', 'STATEMENT_TERMINATOR_TEST', 'UNIT_TESTS', 'MISPLACED_HINTS_TEST')
 	and owner = sys_context('userenv', 'current_schema')
 	and status <> 'VALID';
 
@@ -52,7 +52,7 @@ begin
 	select count(*)
 	into v_count
 	from all_objects
-	where object_name in ('TOKENIZER_TEST', 'STATEMENT_CLASSIFIER_TEST', 'STATEMENT_CLASSIFIER_TEST',
+	where object_name in ('PLSQL_LEXER_TEST', 'STATEMENT_CLASSIFIER_TEST', 'STATEMENT_CLASSIFIER_TEST',
 			'STATEMENT_SPLITTER_TEST', 'STATEMENT_TERMINATOR_TEST', 'PLSQL_LEXER_TEST', 'MISPLACED_HINTS_TEST')
 		and owner = sys_context('userenv', 'current_schema')
 		and status <> 'VALID';
@@ -70,7 +70,7 @@ prompt Running unit tests, this may take a minute...
 set serveroutput on
 set linesize 1000
 begin
-	plsql_lexer_test.run_static_tests;
+	unit_tests.run_static_tests;
 end;
 /
 

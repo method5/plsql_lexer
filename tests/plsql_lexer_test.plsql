@@ -1,15 +1,15 @@
-create or replace package tokenizer_test authid current_user is
+create or replace package plsql_lexer_test authid current_user is
 /*
 == Purpose ==
 
-Unit tests for tokenizer.
+Unit tests for PLSQL_LEXER.
 
 
 == Example ==
 
 begin
-	tokenzier_test.run;
-	tokenizer_test.run(tokenzier_test.c_dynamic_tests);
+	plsql_lexer_test.run;
+	plsql_lexer_test.run(plsql_lexer_test.c_dynamic_tests);
 end;
 
 */
@@ -49,7 +49,7 @@ procedure run(p_tests number default c_static_tests);
 
 end;
 /
-create or replace package body tokenizer_test is
+create or replace package body plsql_lexer_test is
 pragma serially_reusable;
 
 --Global counters.
@@ -84,7 +84,7 @@ end assert_equals;
 function get_value_n(p_source clob, n number) return varchar2 is
 	v_tokens token_table;
 begin
-	v_tokens := tokenizer.tokenize(p_source);
+	v_tokens := plsql_lexer.lex(p_source);
 	return v_tokens(n).value;
 end get_value_n;
 
@@ -93,7 +93,7 @@ end get_value_n;
 function get_sqlcode_n(p_source clob, n number) return varchar2 is
 	v_tokens token_table;
 begin
-	v_tokens := tokenizer.tokenize(p_source);
+	v_tokens := plsql_lexer.lex(p_source);
 	return v_tokens(n).sqlcode;
 end get_sqlcode_n;
 
@@ -102,16 +102,16 @@ end get_sqlcode_n;
 function get_sqlerrm_n(p_source clob, n number) return varchar2 is
 	v_tokens token_table;
 begin
-	v_tokens := tokenizer.tokenize(p_source);
+	v_tokens := plsql_lexer.lex(p_source);
 	return v_tokens(n).sqlerrm;
 end get_sqlerrm_n;
 
 
 --------------------------------------------------------------------------------
---Simplifies calls to tokenize and print_tokens.
+--Simplifies calls to lex and print_tokens.
 function lex(p_source clob) return clob is
 begin
-	return tokenizer.print_tokens(tokenizer.tokenize(p_source));
+	return plsql_lexer.print_tokens(plsql_lexer.lex(p_source));
 end lex;
 
 
@@ -602,7 +602,7 @@ begin
 			)
 		'));
 
-	--Although "**" and "||" are invalid, they are tokenized differently in pattern matching.
+	--Although "**" and "||" are invalid, they are lexed differently in pattern matching.
 	--This may matter for error handling.
 	assert_equals(
 		'Row pattern matching: invalid SQL 2',
@@ -623,9 +623,9 @@ begin
 			)
 		'));
 
-	--Tokenizer bug, although it's astronomically unlikely to happen.
+	--Lexer bug, although it's astronomically unlikely to happen.
 	--Creating functions with these specific names, calling them in this order, and
-	--using "$", "**", and "||" may tokenize incorrectly because it looks like it's
+	--using "$", "**", and "||" may lex incorrectly because it looks like it's
 	--part of pattern matching.
 	assert_equals(
 		'Row pattern matching: Bug 1',
@@ -682,23 +682,23 @@ procedure test_line_col_start_end_pos is
 	end concat_token;
 begin
 	--Simple strings.
-	v_tokens := tokenizer.tokenize('A C');
+	v_tokens := plsql_lexer.lex('A C');
 	assert_equals('Line Number Simple 1.', '1-1-1-1', concat_token(v_tokens(1)));
 	assert_equals('Line Number Simple 2.', '1-2-2-2', concat_token(v_tokens(2)));
 	assert_equals('Line Number Simple 3.', '1-3-3-3', concat_token(v_tokens(3)));
 	assert_equals('Line Number Simple 4.', '1-4-4-4', concat_token(v_tokens(4)));
 
 	--Smallest possible string.
-	v_tokens := tokenizer.tokenize('A');
+	v_tokens := plsql_lexer.lex('A');
 	assert_equals('Line Number Simple 5.', '1-1-1-1', concat_token(v_tokens(1)));
 	assert_equals('Line Number Simple 6.', '1-2-2-2', concat_token(v_tokens(2)));
 
 	--Empty, just EOF.
-	v_tokens := tokenizer.tokenize('');
+	v_tokens := plsql_lexer.lex('');
 	assert_equals('Line Number EOF 1.', '1-1-1-1', concat_token(v_tokens(1)));
 
 	--Test values with all different types.
-	v_tokens := tokenizer.tokenize(q'[
+	v_tokens := plsql_lexer.lex(q'[
 		/*comment*/ 'text1' nq'!text2!' 1.2d asdf "asdf" $$asdf $asdf *.`]'
 	);
 
@@ -724,7 +724,7 @@ begin
 	assert_equals('Line Number 20.', '2-67-68-68', concat_token(v_tokens(20))); --EOF
 
 	--Test multiple new lines.
-	v_tokens := tokenizer.tokenize(q'[
+	v_tokens := plsql_lexer.lex(q'[
 a
 
 
@@ -751,7 +751,7 @@ end test_line_col_start_end_pos;
 --------------------------------------------------------------------------------
 procedure test_convert_to_text is
 begin
-	assert_equals('Convert To Text 1' ,'select * from dual', tokenizer.concatenate(tokenizer.tokenize('select * from dual')));
+	assert_equals('Convert To Text 1' ,'select * from dual', plsql_lexer.concatenate(plsql_lexer.lex('select * from dual')));
 	--TODO: Test multi-byte characters and large strings.
 end test_convert_to_text;
 
@@ -773,7 +773,7 @@ procedure dynamic_tests is
 	sql_cursor sys_refcursor;
 	v_tokens token_table;
 begin
-	--This tests that everything can be tokenized.
+	--This tests that everything can be lexed.
 	--There should not be any unexpected tokens for valid code.
 
 	--Use dynamic SQL so the package doesn't need direct grants on GV$SQL.
@@ -795,13 +795,13 @@ begin
 
 		--Go through each SQL text.
 		for i in 1 .. v_sql_fulltexts.count loop
-			--Tokenize.
-			v_tokens := tokenizer.tokenize(v_sql_fulltexts(i));
+			--Lex.
+			v_tokens := plsql_lexer.lex(v_sql_fulltexts(i));
 
 			--Loop through the tokens.
 			for j in 1 .. v_tokens.count loop
 				--Fail if an unexpected is found.
-				if v_tokens(j).type = tokenizer.c_unexpected then
+				if v_tokens(j).type = plsql_lexer.c_unexpected then
 					assert_equals('Dynamic test on '||v_sql_ids(i)||': ', '0 unexpected found', '>=1 unexpected found');
 					exit;
 				--Pass if last token and no unexpected are found.
@@ -825,7 +825,7 @@ begin
 	--Print header.
 	dbms_output.put_line(null);
 	dbms_output.put_line('----------------------------------------');
-	dbms_output.put_line('PL/SQL Tokenizer Test Summary');
+	dbms_output.put_line('PL/SQL Lexer Test Summary');
 	dbms_output.put_line('----------------------------------------');
 
 	--Run the chosen tests.
@@ -858,9 +858,9 @@ begin
 
 	--Print easy to read pass or fail message.
 	if g_failed_count = 0 then
-		dbms_output.put_line(plsql_lexer_test.C_PASS_MESSAGE);
+		dbms_output.put_line(unit_tests.C_PASS_MESSAGE);
 	else
-		dbms_output.put_line(plsql_lexer_test.C_FAIL_MESSAGE);
+		dbms_output.put_line(unit_tests.C_FAIL_MESSAGE);
 	end if;
 end run;
 

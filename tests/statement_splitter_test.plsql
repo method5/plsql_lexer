@@ -84,18 +84,18 @@ procedure test_errors is
 	v_statements clob;
 	v_split_statements token_table_table := token_table_table();
 begin
-	v_statements:='begin null;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='begin null;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Incompleted PLSQL Block 1a', 1, v_split_statements.count);
-	assert_equals('Incompleted PLSQL Block 1b', v_statements, tokenizer.concatenate(v_split_statements(1)));
+	assert_equals('Incompleted PLSQL Block 1b', v_statements, plsql_lexer.concatenate(v_split_statements(1)));
 
-	v_statements:='create function f1 return asdf is begin null; ';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='create function f1 return asdf is begin null; ';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Incompleted PLSQL Block 2a', 1, v_split_statements.count);
-	assert_equals('Incompleted PLSQL Block 2b', v_statements, tokenizer.concatenate(v_split_statements(1)));
+	assert_equals('Incompleted PLSQL Block 2b', v_statements, plsql_lexer.concatenate(v_split_statements(1)));
 
 	--TODO
-	--v_statements:='begin loop null; end NOT_LOOP;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	--v_statements:='begin loop null; end NOT_LOOP;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	--assert_equals('Incompleted PLSQL Block 3a', 1, v_split_statements.count);
-	--assert_equals('Incompleted PLSQL Block 3b', v_statements, tokenizer.concatenate(v_split_statements(1)));
+	--assert_equals('Incompleted PLSQL Block 3b', v_statements, plsql_lexer.concatenate(v_split_statements(1)));
 end test_errors;
 
 
@@ -104,28 +104,28 @@ procedure test_simple is
 	v_statements clob;
 	v_split_statements token_table_table := token_table_table();
 begin
-	v_statements:='select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
-	assert_equals('No split 1', v_statements, tokenizer.concatenate(v_split_statements(1)));
-	v_statements:='select * from dual';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
-	assert_equals('No split 2', v_statements, tokenizer.concatenate(v_split_statements(1)));
+	v_statements:='select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
+	assert_equals('No split 1', v_statements, plsql_lexer.concatenate(v_split_statements(1)));
+	v_statements:='select * from dual';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
+	assert_equals('No split 2', v_statements, plsql_lexer.concatenate(v_split_statements(1)));
 
-	v_statements:='select * from dual a;select * from dual b;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
-	assert_equals('Simple split 1a', 'select * from dual a;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('Simple split 1b', 'select * from dual b;', tokenizer.concatenate(v_split_statements(2)));
+	v_statements:='select * from dual a;select * from dual b;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
+	assert_equals('Simple split 1a', 'select * from dual a;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('Simple split 1b', 'select * from dual b;', plsql_lexer.concatenate(v_split_statements(2)));
 
-	v_statements:='select * from dual a; select * from dual b; ';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
-	assert_equals('Simple split 2a', 'select * from dual a;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('Simple split 2b', ' select * from dual b; ', tokenizer.concatenate(v_split_statements(2)));
+	v_statements:='select * from dual a; select * from dual b; ';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
+	assert_equals('Simple split 2a', 'select * from dual a;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('Simple split 2b', ' select * from dual b; ', plsql_lexer.concatenate(v_split_statements(2)));
 	assert_equals('Simple split 2c', 2, v_split_statements.count);
 
 	--Small or empty strings should not crash.
-	v_statements:='';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Simple split 3a', 1, v_split_statements.count);
-	assert_equals('Simple split 3b', null, tokenizer.concatenate(v_split_statements(1)));
+	assert_equals('Simple split 3b', null, plsql_lexer.concatenate(v_split_statements(1)));
 
-	v_statements:='a'||chr(10);v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='a'||chr(10);v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Simple split 4a', 1, v_split_statements.count);
-	assert_equals('Simple split 4b', 'a'||chr(10), tokenizer.concatenate(v_split_statements(1)));
+	assert_equals('Simple split 4b', 'a'||chr(10), plsql_lexer.concatenate(v_split_statements(1)));
 end test_simple;
 
 
@@ -134,54 +134,54 @@ procedure test_plsql_declaration is
 	v_statements clob;
 	v_split_statements token_table_table := token_table_table();
 begin
-	v_statements:='with function f return number is begin return 1; end; function g return number is begin return 2; end; select f from dual;select 1 from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='with function f return number is begin return 1; end; function g return number is begin return 2; end; select f from dual;select 1 from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('plsql_declaration 1a', 2, v_split_statements.count);
-	assert_equals('plsql_declaration 1b', 'with function f return number is begin return 1; end; function g return number is begin return 2; end; select f from dual;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('plsql_declaration 1c', 'select 1 from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('plsql_declaration 1b', 'with function f return number is begin return 1; end; function g return number is begin return 2; end; select f from dual;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('plsql_declaration 1c', 'select 1 from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
-	v_statements:='with function f return number is begin return 1; end; function g return number is begin return 2; end; h as (select 1 a from dual) select f from dual;select 1 from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='with function f return number is begin return 1; end; function g return number is begin return 2; end; h as (select 1 a from dual) select f from dual;select 1 from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('plsql_declaration 2a', 2, v_split_statements.count);
-	assert_equals('plsql_declaration 2b', 'with function f return number is begin return 1; end; function g return number is begin return 2; end; h as (select 1 a from dual) select f from dual;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('plsql_declaration 2c', 'select 1 from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('plsql_declaration 2b', 'with function f return number is begin return 1; end; function g return number is begin return 2; end; h as (select 1 a from dual) select f from dual;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('plsql_declaration 2c', 'select 1 from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
-	v_statements:='with function f return number is begin return 1; end; function g return number is begin return 2; end; h(a) as (select 1 a from dual) select f from dual;select 1 from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='with function f return number is begin return 1; end; function g return number is begin return 2; end; h(a) as (select 1 a from dual) select f from dual;select 1 from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('plsql_declaration 3a', 2, v_split_statements.count);
-	assert_equals('plsql_declaration 3b', 'with function f return number is begin return 1; end; function g return number is begin return 2; end; h(a) as (select 1 a from dual) select f from dual;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('plsql_declaration 3c', 'select 1 from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('plsql_declaration 3b', 'with function f return number is begin return 1; end; function g return number is begin return 2; end; h(a) as (select 1 a from dual) select f from dual;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('plsql_declaration 3c', 'select 1 from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
-	v_statements:='with function f return number is begin return 1; end; function g return number is begin return 2; end; h as (select 1 a from dual), i as (select 1 a from dual) select f from dual;select 1 from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='with function f return number is begin return 1; end; function g return number is begin return 2; end; h as (select 1 a from dual), i as (select 1 a from dual) select f from dual;select 1 from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('plsql_declaration 4a', 2, v_split_statements.count);
-	assert_equals('plsql_declaration 4b', 'with function f return number is begin return 1; end; function g return number is begin return 2; end; h as (select 1 a from dual), i as (select 1 a from dual) select f from dual;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('plsql_declaration 4c', 'select 1 from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('plsql_declaration 4b', 'with function f return number is begin return 1; end; function g return number is begin return 2; end; h as (select 1 a from dual), i as (select 1 a from dual) select f from dual;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('plsql_declaration 4c', 'select 1 from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
-	v_statements:='with function f return number is begin return 1; end; procedure g is begin null; end; h as (select 1 a from dual), i as (select 1 a from dual) select f from dual;select 1 from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='with function f return number is begin return 1; end; procedure g is begin null; end; h as (select 1 a from dual), i as (select 1 a from dual) select f from dual;select 1 from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('plsql_declaration 5a', 2, v_split_statements.count);
-	assert_equals('plsql_declaration 5b', 'with function f return number is begin return 1; end; procedure g is begin null; end; h as (select 1 a from dual), i as (select 1 a from dual) select f from dual;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('plsql_declaration 5c', 'select 1 from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('plsql_declaration 5b', 'with function f return number is begin return 1; end; procedure g is begin null; end; h as (select 1 a from dual), i as (select 1 a from dual) select f from dual;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('plsql_declaration 5c', 'select 1 from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
-	v_statements:='with function f return number is begin return 1; end; function g return number is begin return 2; end; function as (select 1 a from dual) select f from dual;select 1 from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='with function f return number is begin return 1; end; function g return number is begin return 2; end; function as (select 1 a from dual) select f from dual;select 1 from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('plsql_declaration 6a', 2, v_split_statements.count);
-	assert_equals('plsql_declaration 6b', 'with function f return number is begin return 1; end; function g return number is begin return 2; end; function as (select 1 a from dual) select f from dual;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('plsql_declaration 6c', 'select 1 from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('plsql_declaration 6b', 'with function f return number is begin return 1; end; function g return number is begin return 2; end; function as (select 1 a from dual) select f from dual;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('plsql_declaration 6c', 'select 1 from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
-	v_statements:='with function f return number is begin return 1; end; function g return number is begin return 2; end; function(a) as (select 1 a from dual) select f from dual;select 1 from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='with function f return number is begin return 1; end; function g return number is begin return 2; end; function(a) as (select 1 a from dual) select f from dual;select 1 from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('plsql_declaration 7a', 2, v_split_statements.count);
-	assert_equals('plsql_declaration 7b', 'with function f return number is begin return 1; end; function g return number is begin return 2; end; function(a) as (select 1 a from dual) select f from dual;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('plsql_declaration 7c', 'select 1 from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('plsql_declaration 7b', 'with function f return number is begin return 1; end; function g return number is begin return 2; end; function(a) as (select 1 a from dual) select f from dual;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('plsql_declaration 7c', 'select 1 from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--"select 1 as begin" should not count as a "BEGIN".
-	v_statements:='with function f return number is v_test number; begin select 1 as begin into v_test from dual; return 1; end; select f from dual;select 1 from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='with function f return number is v_test number; begin select 1 as begin into v_test from dual; return 1; end; select f from dual;select 1 from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('plsql_declaration 8a', 2, v_split_statements.count);
-	assert_equals('plsql_declaration 8b', 'with function f return number is v_test number; begin select 1 as begin into v_test from dual; return 1; end; select f from dual;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('plsql_declaration 8c', 'select 1 from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('plsql_declaration 8b', 'with function f return number is v_test number; begin select 1 as begin into v_test from dual; return 1; end; select f from dual;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('plsql_declaration 8c', 'select 1 from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--TODO: Test commas, FROM, into, bulk collect.
 
 	--CLUSTER_ID "as begin" exception
-	v_statements:='with function f return number is v_number number; begin select cluster_id(some_model using asdf as begin) into v_number from dual; return v_number; end; select f from dual;select * from dual b;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='with function f return number is v_number number; begin select cluster_id(some_model using asdf as begin) into v_number from dual; return v_number; end; select f from dual;select * from dual b;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('plsql_declaration 9a', 2, v_split_statements.count);
-	assert_equals('plsql_declaration 9b', 'with function f return number is v_number number; begin select cluster_id(some_model using asdf as begin) into v_number from dual; return v_number; end; select f from dual;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('plsql_declaration 9c', 'select * from dual b;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('plsql_declaration 9b', 'with function f return number is v_number number; begin select cluster_id(some_model using asdf as begin) into v_number from dual; return v_number; end; select f from dual;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('plsql_declaration 9c', 'select * from dual b;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--PIVOT_IN_CLAUSE "as begin" exception.
 	v_statements:=q'!
@@ -199,9 +199,9 @@ begin
 	);
 	return v_number;
 end;select f from dual;select * from dual b!';
-	v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('plsql_declaration 10a', 2, v_split_statements.count);
-	assert_equals('plsql_declaration 10b', 'select * from dual b', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('plsql_declaration 10b', 'select * from dual b', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--XMLATTRIBUTES "as begin" exception.
 	v_statements:=q'!
@@ -211,9 +211,9 @@ begin
 	select xmlelement("a", xmlattributes(1 as begin)) into v_test from dual;
 	return v_test;
 end; select f from dual;select * from dual b!';
-	v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('plsql_declaration 11a', 2, v_split_statements.count);
-	assert_equals('plsql_declaration 11b', 'select * from dual b', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('plsql_declaration 11b', 'select * from dual b', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--XMLCOLATTVAL "as begin" exception.
 	v_statements:=q'!
@@ -225,9 +225,9 @@ begin
 	from dual;
 	return v_test;
 end; select f from dual;select * from dual b!';
-	v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('plsql_declaration 12a', 2, v_split_statements.count);
-	assert_equals('plsql_declaration 12b', 'select * from dual b', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('plsql_declaration 12b', 'select * from dual b', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--XMLELEMENTS "as begin" exception.
 	v_statements:=q'!
@@ -237,9 +237,9 @@ begin
 	select xmlelement("a", sys.odcivarchar2list('b') as begin) into v_test from dual;
 	return v_test;
 end; select f from dual;select * from dual b!';
-	v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('plsql_declaration 13a', 2, v_split_statements.count);
-	assert_equals('plsql_declaration 13b', 'select * from dual b', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('plsql_declaration 13b', 'select * from dual b', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--XMLFOREST "as begin" exception.
 	v_statements:=q'!
@@ -249,9 +249,9 @@ begin
 	select xmlforest(1 as begin) into v_test from dual;
 	return v_test;
 end; select f from dual;select * from dual b!';
-	v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('plsql_declaration 14a', 2, v_split_statements.count);
-	assert_equals('plsql_declaration 14b', 'select * from dual b', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('plsql_declaration 14b', 'select * from dual b', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--XMLTABLE_options "as begin" exception.
 	v_statements:=q'!
@@ -264,9 +264,9 @@ begin
 	cross join xmltable('/emp' passing emp.the_xml, emp.the_xml as begin columns name varchar2(100) path '/emp/name');
 	return v_test;
 end; select f from dual;select * from dual b!';
-	v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('plsql_declaration 15a', 2, v_split_statements.count);
-	assert_equals('plsql_declaration 15b', 'select * from dual b', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('plsql_declaration 15b', 'select * from dual b', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--XMLnamespaces_clause "as begin" exception.
 	v_statements:=q'!
@@ -279,9 +279,9 @@ begin
 	cross join xmltable(xmlnamespaces('N' as begin, default ''), '/emp' passing the_xml columns name varchar2(1) path '/emp/name');
 	return v_test;
 end; select f from dual;select * from dual b!';
-	v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('plsql_declaration 16a', 2, v_split_statements.count);
-	assert_equals('plsql_declaration 16b', 'select * from dual b', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('plsql_declaration 16b', 'select * from dual b', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--PIVOT "as begin" exception.
 	v_statements:=q'!
@@ -299,9 +299,9 @@ begin
 	);
 	return v_number;
 end; select f from dual;select * from dual b!';
-	v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('plsql_declaration 17a', 2, v_split_statements.count);
-	assert_equals('plsql_declaration 17b', 'select * from dual b', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('plsql_declaration 17b', 'select * from dual b', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--PIVOT XML "as begin" exception.
 	v_statements:=q'!
@@ -319,18 +319,18 @@ begin
 	);
 	return v_number;
 end; select f from dual;select * from dual b!';
-	v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('plsql_declaration 18a', 2, v_split_statements.count);
-	assert_equals('plsql_declaration 18b', 'select * from dual b', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('plsql_declaration 18b', 'select * from dual b', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--nested_table_col_properties "as begin" exception.
 	v_statements:=q'!
 create table test1 nested table a store as begin as
 with function f return varchar2 is v_string varchar2(1); begin return 'A'; end;
 select sys.dbms_debug_vc2coll('A') a from dual;select * from dual b!';
-	v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('plsql_declaration 19a', 2, v_split_statements.count);
-	assert_equals('plsql_declaration 19b', 'select * from dual b', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('plsql_declaration 19b', 'select * from dual b', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--TODO: SQL with PL/SQL with a SQL with PL/SQL.
 end test_plsql_declaration;
@@ -341,92 +341,92 @@ procedure test_plsql_block is
 	v_statements clob;
 	v_split_statements token_table_table := token_table_table();
 begin
-	v_statements:='declare v_test number; begin select begin begin into v_test from (select 1 begin from dual); end; select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='declare v_test number; begin select begin begin into v_test from (select 1 begin from dual); end; select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('plsql_block: begin begin does not start a block 1a', 2, v_split_statements.count);
-	assert_equals('plsql_block: begin begin does not start a block 1b', 'declare v_test number; begin select begin begin into v_test from (select 1 begin from dual); end;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('plsql_block: begin begin does not start a block 1c', ' select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('plsql_block: begin begin does not start a block 1b', 'declare v_test number; begin select begin begin into v_test from (select 1 begin from dual); end;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('plsql_block: begin begin does not start a block 1c', ' select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
-	v_statements:='select begin begin into v_test from (select 1 begin from dual); select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='select begin begin into v_test from (select 1 begin from dual); select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('plsql_block: begin begin does not start a block 2a', 2, v_split_statements.count);
-	assert_equals('plsql_block: begin begin does not start a block 2b', 'select begin begin into v_test from (select 1 begin from dual);', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('plsql_block: begin begin does not start a block 2c', ' select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('plsql_block: begin begin does not start a block 2b', 'select begin begin into v_test from (select 1 begin from dual);', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('plsql_block: begin begin does not start a block 2c', ' select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
-	v_statements:='declare v_test number; begin begin begin select begin begin into v_test from (select 1 begin from dual); end; end; end; select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='declare v_test number; begin begin begin select begin begin into v_test from (select 1 begin from dual); end; end; end; select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('plsql_block: begin begin does not start a block 3a', 2, v_split_statements.count);
-	assert_equals('plsql_block: begin begin does not start a block 3b', 'declare v_test number; begin begin begin select begin begin into v_test from (select 1 begin from dual); end; end; end;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('plsql_block: begin begin does not start a block 3c', ' select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('plsql_block: begin begin does not start a block 3b', 'declare v_test number; begin begin begin select begin begin into v_test from (select 1 begin from dual); end; end; end;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('plsql_block: begin begin does not start a block 3c', ' select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
-	v_statements:='declare v_test number; begin select 1 as end into v_test from dual; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='declare v_test number; begin select 1 as end into v_test from dual; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('plsql_block: "as end" does not count 1a', 2, v_split_statements.count);
-	assert_equals('plsql_block: "as end" does not count 1b', 'declare v_test number; begin select 1 as end into v_test from dual; end;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('plsql_block: "as end" does not count 1c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('plsql_block: "as end" does not count 1b', 'declare v_test number; begin select 1 as end into v_test from dual; end;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('plsql_block: "as end" does not count 1c', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
-	v_statements:='declare v_test number; begin with end as (select 1 a from dual) select a into v_test from end; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='declare v_test number; begin with end as (select 1 a from dual) select a into v_test from end; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('plsql_block: "as end" does not count 2a', 2, v_split_statements.count);
-	assert_equals('plsql_block: "as end" does not count 2b', 'declare v_test number; begin with end as (select 1 a from dual) select a into v_test from end; end;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('plsql_block: "as end" does not count 2c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('plsql_block: "as end" does not count 2b', 'declare v_test number; begin with end as (select 1 a from dual) select a into v_test from end; end;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('plsql_block: "as end" does not count 2c', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--Don't count "end if".
-	v_statements:='begin if 1=1 then null; end if; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='begin if 1=1 then null; end if; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('PLSQL Block 1a', 2, v_split_statements.count);
-	assert_equals('PLSQL Block 1b', 'begin if 1=1 then null; end if; end;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('PLSQL Block 1c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('PLSQL Block 1b', 'begin if 1=1 then null; end if; end;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('PLSQL Block 1c', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--Don't count "end loop".
-	v_statements:='begin loop null; end loop; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='begin loop null; end loop; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('PLSQL Block 2a', 2, v_split_statements.count);
-	assert_equals('PLSQL Block 2b', 'begin loop null; end loop; end;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('PLSQL Block 2c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('PLSQL Block 2b', 'begin loop null; end loop; end;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('PLSQL Block 2c', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--Don't count "end case".
-	v_statements:='begin case when 1=1 then null; end case; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='begin case when 1=1 then null; end case; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('PLSQL Block 3a', 2, v_split_statements.count);
-	assert_equals('PLSQL Block 3b', 'begin case when 1=1 then null; end case; end;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('PLSQL Block 3c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('PLSQL Block 3b', 'begin case when 1=1 then null; end case; end;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('PLSQL Block 3c', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--Count "begin begin".
-	v_statements:='begin begin null; end; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='begin begin null; end; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('PLSQL Block 4a', 2, v_split_statements.count);
-	assert_equals('PLSQL Block 4b', 'begin begin null; end; end;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('PLSQL Block 4c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('PLSQL Block 4b', 'begin begin null; end; end;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('PLSQL Block 4c', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--(Cannot test "as begin" and "is begin", those are tested in test_proc_and_func.)
 
 	--Count "; begin".
-	v_statements:='declare a number; begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='declare a number; begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('PLSQL Block 5a', 2, v_split_statements.count);
-	assert_equals('PLSQL Block 5b', 'declare a number; begin null; end;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('PLSQL Block 5c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('PLSQL Block 5b', 'declare a number; begin null; end;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('PLSQL Block 5c', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--Count ">> begin".
-	v_statements:='declare a number; begin <<label1>> null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='declare a number; begin <<label1>> null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('PLSQL Block 6a', 2, v_split_statements.count);
-	assert_equals('PLSQL Block 6b', 'declare a number; begin <<label1>> null; end;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('PLSQL Block 6c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('PLSQL Block 6b', 'declare a number; begin <<label1>> null; end;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('PLSQL Block 6c', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--Count "then begin".
-	v_statements:='begin if 1=1 then begin null; end; end if; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='begin if 1=1 then begin null; end; end if; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('PLSQL Block 7a', 2, v_split_statements.count);
-	assert_equals('PLSQL Block 7b', 'begin if 1=1 then begin null; end; end if; end;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('PLSQL Block 7c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('PLSQL Block 7b', 'begin if 1=1 then begin null; end; end if; end;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('PLSQL Block 7c', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--Count "else begin".
-	v_statements:='begin if 1=1 then null; else begin null; end; end if; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='begin if 1=1 then null; else begin null; end; end if; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('PLSQL Block 8a', 2, v_split_statements.count);
-	assert_equals('PLSQL Block 8b', 'begin if 1=1 then null; else begin null; end; end if; end;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('PLSQL Block 8c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('PLSQL Block 8b', 'begin if 1=1 then null; else begin null; end; end if; end;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('PLSQL Block 8c', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--Count "loop begin".
-	v_statements:='begin for i in 1 .. 2 loop begin null; end; end loop; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='begin for i in 1 .. 2 loop begin null; end; end loop; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('PLSQL Block 9a', 2, v_split_statements.count);
-	assert_equals('PLSQL Block 9b', 'begin for i in 1 .. 2 loop begin null; end; end loop; end;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('PLSQL Block 9c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('PLSQL Block 9b', 'begin for i in 1 .. 2 loop begin null; end; end loop; end;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('PLSQL Block 9c', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--DECLARE with PROCEDURE.
-	v_statements:='declare procedure p1 is begin null; end; begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='declare procedure p1 is begin null; end; begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('PLSQL Block 10a', 2, v_split_statements.count);
-	assert_equals('PLSQL Block 10b', 'declare procedure p1 is begin null; end; begin null; end;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('PLSQL Block 10c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('PLSQL Block 10b', 'declare procedure p1 is begin null; end; begin null; end;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('PLSQL Block 10c', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 end test_plsql_block;
 
 
@@ -436,10 +436,10 @@ procedure test_package is
 	v_split_statements token_table_table := token_table_table();
 begin
 	--Empty package.
-	v_statements:='create or replace package test_package is end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='create or replace package test_package is end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Package 1a', 2, v_split_statements.count);
-	assert_equals('Package 1b', 'create or replace package test_package is end;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('Package 1c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Package 1b', 'create or replace package test_package is end;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('Package 1c', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--Package with procedures and functions and items.
 	v_statements:='
@@ -447,9 +447,9 @@ begin
 			procedure procedure1;
 			function function1 return number;
 		end;select * from dual;';
-	v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Package 2a', 2, v_split_statements.count);
-	assert_equals('Package 2b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Package 2b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--Package with PLSQL_DECLARATION cursor - Not valid in 12.1.0.2.0.
 	/*
@@ -461,9 +461,9 @@ begin
 			procedure procedure1;
 			function function1 return number;
 		end;select * from dual;';
-	v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Package 3a', 2, v_split_statements.count);
-	assert_equals('Package 3b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Package 3b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 	*/
 end test_package;
 
@@ -492,9 +492,9 @@ begin
 			member function function1 return number is begin return 1; end;
 			order member function return_order(a type1) return number is begin return 1; end;
 			final instantiable constructor function type1 return self as result is begin null; end;
-		end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+		end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Type Body 1a', 2, v_split_statements.count);
-	assert_equals('Type body 1b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Type body 1b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 end test_type_body;
 
 
@@ -507,9 +507,9 @@ begin
 	v_statements:='
 		create or replace trigger test2_trigger1
 		instead of insert on test2_vw
-		begin null; end test2_trigger1;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+		begin null; end test2_trigger1;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Trigger 1a', 2, v_split_statements.count);
-	assert_equals('Trigger 1b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Trigger 1b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--Compound triggers require an extra END.
 	v_statements:='
@@ -524,9 +524,9 @@ begin
 			after each row is begin null; end after each row;
 			--This is invalid even though the manual implies it is allowed.
 			--instead of each row is begin null; end instead of each row;
-		end test1_trigger2;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+		end test1_trigger2;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Trigger 2a', 2, v_split_statements.count);
-	assert_equals('Trigger 2b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Trigger 2b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--A CALL trigger needs a regular terminator.
 	--(This behavior is slightly different than SQL*Plus and the manual.
@@ -535,9 +535,9 @@ begin
 		create or replace trigger test1_trigger1
 		before delete on test1
 		for each row
-		call test_procedure;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+		call test_procedure;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Trigger 3a', 2, v_split_statements.count);
-	assert_equals('Trigger 3b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Trigger 3b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 
 	---------------------------------------
@@ -545,104 +545,104 @@ begin
 	---------------------------------------
 
 	--Name of trigger.
-	v_statements:='create trigger call before update on table1 for each row begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='create trigger call before update on table1 for each row begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Trigger 4a', 2, v_split_statements.count);
-	assert_equals('Trigger 4b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Trigger 4b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--Name of schema and trigger.
-	v_statements:='create trigger call.call before update on table1 for each row begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='create trigger call.call before update on table1 for each row begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Trigger 5a', 2, v_split_statements.count);
-	assert_equals('Trigger 5b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Trigger 5b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--Name of schema and trigger.
-	v_statements:='create trigger call.call before update on table1 for each row begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='create trigger call.call before update on table1 for each row begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Trigger 6a', 2, v_split_statements.count);
-	assert_equals('Trigger 6b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Trigger 6b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--dml_event_clause - first column, schema name and table name
-	v_statements:='create trigger call.call before update of call on call.call for each row begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='create trigger call.call before update of call on call.call for each row begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Trigger 7a', 2, v_split_statements.count);
-	assert_equals('Trigger 7b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Trigger 7b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--dml_event_clause - additional column, schema name, and tble name.
-	v_statements:='create trigger call.call before update of a, call on call.call for each row begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='create trigger call.call before update of a, call on call.call for each row begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Trigger 8a', 2, v_split_statements.count);
-	assert_equals('Trigger 8b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Trigger 8b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--referencing_clause 1 - old
-	v_statements:='create or replace trigger trigger1 after update on table1 referencing old as call begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='create or replace trigger trigger1 after update on table1 referencing old as call begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Trigger 9a', 2, v_split_statements.count);
-	assert_equals('Trigger 9b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Trigger 9b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--referencing_clause 2 - new
-	v_statements:='create or replace trigger trigger1 after update on table1 referencing new as call begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='create or replace trigger trigger1 after update on table1 referencing new as call begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Trigger 10a', 2, v_split_statements.count);
-	assert_equals('Trigger 10b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Trigger 10b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--referencing_clause 3 - parent
-	v_statements:='create or replace trigger trigger1 instead of update on nested table v_type1_nt of view1 referencing parent as call old as asdf new as qwer begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='create or replace trigger trigger1 instead of update on nested table v_type1_nt of view1 referencing parent as call old as asdf new as qwer begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Trigger 11a', 2, v_split_statements.count);
-	assert_equals('Trigger 11b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Trigger 11b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--referencing_clause 4 - combined 1
-	v_statements:='create or replace trigger trigger1 instead of update on nested table v_type1_nt of view1 referencing parent as call old as asdf new as qwer begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='create or replace trigger trigger1 instead of update on nested table v_type1_nt of view1 referencing parent as call old as asdf new as qwer begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Trigger 12a', 2, v_split_statements.count);
-	assert_equals('Trigger 12b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Trigger 12b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--referencing_clause 5 - combined 2
-	v_statements:='create or replace trigger trigger1 instead of update on nested table v_type1_nt of view1 referencing old as asdf parent as call new as qwer begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='create or replace trigger trigger1 instead of update on nested table v_type1_nt of view1 referencing old as asdf parent as call new as qwer begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Trigger 13a', 2, v_split_statements.count);
-	assert_equals('Trigger 13b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Trigger 13b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--referencing_clause 6 - "as begin" does not count as a real BEGIN.
-	v_statements:='create or replace trigger trigger1 after update on table1 referencing old as begin begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='create or replace trigger trigger1 after update on table1 referencing old as begin begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Trigger 13.5a', 2, v_split_statements.count);
-	assert_equals('Trigger 13.5b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Trigger 13.5b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--referencing_clause 7 - "as end" does not count as a real END.
-	v_statements:='create or replace trigger trigger1 after update on table1 referencing old as end begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='create or replace trigger trigger1 after update on table1 referencing old as end begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Trigger 13.7a', 2, v_split_statements.count);
-	assert_equals('Trigger 13.7b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Trigger 13.7b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--trigger_ordering_clause 1 - follows 1
-	v_statements:='create or replace trigger trigger2 before update on table1 for each row follows call begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='create or replace trigger trigger2 before update on table1 for each row follows call begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Trigger 14a', 2, v_split_statements.count);
-	assert_equals('Trigger 14b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Trigger 14b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--trigger_ordering_clause 1 - follows 2
-	v_statements:='create or replace trigger trigger2 before update on table1 for each row follows call.call begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='create or replace trigger trigger2 before update on table1 for each row follows call.call begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Trigger 15a', 2, v_split_statements.count);
-	assert_equals('Trigger 15b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Trigger 15b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--trigger_ordering_clause 1 - follows 3
-	v_statements:='create or replace trigger trigger2 before update on table1 for each row follows call.call, call begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='create or replace trigger trigger2 before update on table1 for each row follows call.call, call begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Trigger 16a', 2, v_split_statements.count);
-	assert_equals('Trigger 16b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Trigger 16b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--trigger_ordering_clause 1 - follows 4.  Yes, this is valid syntax!  (Except that the semicolon after the first statement would not work in SQL*Plus.)
-	v_statements:='create or replace trigger trigger2 before update on table1 for each row follows call.call, call, call, call call test_procedure;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='create or replace trigger trigger2 before update on table1 for each row follows call.call, call, call, call call test_procedure;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Trigger 17a', 2, v_split_statements.count);
-	assert_equals('Trigger 17b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Trigger 17b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--trigger_ordering_clause 2 - precedes
-	v_statements:='create or replace trigger trigger2 before update on table1 for each row precedes call begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='create or replace trigger trigger2 before update on table1 for each row precedes call begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Trigger 18a', 2, v_split_statements.count);
-	assert_equals('Trigger 18b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Trigger 18b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--WHEN (condition)
-	v_statements:='create or replace trigger trigger2 before update on table1 for each row when (((old.call > new.call)) or (old.call > 1)) begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='create or replace trigger trigger2 before update on table1 for each row when (((old.call > new.call)) or (old.call > 1)) begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Trigger 19a', 2, v_split_statements.count);
-	assert_equals('Trigger 19b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Trigger 19b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--system_trigger [on schema.schema]
-	v_statements:='create or replace trigger trigger_schema before comment or create on call.schema begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='create or replace trigger trigger_schema before comment or create on call.schema begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Trigger 20a', 2, v_split_statements.count);
-	assert_equals('Trigger 20b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Trigger 20b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--system_trigger - syntax the manual leaves out
-	v_statements:='create or replace trigger trigger_schema before comment or create on jheller.schema enable when (1=1) begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='create or replace trigger trigger_schema before comment or create on jheller.schema enable when (1=1) begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Trigger 21a', 2, v_split_statements.count);
-	assert_equals('Trigger 21b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Trigger 21b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 end test_trigger;
 
 
@@ -652,45 +652,45 @@ procedure test_proc_and_func is
 	v_split_statements token_table_table := token_table_table();
 begin
 	--Regular procedure.
-	v_statements:='create procedure test_procedure is begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='create procedure test_procedure is begin null; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Procedure and Function 1a', 2, v_split_statements.count);
-	assert_equals('Procedure and Function 1b', 'create procedure test_procedure is begin null; end;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('Procedure and Function 1c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Procedure and Function 1b', 'create procedure test_procedure is begin null; end;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('Procedure and Function 1c', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--External procedure.
-	v_statements:='create procedure test_procedure as external language c name "c_test" library test_lib;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='create procedure test_procedure as external language c name "c_test" library test_lib;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Procedure and Function 2a', 2, v_split_statements.count);
-	assert_equals('Procedure and Function 2b', 'create procedure test_procedure as external language c name "c_test" library test_lib;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('Procedure and Function 2c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Procedure and Function 2b', 'create procedure test_procedure as external language c name "c_test" library test_lib;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('Procedure and Function 2c', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--Regular function.
-	v_statements:='create function test_function return number is begin return 1; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='create function test_function return number is begin return 1; end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Procedure and Function 3a', 2, v_split_statements.count);
-	assert_equals('Procedure and Function 3b', 'create function test_function return number is begin return 1; end;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('Procedure and Function 3c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Procedure and Function 3b', 'create function test_function return number is begin return 1; end;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('Procedure and Function 3c', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--External function.
-	v_statements:='create function test_function return number as external language c name "c_test" library test_lib;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='create function test_function return number as external language c name "c_test" library test_lib;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Procedure and Function 4a', 2, v_split_statements.count);
-	assert_equals('Procedure and Function 4b', 'create function test_function return number as external language c name "c_test" library test_lib;', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('Procedure and Function 4c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Procedure and Function 4b', 'create function test_function return number as external language c name "c_test" library test_lib;', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('Procedure and Function 4c', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--External function with CALL syntax.
 	--This would be a valid example with this Java:
 	--  create or replace and compile java source named "RandomUUID" as
 	--  public class RandomUUID { public static String create() { return java.util.UUID.randomUUID().toString(); } }
 	--External function.
-	v_statements:=q'<create or replace function randomuuid return varchar2 as language java name 'RandomUUID.create() return java.lang.String';select * from dual;>';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:=q'<create or replace function randomuuid return varchar2 as language java name 'RandomUUID.create() return java.lang.String';select * from dual;>';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Procedure and Function 5a', 2, v_split_statements.count);
-	assert_equals('Procedure and Function 5b', q'<create or replace function randomuuid return varchar2 as language java name 'RandomUUID.create() return java.lang.String';>', tokenizer.concatenate(v_split_statements(1)));
-	assert_equals('Procedure and Function 5c', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Procedure and Function 5b', q'<create or replace function randomuuid return varchar2 as language java name 'RandomUUID.create() return java.lang.String';>', plsql_lexer.concatenate(v_split_statements(1)));
+	assert_equals('Procedure and Function 5c', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--TODO: How to handle errors?
 /*
 	--Procedure that doesn't properly end.  EOF should always end.
-	v_statements:='create procedure test_procedure is ';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='create procedure test_procedure is ';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Procedure and Function 6a', 1, v_split_statements.count);
-	assert_equals('Procedure and Function 6b', 'create procedure test_procedure is ', tokenizer.concatenate(v_split_statements(1)));
+	assert_equals('Procedure and Function 6b', 'create procedure test_procedure is ', plsql_lexer.concatenate(v_split_statements(1)));
 */
 end test_proc_and_func;
 
@@ -703,32 +703,32 @@ begin
 	--#1: Extra END in an emtpy package body.
 	v_statements:='
 		create or replace package body test_package is
-		end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+		end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Package Body 1a', 2, v_split_statements.count);
-	assert_equals('Package Body 1b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Package Body 1b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	v_statements:='
 		create or replace package body test_package is
-		end test_package;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+		end test_package;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Package Body 1.5a', 2, v_split_statements.count);
-	assert_equals('Package Body 1.5b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Package Body 1.5b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--#2: One matched BEGIN and END when there is only an initialization block.
 	v_statements:='
 		create or replace package body test_package is
 		begin
 			null;
-		end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+		end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Package Body 2a', 2, v_split_statements.count);
-	assert_equals('Package Body 2b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Package Body 2b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--#3: Matched BEGIN and END and extra END.
 	v_statements:='
 		create or replace package body test_package is
 			procedure test1 is begin null; end;
-		end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+		end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Package Body 3a', 2, v_split_statements.count);
-	assert_equals('Package Body 3b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Package Body 3b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--#4: Two sets of matched BEGINs and ENDs - from methods.
 	v_statements:='
@@ -736,9 +736,9 @@ begin
 			procedure test1 is begin null; end;
 		begin
 			null;
-		end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+		end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Package Body 4a', 2, v_split_statements.count);
-	assert_equals('Package Body 4b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Package Body 4b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--#4.5: Two sets of matched BEGINs and ENDs - from methods.
 	v_statements:='
@@ -747,9 +747,9 @@ begin
 			procedure test2 is begin null; end;
 		begin
 			null;
-		end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+		end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Package Body 4.5a', 2, v_split_statements.count);
-	assert_equals('Package Body 4.5b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Package Body 4.5b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--#5: Two sets of matched BEGINs and ENDs - from CURSORS and methods.
 	/*
@@ -760,9 +760,9 @@ begin
 			procedure test1 is begin null; end;
 		begin
 			null;
-		end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+		end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Package Body 5a', 2, v_split_statements.count);
-	assert_equals('Package Body 5b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Package Body 5b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 	*/
 
 	--#5.5: Sets of matched BEGINs and ENDs - from CURSORS with multiple plsql_declarations
@@ -776,9 +776,9 @@ begin
 			cursor my_cursor is with function test_function1 return number is begin return 1; end; function as (select 1 a from dual) select a from function;
 		begin
 			null;
-		end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+		end;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Package Body 5.5a', 2, v_split_statements.count);
-	assert_equals('Package Body 5.5b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Package Body 5.5b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 	*/
 
 	--#6: Items only.
@@ -788,18 +788,18 @@ begin
 			variable2 number := 5;
 			type type1 is table of varchar2(4000);
 			string_nt type1 := type1('asdf', 'qwer');
-		end;select * from dual;>';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+		end;select * from dual;>';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Package Body 6a', 2, v_split_statements.count);
-	assert_equals('Package Body 6b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Package Body 6b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 	--#7: External functions.
 	v_statements:=q'<
 		create or replace package body test_package is
 			function randomuuid1 return varchar2 as language java name 'RandomUUID.create() return java.lang.String';
 			function randomuuid2 return varchar2 as language java name 'RandomUUID.create() return java.lang.String';
-		end;select * from dual;>';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+		end;select * from dual;>';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Package Body 7a', 2, v_split_statements.count);
-	assert_equals('Package Body 7b', 'select * from dual;', tokenizer.concatenate(v_split_statements(2)));
+	assert_equals('Package Body 7b', 'select * from dual;', plsql_lexer.concatenate(v_split_statements(2)));
 
 end test_package_body;
 
@@ -931,7 +931,7 @@ procedure test_metadata is
 			p_token.last_char_position;
 	end;
 begin
-	v_statements:='select * from dual;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(tokenizer.tokenize(v_statements));
+	v_statements:='select * from dual;select * from dual;';v_split_statements:=statement_splitter.split_by_semicolon(plsql_lexer.lex(v_statements));
 	assert_equals('Metadata 1', '1,1,1,6|1,1,1,6', concat_metadata(v_split_statements(1)(1)) || '|' || concat_metadata(v_split_statements(2)(1)));
 
 	--TODO: More unit tests.
@@ -980,7 +980,7 @@ begin
 			g_test_count := g_test_count + 1;
 
 			--Test that each statement is only split into one
-			v_split_statements := statement_splitter.split_by_semicolon(tokenizer.tokenize(v_sql_fulltexts(i)));
+			v_split_statements := statement_splitter.split_by_semicolon(plsql_lexer.lex(v_sql_fulltexts(i)));
 
 			if v_split_statements.count = 1 then
 				g_passed_count := g_passed_count + 1;
@@ -1022,7 +1022,7 @@ begin
 			g_test_count := g_test_count + 1;
 
 			--Process source after adding "CREATE" to each statement.
-			v_statements := statement_splitter.split_by_semicolon(tokenizer.tokenize('create '||v_source));
+			v_statements := statement_splitter.split_by_semicolon(plsql_lexer.lex('create '||v_source));
 
 			--Count as success or failure depending on count.
 			if v_statements.count = 1 then
@@ -1086,9 +1086,9 @@ begin
 
 	--Print easy to read pass or fail message.
 	if g_failed_count = 0 then
-		dbms_output.put_line(plsql_lexer_test.C_PASS_MESSAGE);
+		dbms_output.put_line(unit_tests.C_PASS_MESSAGE);
 	else
-		dbms_output.put_line(plsql_lexer_test.C_FAIL_MESSAGE);
+		dbms_output.put_line(unit_tests.C_FAIL_MESSAGE);
 	end if;
 end run;
 
