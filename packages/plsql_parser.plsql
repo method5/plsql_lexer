@@ -1759,17 +1759,18 @@ end query_block;
 
 
 function subquery(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_first_subquery_id number;
+	v_second_subquery_node_id number;
 begin
-	v_new_node_id := push(C_SUBQUERY, p_parent_id);
+	v_first_subquery_id := push(C_SUBQUERY, p_parent_id);
 
 	--Third branch of diagram.
-	if match_terminal('(', v_new_node_id) then 
-		if subquery(v_new_node_id) then
-			if match_terminal(')', v_new_node_id) then
+	if match_terminal('(', v_first_subquery_id) then 
+		if subquery(v_first_subquery_id) then
+			if match_terminal(')', v_first_subquery_id) then
 				--Two optional rules at the end. 
-				g_optional := order_by_clause(v_new_node_id);
-				g_optional := row_limiting_clause(v_new_node_id);
+				g_optional := order_by_clause(v_first_subquery_id);
+				g_optional := row_limiting_clause(v_first_subquery_id);
 				return true;
 			else
 				parse_error('")"', $$plsql_line);
@@ -1780,22 +1781,22 @@ begin
 
 	--First or second branch of diagram.
 	else
-		--Assume it's a subquery (middle branch)
-		v_new_node_id := push(C_SUBQUERY, v_new_node_id);
+		--Assume it's a subquery (middle branch) - workaround to avoid left-recursion.
+		v_second_subquery_node_id := push(C_SUBQUERY, v_first_subquery_id);
 
-		if query_block(v_new_node_id) then
+		if query_block(v_second_subquery_node_id) then
 			--Second branch of diagram.
-			if next_value in ('UNION', 'INTERSECT', 'MINUS') then
+			if current_value in ('UNION', 'INTERSECT', 'MINUS') then
 				loop
 					if
 					(
-						(match_terminal('UNION', v_new_node_id) and match_terminal('ALL', v_new_node_id) is not null)
+						(match_terminal('UNION', v_first_subquery_id) and match_terminal('ALL', v_first_subquery_id) is not null)
 						or
-						match_terminal('INTERSECT', v_new_node_id)
+						match_terminal('INTERSECT', v_first_subquery_id)
 						or
-						match_terminal('MINUS', v_new_node_id)
+						match_terminal('MINUS', v_first_subquery_id)
 					) then
-						if subquery(v_new_node_id) then
+						if subquery(v_first_subquery_id) then
 							null;
 						else
 							parse_error('subquery', $$plsql_line);
@@ -1808,11 +1809,11 @@ begin
 			--First branch of diagram.
 			else
 				--Remove extra SUBQUERY, it's a plain QUERY_BLOCK.
-				v_new_node_id := remove_extra_subquery(v_new_node_id);
+				v_first_subquery_id := remove_extra_subquery(v_second_subquery_node_id);
 
 				--Two optional rules at the end. 
-				g_optional := order_by_clause(v_new_node_id);
-				g_optional := row_limiting_clause(v_new_node_id);
+				g_optional := order_by_clause(v_first_subquery_id);
+				g_optional := row_limiting_clause(v_first_subquery_id);
 				return true;
 			end if;
 		else
