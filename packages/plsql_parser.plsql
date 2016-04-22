@@ -25,7 +25,7 @@ Parse Oracle SQL and PL/SQL statements.  Currently only SELECT statements are su
 == Example ==
 
 select lpad('   ', (level - 1) * 3, '   ') || type type, to_char(a.lexer_token.value) value, a.*
-from table(parser.parse('select * from dual', user)) a
+from table(plsql_parser.parse('select * from dual', user)) a
 start with parent_id is null
 connect by parent_id = prior id;
 
@@ -1252,6 +1252,16 @@ g_parse_tree_tokens         token_table;
 g_map_between_parse_and_ast number_table := number_table();
 g_reserved_words            string_table;
 
+
+
+
+
+
+
+
+
+
+
 -------------------------------------------------------------------------------
 --Helper functions
 -------------------------------------------------------------------------------
@@ -1274,6 +1284,7 @@ exception
 		return null;
 end push;
 
+
 procedure push(p_node_type varchar2, p_parent_id number) is
 	v_ignore_result number;
 begin
@@ -1284,7 +1295,7 @@ end push;
 procedure pop is
 begin
 	g_nodes.trim;
-end;
+end pop;
 
 
 function pop(p_node_index_before number default null, p_nodes_before node_table default null) return boolean is
@@ -1297,7 +1308,8 @@ begin
 		g_nodes := p_nodes_before;
 	end if;
 	return false;
-end;
+end pop;
+
 
 function current_value return clob is begin
 	begin
@@ -1305,7 +1317,8 @@ function current_value return clob is begin
 	exception when subscript_beyond_count then
 		return null;
 	end;
-end;
+end current_value;
+
 
 function current_type return varchar2 is begin
 	begin
@@ -1313,11 +1326,13 @@ function current_type return varchar2 is begin
 	exception when subscript_beyond_count then
 		return null;
 	end;
-end;
+end current_type;
+
 
 procedure increment(p_increment number default 1) is begin
 	g_ast_token_index := g_ast_token_index + p_increment;
-end;
+end increment;
+
 
 function match_terminal(p_value varchar2, p_parent_id in number) return boolean is
 begin
@@ -1331,13 +1346,15 @@ begin
 	end if;
 end match_terminal;
 
+
 function next_value(p_increment number default 1) return clob is begin
 	begin
 		return upper(g_ast_tokens(g_ast_token_index+p_increment).value);
 	exception when subscript_beyond_count then
 		return null;
 	end;
-end;
+end next_value;
+
 
 function previous_value(p_decrement number) return clob is begin
 	begin
@@ -1349,7 +1366,8 @@ function previous_value(p_decrement number) return clob is begin
 	exception when subscript_beyond_count then
 		null;
 	end;
-end;
+end previous_value;
+
 
 --Purpose: Determine which reserved words are truly reserved.
 --V$RESERVED_WORD.RESERVED is not reliable so we must use dynamic SQL and catch
@@ -1375,7 +1393,8 @@ begin
 	end loop;
 
 	return v_reserved_words;
-end;
+end get_reserved_words;
+
 
 --Purpose: Remove the SUBQUERY node, re-number descendents to fill in gap, return parent id. 
 --ASSUMPTIONS: 
@@ -1405,6 +1424,7 @@ begin
 
 	return v_subquery_node_id - 1;
 end remove_extra_subquery;
+
 
 --------------------------------------------------------------------------------
 --Purpose: Get the line up to a specific token.
@@ -1452,13 +1472,12 @@ begin
 	return substrb(cast(substr(v_line, 1, 4000) as varchar2), 1, 4000);
 end get_line_up_until_error;
 
+
 --Purpose: Raise exception with information about the error.
 --ASSUMES: All production rules are coded as functions on a line like: function%return boolean is%
 procedure parse_error(p_error_expected_items varchar2, p_line_number number) is
 	v_production_rule varchar2(4000);
 	v_parse_tree_token_index number;
-
-
 begin
 	--Find the production rule the error line occurred on.
 	select production_rule
@@ -1500,6 +1519,19 @@ exception when no_data_found then
 end parse_error;
 
 
+function a_word_but_not_reserved(node_type varchar2, p_parent_id number) return boolean is
+begin
+	push(node_type, p_parent_id);
+
+	if current_type = plsql_lexer.c_word and current_value not member of g_reserved_words then
+		increment;
+		return true;
+	else
+		return pop;
+	end if;
+end a_word_but_not_reserved;
+
+
 
 
 
@@ -1511,23 +1543,68 @@ end parse_error;
 -------------------------------------------------------------------------------
 --Production Rules.
 -------------------------------------------------------------------------------
-function order_by_clause(p_parent_id number) return boolean is
-begin
-	--TODO
-	return true;
-end order_by_clause;
 
-function row_limiting_clause(p_parent_id number) return boolean is
-begin
-	--TODO
-	return true;
-end row_limiting_clause;
+--Forward declarations so functions can be placed in alphabetical order.
+function containers_clause(p_parent_id number) return boolean;
+function flashback_query_clause(p_parent_id number) return boolean;
+function for_update_clause(p_parent_id number) return boolean;
+function group_by_clause(p_parent_id number) return boolean;
+function hierarchical_query_clause(p_parent_id number) return boolean;
+function hint(p_parent_id number) return boolean;
+function join_clause(p_parent_id number) return boolean;
+function model_clause(p_parent_id number) return boolean;
+function order_by_clause(p_parent_id number) return boolean;
+function plsql_declarations(p_parent_id number) return boolean;
+function query_block(p_parent_id number) return boolean;
+function query_table_expression(p_parent_id number) return boolean;
+function row_limiting_clause(p_parent_id number) return boolean;
+function select_list(p_parent_id number) return boolean;
+function select_statement(p_parent_id number) return boolean;
+function subquery(p_parent_id number) return boolean;
+function subquery_factoring_clause(p_parent_id number) return boolean;
+function table_reference(p_parent_id number) return boolean;
+function where_clause(p_parent_id number) return boolean;
+function with_clause(p_parent_id number) return boolean;
 
-function with_clause(p_parent_id number) return boolean is
+
+function containers_clause(p_parent_id number) return boolean is
+begin
+	push(C_CONTAINERS_CLAUSE, p_parent_id);
+
+	--TODO
+	return pop;
+end containers_clause;
+
+
+function flashback_query_clause(p_parent_id number) return boolean is
+begin
+	push(C_FLASHBACK_QUERY_CLAUSE, p_parent_id);
+
+	--TODO
+	return pop;
+end flashback_query_clause;
+
+
+function for_update_clause(p_parent_id number) return boolean is
 begin
 	--TODO
 	return true;
-end with_clause;
+end for_update_clause;
+
+
+function group_by_clause(p_parent_id number) return boolean is
+begin
+	--TODO
+	return true;
+end group_by_clause;
+
+
+function hierarchical_query_clause(p_parent_id number) return boolean is
+begin
+	--TODO
+	return true;
+end hierarchical_query_clause;
+
 
 --Hints are semi-abstract.
 --Comments are excluded from the AST tokens because they generally never matter
@@ -1561,109 +1638,6 @@ exception when subscript_beyond_count then
 	return pop;
 end hint;
 
-function select_list(p_parent_id number) return boolean is
-	v_new_node_id number;
-begin
-	v_new_node_id := push(C_SELECT_LIST, p_parent_id);
-
-	--TODO
-	if match_terminal('*', v_new_node_id) then
-		return true;
-	else
-		return pop;
-	end if;
-end select_list;
-
-function t_alias(p_parent_id number) return boolean is
-begin
-	push(C_T_ALIAS, p_parent_id);
-
-	if current_type = plsql_lexer.c_word and current_value not member of g_reserved_words then
-		increment;
-		return true;
-	else
-		return pop;
-	end if;
-end t_alias;
-
-function query_name(p_parent_id number) return boolean is
-begin
-	push(C_QUERY_NAME, p_parent_id);
-
-	if current_type = plsql_lexer.c_word and current_value not member of g_reserved_words then
-		increment;
-		return true;
-	else
-		return pop;
-	end if;
-end query_name;
-
-
-function containers_clause(p_parent_id number) return boolean is
-begin
-	push(C_CONTAINERS_CLAUSE, p_parent_id);
-
-	--TODO
-	return pop;
-end containers_clause;
-
-function query_table_expression(p_parent_id number) return boolean is
-	v_new_node_id number;
-begin
-	v_new_node_id := push(C_QUERY_TABLE_EXPRESSION, p_parent_id);
-
-	--TODO:
-	--lateral, table_collection_expression, schema., etc.
-
-	if query_name(v_new_node_id) then
-		return true;
-	end if;
-
-	return pop;
-end query_table_expression;
-
-function flashback_query_clause(p_parent_id number) return boolean is
-begin
-	push(C_FLASHBACK_QUERY_CLAUSE, p_parent_id);
-
-	--TODO
-	return pop;
-end flashback_query_clause;
-
-
-function table_reference(p_parent_id number) return boolean is
-	v_new_node_id number;
-begin
-	v_new_node_id := push(C_TABLE_REFERENCE, p_parent_id);
-
-	if containers_clause(v_new_node_id) then
-		g_optional := t_alias(v_new_node_id);
-	elsif next_value(1) = 'ONLY' and next_value(2) = '(' then
-		increment;
-		increment;
-		if query_table_expression(v_new_node_id) then
-			if match_terminal(')', v_new_node_id) then
---				g_optional := flashback_query_clause;
---				g_optional := pivot_clause or unpivot_clause or row_pattern_clause;
-				g_optional := t_alias(v_new_node_id);
-				return true;				
-			else
-				parse_error('")"', $$plsql_line);
-			end if;
-		else
-			parse_error('query_table_expression', $$plsql_line);
-			return pop;
-		end if;
-	elsif query_table_expression(v_new_node_id) then
-		g_optional := flashback_query_clause(v_new_node_id);
---		g_optional := pivot_clause or unpivot_clause or row_pattern_clause;
-		g_optional := t_alias(v_new_node_id);
-		return true;				
-	else
-		parse_error('ONLY(query_table_expression), query_table_expression, or containers_clause', $$plsql_line);
-		return pop;
-	end if;
-end table_reference;
 
 function join_clause(p_parent_id number) return boolean is
 begin
@@ -1671,29 +1645,31 @@ begin
 	return true;
 end join_clause;
 
-function where_clause(p_parent_id number) return boolean is
-begin
-	--TODO
-	return true;
-end where_clause;
-
-function hierarchical_query_clause(p_parent_id number) return boolean is
-begin
-	--TODO
-	return true;
-end hierarchical_query_clause;
-
-function group_by_clause(p_parent_id number) return boolean is
-begin
-	--TODO
-	return true;
-end group_by_clause;
 
 function model_clause(p_parent_id number) return boolean is
 begin
 	--TODO
 	return true;
 end model_clause;
+
+
+function order_by_clause(p_parent_id number) return boolean is
+begin
+	--TODO
+	return true;
+end order_by_clause;
+
+
+function plsql_declarations(p_parent_id number) return boolean is
+begin
+	--TODO: PL/SQL is not yet supported.
+	if current_value in ('PROCEDURE', 'FUNCTION') and next_value not in ('(', 'AS') then
+		raise_application_error(-20000, 'PL/SQL is not yet supported.');
+	else
+		return false;
+	end if;
+end plsql_declarations;
+
 
 function query_block(p_parent_id number) return boolean is
 	v_new_node_id number;
@@ -1756,6 +1732,59 @@ begin
 end query_block;
 
 
+function query_table_expression(p_parent_id number) return boolean is
+	v_new_node_id number;
+begin
+	v_new_node_id := push(C_QUERY_TABLE_EXPRESSION, p_parent_id);
+
+	--TODO:
+	--lateral, table_collection_expression, schema., etc.
+
+	if a_word_but_not_reserved(C_QUERY_NAME, v_new_node_id) then
+		return true;
+	end if;
+
+	return pop;
+end query_table_expression;
+
+
+function row_limiting_clause(p_parent_id number) return boolean is
+begin
+	--TODO
+	return true;
+end row_limiting_clause;
+
+
+--select::=
+--DIFFERENCE FROM MANUAL: "select_statement" instead of "select" to avoid collision with SELECT token.
+function select_statement(p_parent_id number) return boolean is
+	v_new_node_id number;
+begin
+	v_new_node_id := push(C_SELECT_STATEMENT, p_parent_id);
+
+	if subquery(v_new_node_id) then
+		g_optional := for_update_clause(v_new_node_id);
+		--DIFFERENCE FROM MANUAL: The semicolon is optional, not required.
+		g_optional := match_terminal(';', v_new_node_id);
+		return true;
+	else
+		return pop;
+	end if;
+end select_statement;
+
+
+function select_list(p_parent_id number) return boolean is
+	v_new_node_id number;
+begin
+	v_new_node_id := push(C_SELECT_LIST, p_parent_id);
+
+	--TODO
+	if match_terminal('*', v_new_node_id) then
+		return true;
+	else
+		return pop;
+	end if;
+end select_list;
 
 
 function subquery(p_parent_id number) return boolean is
@@ -1820,37 +1849,100 @@ begin
 			return pop;
 		end if;
 	end if;
-end;
+end subquery;
 
-function for_update_clause(p_parent_id number) return boolean is
+
+function subquery_factoring_clause(p_parent_id number) return boolean is
+	v_new_node_id number;
+begin
+	v_new_node_id := push(C_SUBQUERY_FACTORING_CLAUSE, p_parent_id);
+
+	if a_word_but_not_reserved(C_QUERY_NAME, v_new_node_id) then
+		--TODO
+		return false;
+	end if;
+
+	return pop;
+end subquery_factoring_clause;
+
+
+function table_reference(p_parent_id number) return boolean is
+	v_new_node_id number;
+begin
+	v_new_node_id := push(C_TABLE_REFERENCE, p_parent_id);
+
+	if containers_clause(v_new_node_id) then
+		g_optional := a_word_but_not_reserved(C_T_ALIAS, v_new_node_id);
+	elsif next_value(1) = 'ONLY' and next_value(2) = '(' then
+		increment;
+		increment;
+		if query_table_expression(v_new_node_id) then
+			if match_terminal(')', v_new_node_id) then
+--				g_optional := flashback_query_clause;
+--				g_optional := pivot_clause or unpivot_clause or row_pattern_clause;
+				g_optional := a_word_but_not_reserved(C_T_ALIAS, v_new_node_id);
+				return true;				
+			else
+				parse_error('")"', $$plsql_line);
+			end if;
+		else
+			parse_error('query_table_expression', $$plsql_line);
+			return pop;
+		end if;
+	elsif query_table_expression(v_new_node_id) then
+		g_optional := flashback_query_clause(v_new_node_id);
+--		g_optional := pivot_clause or unpivot_clause or row_pattern_clause;
+		g_optional := a_word_but_not_reserved(C_T_ALIAS, v_new_node_id);
+		return true;				
+	else
+		parse_error('ONLY(query_table_expression), query_table_expression, or containers_clause', $$plsql_line);
+		return pop;
+	end if;
+end table_reference;
+
+
+function where_clause(p_parent_id number) return boolean is
 begin
 	--TODO
 	return true;
-end for_update_clause;
+end where_clause;
 
 
---select::=
---DIFFERENCE FROM MANUAL: "select_statement" instead of "select" to avoid collision with SELECT token.
-function select_statement(p_parent_id number) return boolean is
+function with_clause(p_parent_id number) return boolean is
 	v_new_node_id number;
 begin
-	v_new_node_id := push(C_SELECT_STATEMENT, p_parent_id);
+	v_new_node_id := push(C_WITH_CLAUSE, p_parent_id);
 
-	if subquery(v_new_node_id) then
-		g_optional := for_update_clause(v_new_node_id);
-		--DIFFERENCE FROM MANUAL: The semicolon is optional, not required.
-		g_optional := match_terminal(';', v_new_node_id);
-		return true;
+	if match_terminal('WITH', v_new_node_id) then
+		--MANUAL DIFFERENCE  (sort of, it matches the "Note")
+		--"Note:
+		--You cannot specify only the WITH keyword. You must specify at least one of the clauses plsql_declarations or subquery_factoring_clause."
+		if not (plsql_declarations(v_new_node_id) or subquery_factoring_clause(v_new_node_id)) then
+			parse_error('plsql_declarations or subquery_factoring_clause', $$plsql_line);
+		else
+			return true;
+		end if;
 	else
 		return pop;
 	end if;
-end select_statement;
+end with_clause;
 
 
---------------------------------------------------------------------------------
-/*Purpose: Recursive descent parser for PL/SQL.
 
-This link has a good introduction to recursive descent parsers: https://www.cis.upenn.edu/~matuszek/General/recursive-descent-parsing.html)
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+--Main Function
+-------------------------------------------------------------------------------
+/*
+	Purpose: Recursive descent parser for PL/SQL.
+
+	This link has a good introduction to recursive descent parsers: https://www.cis.upenn.edu/~matuszek/General/recursive-descent-parsing.html)
 */
 function parse(
 		p_source        in clob,
