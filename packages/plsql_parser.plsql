@@ -57,9 +57,9 @@ create or replace type node_table is table of node;
 --Constants that are not auto-generated.
 
 --Not listed:
+C_ALIAS                          constant varchar2(100) := 'c_alias';
 C_QUERY_NAME                     constant varchar2(100) := 'query_name';
 C_T_ALIAS                        constant varchar2(100) := 't_alias';
-
 --"SELECT" collides with the "SELECT" terminal.
 C_SELECT_STATEMENT               constant varchar2(100) := 'select_statement';
 
@@ -1253,6 +1253,10 @@ g_map_between_parse_and_ast number_table := number_table();
 g_reserved_words            string_table;
 
 
+--Temporary constants for ambiguous intermediate nodes that must be resolved later.
+C_AMBIG_schema                   constant varchar2(100) := 'C_AMBIG_schema';
+C_AMBIG_qn_t_v_mv_alias          constant varchar2(100) := 'C_AMBIG_qn_t_v_mv_alias';
+
 
 
 
@@ -1356,6 +1360,15 @@ function next_value(p_increment number default 1) return clob is begin
 end next_value;
 
 
+function next_type(p_increment number default 1) return varchar2 is begin
+	begin
+		return g_ast_tokens(g_ast_token_index+p_increment).type;
+	exception when subscript_beyond_count then
+		return null;
+	end;
+end next_type;
+
+
 function previous_value(p_decrement number) return clob is begin
 	begin
 		if g_ast_token_index - p_decrement <= 0 then
@@ -1426,7 +1439,6 @@ begin
 end remove_extra_subquery;
 
 
---------------------------------------------------------------------------------
 --Purpose: Get the line up to a specific token.
 function get_line_up_until_error(p_tokens token_table, p_token_error_index number) return varchar2 is
 	v_newline_position number;
@@ -1474,7 +1486,7 @@ end get_line_up_until_error;
 
 
 --Purpose: Raise exception with information about the error.
---ASSUMES: All production rules are coded as functions on a line like: function%return boolean is%
+--ASSUMES: All production rules are coded as functions on a line like: function%
 procedure parse_error(p_error_expected_items varchar2, p_line_number number) is
 	v_production_rule varchar2(4000);
 	v_parse_tree_token_index number;
@@ -1495,7 +1507,7 @@ begin
 			and type = 'PACKAGE BODY'
 			and line <= p_line_number
 			--Assumes coding style.
-			and lower(text) like 'function%return boolean is%'
+			and lower(text) like 'function%'
 	) function_names
 	where last_when_1 = 1;
 
@@ -1519,7 +1531,7 @@ exception when no_data_found then
 end parse_error;
 
 
-function a_word_but_not_reserved(node_type varchar2, p_parent_id number) return boolean is
+function match_unreserved_word(node_type varchar2, p_parent_id number) return boolean is
 begin
 	push(node_type, p_parent_id);
 
@@ -1529,10 +1541,27 @@ begin
 	else
 		return pop;
 	end if;
-end a_word_but_not_reserved;
+end match_unreserved_word;
 
 
+function is_unreserved_word(p_increment in number) return boolean is
+begin
+	if next_type(p_increment) = plsql_lexer.c_word and next_value(p_increment) not member of g_reserved_words then
+		return true;
+	else
+		return false;
+	end if;
+end is_unreserved_word;
 
+
+--Purpose: Resolve nodes that are ambiguous offline or at the beginning of parsing.
+--For example, "select a.* ..." - the "a" can be multiple things, such as a
+--table alias, query name, table, view, or a materialized view.
+procedure resolve_ambiguous_nodes is
+begin
+	--TODO
+	null;
+end resolve_ambiguous_nodes;
 
 
 
@@ -1558,6 +1587,7 @@ function plsql_declarations(p_parent_id number) return boolean;
 function query_block(p_parent_id number) return boolean;
 function query_table_expression(p_parent_id number) return boolean;
 function row_limiting_clause(p_parent_id number) return boolean;
+function search_clause(p_parent_id number) return boolean;
 function select_list(p_parent_id number) return boolean;
 function select_statement(p_parent_id number) return boolean;
 function subquery(p_parent_id number) return boolean;
@@ -1574,6 +1604,24 @@ begin
 	--TODO
 	return pop;
 end containers_clause;
+
+
+function cycle_clause(p_parent_id number) return boolean is
+begin
+	push(C_CYCLE_CLAUSE, p_parent_id);
+
+	--TODO
+	return pop;
+end cycle_clause;
+
+
+function expr(p_parent_id number) return boolean is
+begin
+	push(C_EXPR, p_parent_id);
+
+	--TODO
+	return pop;
+end expr;
 
 
 function flashback_query_clause(p_parent_id number) return boolean is
@@ -1740,7 +1788,7 @@ begin
 	--TODO:
 	--lateral, table_collection_expression, schema., etc.
 
-	if a_word_but_not_reserved(C_QUERY_NAME, v_new_node_id) then
+	if match_unreserved_word(C_QUERY_NAME, v_new_node_id) then
 		return true;
 	end if;
 
@@ -1755,8 +1803,15 @@ begin
 end row_limiting_clause;
 
 
+function search_clause(p_parent_id number) return boolean is
+begin
+	--TODO
+	return true;
+end search_clause;
+
+
 --select::=
---DIFFERENCE FROM MANUAL: "select_statement" instead of "select" to avoid collision with SELECT token.
+--**DIFFERENCE FROM MANUAL**: "select_statement" instead of "select" to avoid collision with SELECT token.
 function select_statement(p_parent_id number) return boolean is
 	v_new_node_id number;
 begin
@@ -1764,7 +1819,7 @@ begin
 
 	if subquery(v_new_node_id) then
 		g_optional := for_update_clause(v_new_node_id);
-		--DIFFERENCE FROM MANUAL: The semicolon is optional, not required.
+		--**DIFFERENCE FROM MANUAL**: The semicolon is optional, not required.
 		g_optional := match_terminal(';', v_new_node_id);
 		return true;
 	else
@@ -1778,12 +1833,57 @@ function select_list(p_parent_id number) return boolean is
 begin
 	v_new_node_id := push(C_SELECT_LIST, p_parent_id);
 
-	--TODO
+	--**DIFFERENCE FROM MANUAL**:
+	--The top "t_alias.*" in the manual is incorrect.
+	--It implies a table alias can only be used once when it can be used many times.
+	--For example, this is a valid query: select a.*, b.* from dual a, dual b;
+	--Accordingly, the "t_alias.*" is moved a bit and is an alternative to query_name and schema.table|view|materialized_view.
 	if match_terminal('*', v_new_node_id) then
 		return true;
+	elsif is_unreserved_word(0) and next_type(1) = '.' and next_type(2) = '*' then
+		g_optional := match_unreserved_word(C_AMBIG_qn_t_v_mv_alias, v_new_node_id) and match_terminal('.', v_new_node_id) and match_terminal('*', v_new_node_id);
+	elsif is_unreserved_word(0) and next_type(1) = '.' and is_unreserved_word(2) and next_type(3) = '.' and next_type(4) = '*' then
+		g_optional := match_unreserved_word(C_AMBIG_schema, v_new_node_id) and match_terminal('.', v_new_node_id) and match_unreserved_word(C_AMBIG_qn_t_v_mv_alias, v_new_node_id) and match_terminal('.', v_new_node_id) and match_terminal('*', v_new_node_id);
+	elsif expr(v_new_node_id) then
+		if match_terminal('AS', v_new_node_id) then
+			if match_unreserved_word(C_ALIAS, v_new_node_id) then
+				null;
+			else
+				parse_error('c_alias', $$plsql_line);
+			end if;
+		else
+			g_optional := match_unreserved_word(C_ALIAS, v_new_node_id);
+		end if;
 	else
 		return pop;
 	end if;
+
+	loop
+		if match_terminal(',', v_new_node_id) then
+			if is_unreserved_word(0) and next_type(1) = '.' and next_type(2) = '*' then
+				g_optional := match_unreserved_word(C_AMBIG_qn_t_v_mv_alias, v_new_node_id) and match_terminal('.', v_new_node_id) and match_terminal('*', v_new_node_id);
+			elsif is_unreserved_word(0) and next_type(1) = '.' and is_unreserved_word(2) and next_type(3) = '.' and next_type(4) = '*' then
+				g_optional := match_unreserved_word(C_AMBIG_schema, v_new_node_id) and match_terminal('.', v_new_node_id) and match_unreserved_word(C_AMBIG_qn_t_v_mv_alias, v_new_node_id) and match_terminal('.', v_new_node_id) and match_terminal('*', v_new_node_id);
+			elsif expr(v_new_node_id) then
+				if match_terminal('AS', v_new_node_id) then
+					if match_unreserved_word(C_ALIAS, v_new_node_id) then
+						null;
+					else
+						parse_error('c_alias', $$plsql_line);
+					end if;
+				else
+					g_optional := match_unreserved_word(C_ALIAS, v_new_node_id);
+				end if;
+			else
+				parse_error('t_alias.*, query_name.*, schema.table|view|materialized view.*, or expr', $$plsql_line);
+			end if;
+		else
+			exit;
+		end if;
+	end loop;
+
+	return true;
+
 end select_list;
 
 
@@ -1857,9 +1957,42 @@ function subquery_factoring_clause(p_parent_id number) return boolean is
 begin
 	v_new_node_id := push(C_SUBQUERY_FACTORING_CLAUSE, p_parent_id);
 
-	if a_word_but_not_reserved(C_QUERY_NAME, v_new_node_id) then
-		--TODO
-		return false;
+	if match_unreserved_word(C_QUERY_NAME, v_new_node_id) then
+		if match_terminal('(', v_new_node_id) then
+			if match_unreserved_word(C_ALIAS, v_new_node_id) then
+				loop
+					if match_terminal('(', v_new_node_id) then
+						if match_unreserved_word(C_ALIAS, v_new_node_id) then
+							null;
+						else
+							parse_error('C_ALIAS', $$plsql_line);
+						end if;
+					else
+						exit;
+					end if;
+				end loop;
+			end if;
+		end if;
+
+		if match_terminal('AS', v_new_node_id) then
+			if match_terminal('(', v_new_node_id) then
+				if subquery(v_new_node_id) then
+					if match_terminal(')', v_new_node_id) then
+						g_optional := search_clause(v_new_node_id);
+						g_optional := cycle_clause(v_new_node_id);
+						return true;
+					else
+						parse_error('")"', $$plsql_line);
+					end if;
+				else
+					parse_error('subquery', $$plsql_line);
+				end if;
+			else
+				parse_error('"("', $$plsql_line);
+			end if;
+		else
+			parse_error('AS', $$plsql_line);
+		end if;
 	end if;
 
 	return pop;
@@ -1872,7 +2005,7 @@ begin
 	v_new_node_id := push(C_TABLE_REFERENCE, p_parent_id);
 
 	if containers_clause(v_new_node_id) then
-		g_optional := a_word_but_not_reserved(C_T_ALIAS, v_new_node_id);
+		g_optional := match_unreserved_word(C_T_ALIAS, v_new_node_id);
 	elsif next_value(1) = 'ONLY' and next_value(2) = '(' then
 		increment;
 		increment;
@@ -1880,7 +2013,7 @@ begin
 			if match_terminal(')', v_new_node_id) then
 --				g_optional := flashback_query_clause;
 --				g_optional := pivot_clause or unpivot_clause or row_pattern_clause;
-				g_optional := a_word_but_not_reserved(C_T_ALIAS, v_new_node_id);
+				g_optional := match_unreserved_word(C_T_ALIAS, v_new_node_id);
 				return true;				
 			else
 				parse_error('")"', $$plsql_line);
@@ -1892,8 +2025,8 @@ begin
 	elsif query_table_expression(v_new_node_id) then
 		g_optional := flashback_query_clause(v_new_node_id);
 --		g_optional := pivot_clause or unpivot_clause or row_pattern_clause;
-		g_optional := a_word_but_not_reserved(C_T_ALIAS, v_new_node_id);
-		return true;				
+		g_optional := match_unreserved_word(C_T_ALIAS, v_new_node_id);
+		return true;
 	else
 		parse_error('ONLY(query_table_expression), query_table_expression, or containers_clause', $$plsql_line);
 		return pop;
@@ -1914,7 +2047,7 @@ begin
 	v_new_node_id := push(C_WITH_CLAUSE, p_parent_id);
 
 	if match_terminal('WITH', v_new_node_id) then
-		--MANUAL DIFFERENCE  (sort of, it matches the "Note")
+		--**DIFFERENCE FROM MANUAL**  (sort of, it matches the "Note")
 		--"Note:
 		--You cannot specify only the WITH keyword. You must specify at least one of the clauses plsql_declarations or subquery_factoring_clause."
 		if not (plsql_declarations(v_new_node_id) or subquery_factoring_clause(v_new_node_id)) then
@@ -1952,6 +2085,9 @@ begin
 	--Check input.
 	--TODO
 
+	--Conditional compilation?
+	--TODO
+
 	--Reset values, tokenize input.
 	g_nodes := node_table();
 	g_ast_tokens := token_table();
@@ -1975,6 +2111,14 @@ begin
 
 	--Classify, create statement based on classification.
 	g_optional := select_statement(null);
+
+	--Throw error if any tokens remain.
+	if current_value is not null then
+		parse_error('<empty token>', $$plsql_line);
+	end if;
+
+	--Second-pass to resolve ambiguous nodes.
+	resolve_ambiguous_nodes;
 
 	return g_nodes;
 end parse;
