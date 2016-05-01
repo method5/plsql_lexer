@@ -57,8 +57,15 @@ create or replace type node_table is table of node;
 --Constants that are not auto-generated.
 
 --Not listed:
-C_ALIAS                          constant varchar2(100) := 'c_alias';
+C_ALIAS                          constant varchar2(100) := 'alias';
+C_COMPARISON_EXPR                constant varchar2(100) := 'comparison_expr';
+C_ELSE_EXPR                      constant varchar2(100) := 'else_expr';
+C_FUNCTION_EXPRESSION            constant varchar2(100) := 'function_expression';
+C_HOST_VARIABLE                  constant varchar2(100) := 'host_variable';
+C_INDICATOR_VARIABLE             constant varchar2(100) := 'indicator_variable';
 C_QUERY_NAME                     constant varchar2(100) := 'query_name';
+C_RETURN_EXPR                    constant varchar2(100) := 'return_expr';
+C_SCALAR_SUBQUERY_EXPRESSION     constant varchar2(100) := 'scalar_subquery_expression';
 C_T_ALIAS                        constant varchar2(100) := 't_alias';
 --"SELECT" collides with the "SELECT" terminal.
 C_SELECT_STATEMENT               constant varchar2(100) := 'select_statement';
@@ -1577,24 +1584,104 @@ end resolve_ambiguous_nodes;
 function containers_clause(p_parent_id number) return boolean;
 function flashback_query_clause(p_parent_id number) return boolean;
 function for_update_clause(p_parent_id number) return boolean;
+function function_expression_1(p_parent_id number) return boolean;
+function else_clause(p_parent_id number) return boolean;
+function else_expr(p_parent_id number) return boolean;
+function expr(p_parent_id number) return boolean;
 function group_by_clause(p_parent_id number) return boolean;
 function hierarchical_query_clause(p_parent_id number) return boolean;
 function hint(p_parent_id number) return boolean;
+function interval_expression(p_parent_id number) return boolean;
 function join_clause(p_parent_id number) return boolean;
 function model_clause(p_parent_id number) return boolean;
+function model_expression(p_parent_id number) return boolean;
+function object_access_expression_1(p_parent_id number) return boolean;
 function order_by_clause(p_parent_id number) return boolean;
+function placeholder_expression(p_parent_id number) return boolean;
 function plsql_declarations(p_parent_id number) return boolean;
 function query_block(p_parent_id number) return boolean;
 function query_table_expression(p_parent_id number) return boolean;
+function return_expr(p_parent_id number) return boolean;
 function row_limiting_clause(p_parent_id number) return boolean;
+function searched_case_expression(p_parent_id number) return boolean;
 function search_clause(p_parent_id number) return boolean;
 function select_list(p_parent_id number) return boolean;
 function select_statement(p_parent_id number) return boolean;
+function simple_case_expression(p_parent_id number) return boolean;
+function simple_expression_1(p_parent_id number) return boolean;
+function scalar_subquery_expression(p_parent_id number) return boolean;
 function subquery(p_parent_id number) return boolean;
 function subquery_factoring_clause(p_parent_id number) return boolean;
 function table_reference(p_parent_id number) return boolean;
+function type_constructor_expression_1(p_parent_id number) return boolean;
 function where_clause(p_parent_id number) return boolean;
 function with_clause(p_parent_id number) return boolean;
+
+
+--?????
+function ambiguous_expression(p_parent_id number) return boolean is
+	v_new_node_id number;
+begin
+--	v_new_node_id := push(C_AMBIGUOUS_EXPRESSION, p_parent_id);
+
+	--TODO
+	return pop;
+end ambiguous_expression;
+
+
+function case_expression(p_parent_id number) return boolean is
+	v_new_node_id number;
+begin
+	v_new_node_id := push(C_CASE_EXPRESSION, p_parent_id);
+
+	if match_terminal('CASE', v_new_node_id) then
+		if simple_case_expression(v_new_node_id) or searched_case_expression(v_new_node_id) then
+			g_optional := else_clause(v_new_node_id);
+			if match_terminal('END', v_new_node_id) then
+				return true;
+			else
+				parse_error('END', $$plsql_line);
+			end if;
+		else
+			parse_error('simple_case_expression or searched_case_expression', $$plsql_line);
+		end if;
+	else
+		return pop;
+	end if;
+end case_expression;
+
+
+function comparison_expr(p_parent_id number) return boolean is
+	v_new_node_id number;
+begin
+	v_new_node_id := push(C_COMPARISON_EXPR, p_parent_id);
+
+	if expr(v_new_node_id) then
+		return true;
+	else
+		return pop;
+	end if;
+end comparison_expr;
+
+
+function compound_expression(p_parent_id number) return boolean is
+	v_new_node_id number;
+begin
+	v_new_node_id := push(C_COMPOUND_EXPRESSION, p_parent_id);
+
+	--TODO
+	return pop;
+end compound_expression;
+
+
+function condition(p_parent_id number) return boolean is
+	v_new_node_id number;
+begin
+	v_new_node_id := push(C_CONDITION, p_parent_id);
+
+	--TODO
+	return pop;
+end condition;
 
 
 function containers_clause(p_parent_id number) return boolean is
@@ -1606,6 +1693,27 @@ begin
 end containers_clause;
 
 
+function cursor_expression(p_parent_id number) return boolean is
+	v_new_node_id number;
+begin
+	v_new_node_id := push(C_CURSOR_EXPRESSION, p_parent_id);
+
+	if 
+		match_terminal('CURSOR', v_new_node_id) and
+		match_terminal('(', v_new_node_id) and
+		subquery(v_new_node_id)
+	then
+		if match_terminal(')', v_new_node_id) then
+			return true;
+		else
+			parse_error('")"', $$plsql_line);
+		end if;
+	else
+		return pop;
+	end if;
+end cursor_expression;
+
+
 function cycle_clause(p_parent_id number) return boolean is
 begin
 	push(C_CYCLE_CLAUSE, p_parent_id);
@@ -1615,11 +1723,146 @@ begin
 end cycle_clause;
 
 
-function expr(p_parent_id number) return boolean is
+--Datetime expressions must be handled after the expressions are created,
+--and inserted before the current node.
+function datetime_expression(p_parent_id number) return boolean is
+	v_new_node_id number;
 begin
-	push(C_EXPR, p_parent_id);
+	v_new_node_id := push(C_DATETIME_EXPRESSION, p_parent_id);
 
 	--TODO
+	return pop;
+end datetime_expression;
+
+
+function else_clause(p_parent_id number) return boolean is
+	v_new_node_id number;
+begin
+	v_new_node_id := push(C_ELSE_CLAUSE, p_parent_id);
+
+	if match_terminal('ELSE', v_new_node_id) then
+		if else_expr(v_new_node_id) then
+			return true;
+		else
+			parse_error('else_expr', $$plsql_line);
+		end if;
+	else
+		return pop;
+	end if;
+end else_clause;
+
+
+function else_expr(p_parent_id number) return boolean is
+	v_new_node_id number;
+begin
+	v_new_node_id := push(C_ELSE_EXPR, p_parent_id);
+
+	if expr(v_new_node_id) then
+		return true;
+	else
+		return pop;
+	end if;
+end else_expr;
+
+
+--**MANUAL ERROR**: "variable_expression" should be named "placeholder_expression".
+function expr(p_parent_id number) return boolean is
+	v_new_node_id number;
+begin
+	v_new_node_id := push(C_EXPR, p_parent_id);
+
+	/*
+	--Ideally expressions would be this simple:
+	if
+		simple_expression or
+		compound_expression or
+		case_expression or
+		cursor_expression or
+		datetime_expression or
+		function_expression or
+		interval_expression or
+		JSON_object_access_expr or
+		model_expression or
+		object_access_expression or
+		scalar_subquery_expression or
+		type_constructor_expression or
+		placeholder_expression
+	then
+		return true
+	else
+		return pop;
+	end if;
+
+	But there's a lot of ambiguity so different expression types must be broken up
+	and much of it resolved later.
+
+*/
+
+	if
+		case_expression(v_new_node_id) or
+		cursor_expression(v_new_node_id) or
+		placeholder_expression(v_new_node_id) or
+		interval_expression(v_new_node_id) or
+		model_expression(v_new_node_id) or
+		scalar_subquery_expression(v_new_node_id) or
+		simple_expression_1(v_new_node_id) or
+		compound_expression(v_new_node_id) or
+		function_expression_1(v_new_node_id) or
+		object_access_expression_1(v_new_node_id) or
+		type_constructor_expression_1(v_new_node_id) or
+		--Could be simple_expression,
+		ambiguous_expression(v_new_node_id)
+	then
+		g_optional := datetime_expression(v_new_node_id);
+		return true;
+	else
+		return pop;
+	end if;
+/*
+Easy to detect:
+
+	case_expression
+	cursor_expression
+	placeholder_expression --Manual sometimes calls this variable_expression
+	scalar_subquery_expression
+	model_expression  --Difference from manual: analytic_function is a function expression
+	interval_expression (look for "(", then last ")" then DAY or YEAR
+?
+
+	simple_expression  --Problem: missing some literal, missing t_alias.
+		easy to detect
+		dot and words
+	compound_expression
+		starts with +, -, PRIOR
+		followed by *, /, +, -, ||
+		in parens, nothing following it
+	datetime_expression
+		expression followed by "at" ("local" or "time zone ...")
+
+Just dots and words
+
+	function_expression  --followed by "keep" or "over" or "within"
+	JSON_object_access_expr
+	object_access_expression   -- ( ... ) "."
+	type_constructor_expression  -- may start with "new"
+
+C_AMBIG_expression_objects
+
+simple_expression
+	query
+	schema
+	table
+	t_alias
+	view
+	materialized view
+	sequence
+function_expression
+JSON_object_access_expr
+object_access_expression
+type_constructor_expression
+
+*/
+
 	return pop;
 end expr;
 
@@ -1640,6 +1883,19 @@ begin
 end for_update_clause;
 
 
+--This function only covers the easy parts of FUNCTION_EXPRESSION, anything
+--that has a trailing "OVER (", "KEEP (", or "WITHIN GROUP (".  Other function
+--expressions are ambiguous and must be handled in post-processing.
+function function_expression_1(p_parent_id number) return boolean is
+	v_new_node_id number;
+begin
+	v_new_node_id := push(C_FUNCTION_EXPRESSION, p_parent_id);
+
+	--TODO
+	return pop;
+end function_expression_1;
+
+
 function group_by_clause(p_parent_id number) return boolean is
 begin
 	--TODO
@@ -1652,6 +1908,21 @@ begin
 	--TODO
 	return true;
 end hierarchical_query_clause;
+
+
+--Bind variables can be either a non-reserved word or a postive integer (digits only).
+function host_variable(p_parent_id number) return boolean is
+	v_new_node_id number;
+begin
+	v_new_node_id := push(C_HOST_VARIABLE, p_parent_id);
+
+	if is_unreserved_word(0) or current_type = plsql_lexer.C_NUMERIC then
+		increment;
+		return true;
+	else
+		return pop;
+	end if;
+end host_variable;
 
 
 --Hints are semi-abstract.
@@ -1687,11 +1958,36 @@ exception when subscript_beyond_count then
 end hint;
 
 
+--Bind variables can be either a non-reserved word or a postive integer (digits only).
+function indicator_variable(p_parent_id number) return boolean is
+	v_new_node_id number;
+begin
+	v_new_node_id := push(C_INDICATOR_VARIABLE, p_parent_id);
+
+	if is_unreserved_word(0) or current_type = plsql_lexer.C_NUMERIC then
+		increment;
+		return true;
+	else
+		return pop;
+	end if;
+end indicator_variable;
+
+
+function interval_expression(p_parent_id number) return boolean is
+begin
+	push(C_INTERVAL_EXPRESSION, p_parent_id);
+
+	--TODO
+	return pop;
+end interval_expression;
+
+
 function join_clause(p_parent_id number) return boolean is
 begin
 	--TODO
 	return true;
 end join_clause;
+
 
 
 function model_clause(p_parent_id number) return boolean is
@@ -1701,11 +1997,69 @@ begin
 end model_clause;
 
 
+function model_expression(p_parent_id number) return boolean is
+	v_new_node_id number;
+begin
+	v_new_node_id := push(C_MODEL_EXPRESSION, p_parent_id);
+
+	--TODO
+	return pop;
+end model_expression;
+
+
+--This function only covers the easy parts of OBJECT_ACCESS_EXPRESSION, anything
+--that has a "( ... ) . ".  Other object access  expressions are ambiguous and
+--must be handled in post-processing.
+function object_access_expression_1(p_parent_id number) return boolean is
+	v_new_node_id number;
+begin
+	v_new_node_id := push(C_OBJECT_ACCESS_EXPRESSION, p_parent_id);
+
+	--TODO
+	return pop;
+end object_access_expression_1;
+
+
 function order_by_clause(p_parent_id number) return boolean is
 begin
 	--TODO
 	return true;
 end order_by_clause;
+
+
+function placeholder_expression(p_parent_id number) return boolean is
+	v_new_node_id number;
+begin
+	v_new_node_id := push(C_PLACEHOLDER_EXPRESSION, p_parent_id);
+
+	if match_terminal(':', v_new_node_id) then
+		if host_variable(v_new_node_id) then
+			if match_terminal('INDICATOR', v_new_node_id) then
+				if match_terminal(':', v_new_node_id) then
+					if indicator_variable(v_new_node_id) then
+						return true;
+					else
+						parse_error('indicator_variable', $$plsql_line);
+					end if;
+				else
+					parse_error('":"', $$plsql_line);
+				end if;
+			elsif match_terminal(':', v_new_node_id) then
+				if indicator_variable(v_new_node_id) then
+					return true;
+				else
+					parse_error('indicator_variable', $$plsql_line);
+				end if;
+			else
+				return true;
+			end if;
+		else
+			parse_error('host_variable', $$plsql_line);
+		end if;
+	else
+		return pop;
+	end if;
+end placeholder_expression;
 
 
 function plsql_declarations(p_parent_id number) return boolean is
@@ -1796,11 +2150,81 @@ begin
 end query_table_expression;
 
 
+function return_expr(p_parent_id number) return boolean is
+	v_new_node_id number;
+begin
+	v_new_node_id := push(C_RETURN_EXPR, p_parent_id);
+
+	if expr(v_new_node_id) then
+		return true;
+	else
+		return pop;
+	end if;
+end return_expr;
+
+
 function row_limiting_clause(p_parent_id number) return boolean is
 begin
 	--TODO
 	return true;
 end row_limiting_clause;
+
+
+function scalar_subquery_expression(p_parent_id number) return boolean is
+	v_new_node_id number;
+begin
+	v_new_node_id := push(C_SCALAR_SUBQUERY_EXPRESSION, p_parent_id);
+
+	--TODO
+	return pop;
+end scalar_subquery_expression;
+
+
+function searched_case_expression(p_parent_id number) return boolean is
+	v_new_node_id number;
+begin
+	v_new_node_id := push(C_SEARCHED_CASE_EXPRESSION, p_parent_id);
+
+	if match_terminal('WHEN', v_new_node_id) then
+		if condition(v_new_node_id) then
+			if match_terminal('THEN', v_new_node_id) then
+				if return_expr(v_new_node_id) then
+
+					loop
+						if match_terminal('WHEN', v_new_node_id) then
+							if condition(v_new_node_id) then
+								if match_terminal('THEN', v_new_node_id) then
+									if return_expr(v_new_node_id) then
+										null;
+									else
+										parse_error('return_expr', $$plsql_line);
+									end if;
+								else
+									parse_error('THEN', $$plsql_line);
+								end if;
+							else
+								parse_error('comparison_expr', $$plsql_line);
+							end if;
+						else
+							exit;
+						end if;
+					end loop;
+					return true;
+
+				else
+					parse_error('return_expr', $$plsql_line);
+				end if;
+			else
+				parse_error('THEN', $$plsql_line);
+			end if;
+		else
+			parse_error('comparison_expr', $$plsql_line);
+		end if;
+	else
+		return pop;
+	end if;
+
+end searched_case_expression;
 
 
 function search_clause(p_parent_id number) return boolean is
@@ -1885,6 +2309,69 @@ begin
 	return true;
 
 end select_list;
+
+
+function simple_case_expression(p_parent_id number) return boolean is
+	v_new_node_id number;
+begin
+	v_new_node_id := push(C_SIMPLE_CASE_EXPRESSION, p_parent_id);
+
+	if expr(v_new_node_id) then
+		if match_terminal('WHEN', v_new_node_id) then
+			if comparison_expr(v_new_node_id) then
+				if match_terminal('THEN', v_new_node_id) then
+					if return_expr(v_new_node_id) then
+
+						loop
+							if match_terminal('WHEN', v_new_node_id) then
+								if comparison_expr(v_new_node_id) then
+									if match_terminal('THEN', v_new_node_id) then
+										if return_expr(v_new_node_id) then
+											null;
+										else
+											parse_error('return_expr', $$plsql_line);
+										end if;
+									else
+										parse_error('THEN', $$plsql_line);
+									end if;
+								else
+									parse_error('comparison_expr', $$plsql_line);
+								end if;
+							else
+								exit;
+							end if;
+						end loop;
+						return true;
+
+					else
+						parse_error('return_expr', $$plsql_line);
+					end if;
+				else
+					parse_error('THEN', $$plsql_line);
+				end if;
+			else
+				parse_error('comparison_expr', $$plsql_line);
+			end if;
+		else
+			parse_error('WHEN', $$plsql_line);
+		end if;
+	else
+		return pop;
+	end if;
+end simple_case_expression;
+
+
+--This function only covers the easy parts of SIMPLE_EXPRESSION, basically everything
+--except for query_name, schema, table, view, materialized view.  Those are
+--ambiguous and must be handled in post-processing.
+function simple_expression_1(p_parent_id number) return boolean is
+	v_new_node_id number;
+begin
+	v_new_node_id := push(C_SIMPLE_EXPRESSION, p_parent_id);
+
+	--TODO
+	return pop;
+end simple_expression_1;
 
 
 function subquery(p_parent_id number) return boolean is
@@ -2032,6 +2519,19 @@ begin
 		return pop;
 	end if;
 end table_reference;
+
+
+--This function only covers the easy parts of TYPE_CONSTRUCTOR_EXPRESSION, anything
+--that has a "new WORD ( ...".  Other type constructor expressions are ambiguous and
+--must be handled in post-processing.
+function type_constructor_expression_1(p_parent_id number) return boolean is
+	v_new_node_id number;
+begin
+	v_new_node_id := push(C_TYPE_CONSTRUCTOR_EXPRESSION, p_parent_id);
+
+	--TODO
+	return pop;
+end type_constructor_expression_1;
 
 
 function where_clause(p_parent_id number) return boolean is
