@@ -21,6 +21,11 @@ g_parse_tree_tokens         token_table;
 g_map_between_parse_and_ast number_table := number_table();
 g_reserved_words            string_table;
 
+type parse_context is record
+(
+	new_node_id number,
+	ast_token_index_before number
+);
 
 --Temporary constants for ambiguous intermediate nodes that must be resolved later.
 C_AMBIG_schema                   constant varchar2(100) := 'C_AMBIG_schema';
@@ -38,48 +43,31 @@ C_AMBIG_qn_t_v_mv_alias          constant varchar2(100) := 'C_AMBIG_qn_t_v_mv_al
 -------------------------------------------------------------------------------
 --Helper functions
 -------------------------------------------------------------------------------
-/*
-procedure push(p_node node) is
-begin
-	g_nodes.extend;
-	g_nodes(g_nodes.count) := p_node;
-end;
-*/
 
 --Puprose: Create a new node and return the node ID.
-function push(p_node_type varchar2, p_parent_id number) return number is
+function push(p_node_type in varchar2, p_parent_id in number) return parse_context is
+	v_parse_context parse_context;
 begin
 	g_nodes.extend;
 	g_nodes(g_nodes.count) := node(id => g_nodes.count, type => p_node_type, parent_id => p_parent_id, lexer_token => g_ast_tokens(g_ast_token_index));
-	return g_nodes.count;
+	v_parse_context.new_node_id := g_nodes.count;
+	v_parse_context.ast_token_index_before := g_ast_token_index;
+	return v_parse_context;
 exception
 	when subscript_beyond_count then
-		return null;
+		v_parse_context.new_node_id := null;
+		v_parse_context.ast_token_index_before := g_ast_token_index;
+		return v_parse_context;
 end push;
 
 
-procedure push(p_node_type varchar2, p_parent_id number) is
-	v_ignore_result number;
+function pop(p_parse_context parse_context) return boolean is
 begin
-	v_ignore_result := push(p_node_type, p_parent_id);
-end push;
-
-
-procedure pop is
-begin
-	g_nodes.trim;
-end pop;
-
-
-function pop(p_node_index_before number default null, p_nodes_before node_table default null) return boolean is
-begin
-	if p_node_index_before is null then
+	for i in 1 .. g_nodes.count - (nvl(p_parse_context.new_node_id, g_nodes.count) - 1) loop
 		g_nodes.trim;
-	else
-		--TODO: Is this correct?
-		--g_node_index := p_node_index_before;
-		g_nodes := p_nodes_before;
-	end if;
+	end loop;
+
+	g_ast_token_index := p_parse_context.ast_token_index_before;
 	return false;
 end pop;
 
@@ -108,14 +96,15 @@ end increment;
 
 
 function match_terminal(p_value varchar2, p_parent_id in number) return boolean is
+	v_parse_context parse_context;
 begin
-	push(p_value, p_parent_id);
+	v_parse_context := push(p_value, p_parent_id);
 
 	if current_value = p_value then
 		increment;
 		return true;
 	else
-		return pop;
+		return pop(v_parse_context);
 	end if;
 end match_terminal;
 
@@ -301,14 +290,15 @@ end parse_error;
 
 
 function match_unreserved_word(node_type varchar2, p_parent_id number) return boolean is
+	v_parse_context parse_context;
 begin
-	push(node_type, p_parent_id);
+	v_parse_context := push(node_type, p_parent_id);
 
 	if current_type = plsql_lexer.c_word and current_value not member of g_reserved_words then
 		increment;
 		return true;
 	else
-		return pop;
+		return pop(v_parse_context);
 	end if;
 end match_unreserved_word;
 
@@ -382,24 +372,24 @@ function with_clause(p_parent_id number) return boolean;
 
 --?????
 function ambiguous_expression(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_parse_context parse_context;
 begin
---	v_new_node_id := push(C_AMBIGUOUS_EXPRESSION, p_parent_id);
+--	v_parse_context.new_node_id := v_parse_context := push(C_AMBIGUOUS_EXPRESSION, p_parent_id);
 
 	--TODO
-	return pop;
+	return pop(v_parse_context);
 end ambiguous_expression;
 
 
 function case_expression(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_parse_context parse_context;
 begin
-	v_new_node_id := push(C_CASE_EXPRESSION, p_parent_id);
+	v_parse_context := push(C_CASE_EXPRESSION, p_parent_id);
 
-	if match_terminal('CASE', v_new_node_id) then
-		if simple_case_expression(v_new_node_id) or searched_case_expression(v_new_node_id) then
-			g_optional := else_clause(v_new_node_id);
-			if match_terminal('END', v_new_node_id) then
+	if match_terminal('CASE', v_parse_context.new_node_id) then
+		if simple_case_expression(v_parse_context.new_node_id) or searched_case_expression(v_parse_context.new_node_id) then
+			g_optional := else_clause(v_parse_context.new_node_id);
+			if match_terminal('END', v_parse_context.new_node_id) then
 				return true;
 			else
 				parse_error('END', $$plsql_line);
@@ -408,130 +398,152 @@ begin
 			parse_error('simple_case_expression or searched_case_expression', $$plsql_line);
 		end if;
 	else
-		return pop;
+		return pop(v_parse_context);
 	end if;
 end case_expression;
 
 
 function comparison_expr(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_parse_context parse_context;
 begin
-	v_new_node_id := push(C_COMPARISON_EXPR, p_parent_id);
+	v_parse_context := push(C_COMPARISON_EXPR, p_parent_id);
 
-	if expr(v_new_node_id) then
+	if expr(v_parse_context.new_node_id) then
 		return true;
 	else
-		return pop;
+		return pop(v_parse_context);
 	end if;
 end comparison_expr;
 
 
-function compound_expression(p_parent_id number) return boolean is
-	v_new_node_id number;
+--This function only covers the easy parts of COMPOUND_EXPRESSION, anything
+--that starts with (, +, -, or PRIOR.  Other forms must be handled later.
+function compound_expression_1(p_parent_id number) return boolean is
+	v_parse_context parse_context;
 begin
-	v_new_node_id := push(C_COMPOUND_EXPRESSION, p_parent_id);
+	v_parse_context := push(C_COMPOUND_EXPRESSION, p_parent_id);
 
-	--TODO
-	return pop;
-end compound_expression;
+	--ASSUMPTION: All other expressions that start with "(" were checked before.
+	if match_terminal('(', v_parse_context.new_node_id) then
+		if expr(v_parse_context.new_node_id) then
+			if match_terminal(')', v_parse_context.new_node_id) then
+				return true;
+			else
+				parse_error('")"', $$plsql_line);
+			end if;
+		else
+			parse_error('expr', $$plsql_line);
+		end if;
+	elsif match_terminal('+', v_parse_context.new_node_id) or match_terminal('-', v_parse_context.new_node_id) or match_terminal('PRIOR', v_parse_context.new_node_id) then
+		if expr(v_parse_context.new_node_id) then
+			return true;
+		else
+			parse_error('expr', $$plsql_line);
+		end if;
+	else
+		return pop(v_parse_context);
+	end if;
+end compound_expression_1;
 
 
 function condition(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_parse_context parse_context;
 begin
-	v_new_node_id := push(C_CONDITION, p_parent_id);
+	v_parse_context := push(C_CONDITION, p_parent_id);
 
 	--TODO
-	return pop;
+	return pop(v_parse_context);
 end condition;
 
 
 function containers_clause(p_parent_id number) return boolean is
+	v_parse_context parse_context;
 begin
-	push(C_CONTAINERS_CLAUSE, p_parent_id);
+	v_parse_context := push(C_CONTAINERS_CLAUSE, p_parent_id);
 
 	--TODO
-	return pop;
+	return pop(v_parse_context);
 end containers_clause;
 
 
 function cursor_expression(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_parse_context parse_context;
 begin
-	v_new_node_id := push(C_CURSOR_EXPRESSION, p_parent_id);
+	v_parse_context := push(C_CURSOR_EXPRESSION, p_parent_id);
 
 	if 
-		match_terminal('CURSOR', v_new_node_id) and
-		match_terminal('(', v_new_node_id) and
-		subquery(v_new_node_id)
+		match_terminal('CURSOR', v_parse_context.new_node_id) and
+		match_terminal('(', v_parse_context.new_node_id) and
+		subquery(v_parse_context.new_node_id)
 	then
-		if match_terminal(')', v_new_node_id) then
+		if match_terminal(')', v_parse_context.new_node_id) then
 			return true;
 		else
 			parse_error('")"', $$plsql_line);
 		end if;
 	else
-		return pop;
+		return pop(v_parse_context);
 	end if;
 end cursor_expression;
 
 
 function cycle_clause(p_parent_id number) return boolean is
+	v_parse_context parse_context;
 begin
-	push(C_CYCLE_CLAUSE, p_parent_id);
+	v_parse_context := push(C_CYCLE_CLAUSE, p_parent_id);
 
 	--TODO
-	return pop;
+	return pop(v_parse_context);
 end cycle_clause;
 
 
 --Datetime expressions must be handled after the expressions are created,
 --and inserted before the current node.
 function datetime_expression(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_parse_context parse_context;
 begin
-	v_new_node_id := push(C_DATETIME_EXPRESSION, p_parent_id);
+	v_parse_context := push(C_DATETIME_EXPRESSION, p_parent_id);
 
 	--TODO
-	return pop;
+	return pop(v_parse_context);
 end datetime_expression;
 
 
 function else_clause(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_parse_context parse_context;
 begin
-	v_new_node_id := push(C_ELSE_CLAUSE, p_parent_id);
+	v_parse_context := push(C_ELSE_CLAUSE, p_parent_id);
 
-	if match_terminal('ELSE', v_new_node_id) then
-		if else_expr(v_new_node_id) then
+	if match_terminal('ELSE', v_parse_context.new_node_id) then
+		if else_expr(v_parse_context.new_node_id) then
 			return true;
 		else
 			parse_error('else_expr', $$plsql_line);
 		end if;
 	else
-		return pop;
+		return pop(v_parse_context);
 	end if;
 end else_clause;
 
 
 function else_expr(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_parse_context parse_context;
 begin
-	v_new_node_id := push(C_ELSE_EXPR, p_parent_id);
+	v_parse_context := push(C_ELSE_EXPR, p_parent_id);
 
-	if expr(v_new_node_id) then
+	if expr(v_parse_context.new_node_id) then
 		return true;
 	else
-		return pop;
+		return pop(v_parse_context);
 	end if;
 end else_expr;
 
 
 --**MANUAL ERROR**: "variable_expression" should be named "placeholder_expression".
 function expr(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_parse_context parse_context;
 begin
-	v_new_node_id := push(C_EXPR, p_parent_id);
+	v_parse_context := push(C_EXPR, p_parent_id);
 
 	/*
 	--Ideally expressions would be this simple:
@@ -552,7 +564,7 @@ begin
 	then
 		return true
 	else
-		return pop;
+		return pop(v_parse_context);
 	end if;
 
 	But there's a lot of ambiguity so different expression types must be broken up
@@ -561,24 +573,24 @@ begin
 */
 
 	if
-		case_expression(v_new_node_id) or
-		cursor_expression(v_new_node_id) or
-		placeholder_expression(v_new_node_id) or
-		interval_expression(v_new_node_id) or
-		model_expression(v_new_node_id) or
-		scalar_subquery_expression(v_new_node_id) or
-		simple_expression_1(v_new_node_id) or
-		compound_expression(v_new_node_id) or
-		function_expression_1(v_new_node_id) or
-		object_access_expression_1(v_new_node_id) or
-		type_constructor_expression_1(v_new_node_id) or
+		case_expression(v_parse_context.new_node_id) or
+		cursor_expression(v_parse_context.new_node_id) or
+		placeholder_expression(v_parse_context.new_node_id) or
+		interval_expression(v_parse_context.new_node_id) or
+		model_expression(v_parse_context.new_node_id) or
+		scalar_subquery_expression(v_parse_context.new_node_id) or
+		simple_expression_1(v_parse_context.new_node_id) or
+		object_access_expression_1(v_parse_context.new_node_id) or
+		compound_expression_1(v_parse_context.new_node_id) or
+		function_expression_1(v_parse_context.new_node_id) or
+		type_constructor_expression_1(v_parse_context.new_node_id) or
 		--Could be simple_expression,
-		ambiguous_expression(v_new_node_id)
+		ambiguous_expression(v_parse_context.new_node_id)
 	then
-		g_optional := datetime_expression(v_new_node_id);
+		g_optional := datetime_expression(v_parse_context.new_node_id);
 		return true;
 	else
-		return pop;
+		return pop(v_parse_context);
 	end if;
 /*
 Easy to detect:
@@ -625,16 +637,17 @@ type_constructor_expression
 
 */
 
-	return pop;
+	return pop(v_parse_context);
 end expr;
 
 
 function flashback_query_clause(p_parent_id number) return boolean is
+	v_parse_context parse_context;
 begin
-	push(C_FLASHBACK_QUERY_CLAUSE, p_parent_id);
+	v_parse_context := push(C_FLASHBACK_QUERY_CLAUSE, p_parent_id);
 
 	--TODO
-	return pop;
+	return pop(v_parse_context);
 end flashback_query_clause;
 
 
@@ -649,12 +662,12 @@ end for_update_clause;
 --that has a trailing "OVER (", "KEEP (", or "WITHIN GROUP (".  Other function
 --expressions are ambiguous and must be handled in post-processing.
 function function_expression_1(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_parse_context parse_context;
 begin
-	v_new_node_id := push(C_FUNCTION_EXPRESSION, p_parent_id);
+	v_parse_context := push(C_FUNCTION_EXPRESSION, p_parent_id);
 
 	--TODO
-	return pop;
+	return pop(v_parse_context);
 end function_expression_1;
 
 
@@ -674,15 +687,15 @@ end hierarchical_query_clause;
 
 --Bind variables can be either a non-reserved word or a postive integer (digits only).
 function host_variable(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_parse_context parse_context;
 begin
-	v_new_node_id := push(C_HOST_VARIABLE, p_parent_id);
+	v_parse_context := push(C_HOST_VARIABLE, p_parent_id);
 
 	if is_unreserved_word(0) or current_type = plsql_lexer.C_NUMERIC then
 		increment;
 		return true;
 	else
-		return pop;
+		return pop(v_parse_context);
 	end if;
 end host_variable;
 
@@ -694,8 +707,9 @@ end host_variable;
 --This means that occasionally we need to search through the parse tokens.
 function hint(p_parent_id number) return boolean is
 	v_parse_token_index number;
+	v_parse_context parse_context;
 begin
-	push(C_HINT, p_parent_id);
+	v_parse_context := push(C_HINT, p_parent_id);
 
 	--Use "-1" to start at previous node and then iterate forward.
 	v_parse_token_index := g_map_between_parse_and_ast(g_ast_token_index-1);
@@ -705,7 +719,7 @@ begin
 	for i in v_parse_token_index+1 .. g_parse_tree_tokens.count loop
 		--False if an abstract token is found
 		if g_parse_tree_tokens(i).type not in (plsql_lexer.c_whitespace, plsql_lexer.c_comment, plsql_lexer.c_eof) then
-			return pop;
+			return pop(v_parse_context);
 		--True if it's a hint.
 		elsif g_parse_tree_tokens(i).type = plsql_lexer.c_comment and substr(g_parse_tree_tokens(i).value, 1, 3) in ('--+', '/*+') then
 			--Replace node that points to abstract token with node that points to comment.
@@ -714,33 +728,34 @@ begin
 		end if;
 	end loop;
 
-	return pop;
+	return pop(v_parse_context);
 exception when subscript_beyond_count then
-	return pop;
+	return pop(v_parse_context);
 end hint;
 
 
 --Bind variables can be either a non-reserved word or a postive integer (digits only).
 function indicator_variable(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_parse_context parse_context;
 begin
-	v_new_node_id := push(C_INDICATOR_VARIABLE, p_parent_id);
+	v_parse_context := push(C_INDICATOR_VARIABLE, p_parent_id);
 
 	if is_unreserved_word(0) or current_type = plsql_lexer.C_NUMERIC then
 		increment;
 		return true;
 	else
-		return pop;
+		return pop(v_parse_context);
 	end if;
 end indicator_variable;
 
 
 function interval_expression(p_parent_id number) return boolean is
+	v_parse_context parse_context;
 begin
-	push(C_INTERVAL_EXPRESSION, p_parent_id);
+	v_parse_context := push(C_INTERVAL_EXPRESSION, p_parent_id);
 
 	--TODO
-	return pop;
+	return pop(v_parse_context);
 end interval_expression;
 
 
@@ -760,12 +775,12 @@ end model_clause;
 
 
 function model_expression(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_parse_context parse_context;
 begin
-	v_new_node_id := push(C_MODEL_EXPRESSION, p_parent_id);
+	v_parse_context := push(C_MODEL_EXPRESSION, p_parent_id);
 
 	--TODO
-	return pop;
+	return pop(v_parse_context);
 end model_expression;
 
 
@@ -773,12 +788,12 @@ end model_expression;
 --that has a "( ... ) . ".  Other object access  expressions are ambiguous and
 --must be handled in post-processing.
 function object_access_expression_1(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_parse_context parse_context;
 begin
-	v_new_node_id := push(C_OBJECT_ACCESS_EXPRESSION, p_parent_id);
+	v_parse_context := push(C_OBJECT_ACCESS_EXPRESSION, p_parent_id);
 
 	--TODO
-	return pop;
+	return pop(v_parse_context);
 end object_access_expression_1;
 
 
@@ -790,15 +805,15 @@ end order_by_clause;
 
 
 function placeholder_expression(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_parse_context parse_context;
 begin
-	v_new_node_id := push(C_PLACEHOLDER_EXPRESSION, p_parent_id);
+	v_parse_context := push(C_PLACEHOLDER_EXPRESSION, p_parent_id);
 
-	if match_terminal(':', v_new_node_id) then
-		if host_variable(v_new_node_id) then
-			if match_terminal('INDICATOR', v_new_node_id) then
-				if match_terminal(':', v_new_node_id) then
-					if indicator_variable(v_new_node_id) then
+	if match_terminal(':', v_parse_context.new_node_id) then
+		if host_variable(v_parse_context.new_node_id) then
+			if match_terminal('INDICATOR', v_parse_context.new_node_id) then
+				if match_terminal(':', v_parse_context.new_node_id) then
+					if indicator_variable(v_parse_context.new_node_id) then
 						return true;
 					else
 						parse_error('indicator_variable', $$plsql_line);
@@ -806,8 +821,8 @@ begin
 				else
 					parse_error('":"', $$plsql_line);
 				end if;
-			elsif match_terminal(':', v_new_node_id) then
-				if indicator_variable(v_new_node_id) then
+			elsif match_terminal(':', v_parse_context.new_node_id) then
+				if indicator_variable(v_parse_context.new_node_id) then
 					return true;
 				else
 					parse_error('indicator_variable', $$plsql_line);
@@ -819,7 +834,7 @@ begin
 			parse_error('host_variable', $$plsql_line);
 		end if;
 	else
-		return pop;
+		return pop(v_parse_context);
 	end if;
 end placeholder_expression;
 
@@ -836,35 +851,35 @@ end plsql_declarations;
 
 
 function query_block(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_parse_context parse_context;
 begin
-	v_new_node_id := push(C_QUERY_BLOCK, p_parent_id);
-	g_optional := with_clause(v_new_node_id);
-	if match_terminal('SELECT', v_new_node_id) then
-		g_optional := hint(v_new_node_id);
-		g_optional := match_terminal('DISTINCT', v_new_node_id) or match_terminal('UNIQUE', v_new_node_id) or match_terminal('ALL', v_new_node_id);
-		if select_list(v_new_node_id) then
-			if match_terminal('FROM', v_new_node_id) then
+	v_parse_context := push(C_QUERY_BLOCK, p_parent_id);
+	g_optional := with_clause(v_parse_context.new_node_id);
+	if match_terminal('SELECT', v_parse_context.new_node_id) then
+		g_optional := hint(v_parse_context.new_node_id);
+		g_optional := match_terminal('DISTINCT', v_parse_context.new_node_id) or match_terminal('UNIQUE', v_parse_context.new_node_id) or match_terminal('ALL', v_parse_context.new_node_id);
+		if select_list(v_parse_context.new_node_id) then
+			if match_terminal('FROM', v_parse_context.new_node_id) then
 				if
 				(
-					table_reference(v_new_node_id) or
-					join_clause(v_new_node_id) or
+					table_reference(v_parse_context.new_node_id) or
+					join_clause(v_parse_context.new_node_id) or
 					(
-						match_terminal('(', v_new_node_id) and
-						join_clause(v_new_node_id) and
-						match_terminal(')', v_new_node_id)
+						match_terminal('(', v_parse_context.new_node_id) and
+						join_clause(v_parse_context.new_node_id) and
+						match_terminal(')', v_parse_context.new_node_id)
 					)
 				) then
 					loop
-						if match_terminal(',', v_new_node_id) then
+						if match_terminal(',', v_parse_context.new_node_id) then
 							if
 							(
-								table_reference(v_new_node_id) or
-								join_clause(v_new_node_id) or
+								table_reference(v_parse_context.new_node_id) or
+								join_clause(v_parse_context.new_node_id) or
 								(
-									match_terminal('(', v_new_node_id) and
-									join_clause(v_new_node_id) and
-									match_terminal(')', v_new_node_id)
+									match_terminal('(', v_parse_context.new_node_id) and
+									join_clause(v_parse_context.new_node_id) and
+									match_terminal(')', v_parse_context.new_node_id)
 								)
 							) then
 								null;
@@ -876,10 +891,10 @@ begin
 						end if;
 					end loop;
 
-					g_optional := where_clause(v_new_node_id);
-					g_optional := hierarchical_query_clause(v_new_node_id);
-					g_optional := group_by_clause(v_new_node_id);
-					g_optional := model_clause(v_new_node_id);
+					g_optional := where_clause(v_parse_context.new_node_id);
+					g_optional := hierarchical_query_clause(v_parse_context.new_node_id);
+					g_optional := group_by_clause(v_parse_context.new_node_id);
+					g_optional := model_clause(v_parse_context.new_node_id);
 					return true;
 				else
 					parse_error('table_reference, join_clause, or ( join_clause )', $$plsql_line);
@@ -891,36 +906,36 @@ begin
 			parse_error('select_list', $$plsql_line);
 		end if;
 	else
-		return pop;
+		return pop(v_parse_context);
 	end if;
 end query_block;
 
 
 function query_table_expression(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_parse_context parse_context;
 begin
-	v_new_node_id := push(C_QUERY_TABLE_EXPRESSION, p_parent_id);
+	v_parse_context := push(C_QUERY_TABLE_EXPRESSION, p_parent_id);
 
 	--TODO:
 	--lateral, table_collection_expression, schema., etc.
 
-	if match_unreserved_word(C_QUERY_NAME, v_new_node_id) then
+	if match_unreserved_word(C_QUERY_NAME, v_parse_context.new_node_id) then
 		return true;
 	end if;
 
-	return pop;
+	return pop(v_parse_context);
 end query_table_expression;
 
 
 function return_expr(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_parse_context parse_context;
 begin
-	v_new_node_id := push(C_RETURN_EXPR, p_parent_id);
+	v_parse_context := push(C_RETURN_EXPR, p_parent_id);
 
-	if expr(v_new_node_id) then
+	if expr(v_parse_context.new_node_id) then
 		return true;
 	else
-		return pop;
+		return pop(v_parse_context);
 	end if;
 end return_expr;
 
@@ -933,30 +948,33 @@ end row_limiting_clause;
 
 
 function scalar_subquery_expression(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_parse_context parse_context;
 begin
-	v_new_node_id := push(C_SCALAR_SUBQUERY_EXPRESSION, p_parent_id);
+	v_parse_context := push(C_SCALAR_SUBQUERY_EXPRESSION, p_parent_id);
 
-	--TODO
-	return pop;
+	if current_value = '(' and subquery(v_parse_context.new_node_id) then
+		return true;
+	else
+		return pop(v_parse_context);
+	end if;
 end scalar_subquery_expression;
 
 
 function searched_case_expression(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_parse_context parse_context;
 begin
-	v_new_node_id := push(C_SEARCHED_CASE_EXPRESSION, p_parent_id);
+	v_parse_context := push(C_SEARCHED_CASE_EXPRESSION, p_parent_id);
 
-	if match_terminal('WHEN', v_new_node_id) then
-		if condition(v_new_node_id) then
-			if match_terminal('THEN', v_new_node_id) then
-				if return_expr(v_new_node_id) then
+	if match_terminal('WHEN', v_parse_context.new_node_id) then
+		if condition(v_parse_context.new_node_id) then
+			if match_terminal('THEN', v_parse_context.new_node_id) then
+				if return_expr(v_parse_context.new_node_id) then
 
 					loop
-						if match_terminal('WHEN', v_new_node_id) then
-							if condition(v_new_node_id) then
-								if match_terminal('THEN', v_new_node_id) then
-									if return_expr(v_new_node_id) then
+						if match_terminal('WHEN', v_parse_context.new_node_id) then
+							if condition(v_parse_context.new_node_id) then
+								if match_terminal('THEN', v_parse_context.new_node_id) then
+									if return_expr(v_parse_context.new_node_id) then
 										null;
 									else
 										parse_error('return_expr', $$plsql_line);
@@ -983,7 +1001,7 @@ begin
 			parse_error('comparison_expr', $$plsql_line);
 		end if;
 	else
-		return pop;
+		return pop(v_parse_context);
 	end if;
 
 end searched_case_expression;
@@ -999,66 +1017,66 @@ end search_clause;
 --select::=
 --**DIFFERENCE FROM MANUAL**: "select_statement" instead of "select" to avoid collision with SELECT token.
 function select_statement(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_parse_context parse_context;
 begin
-	v_new_node_id := push(C_SELECT_STATEMENT, p_parent_id);
+	v_parse_context := push(C_SELECT_STATEMENT, p_parent_id);
 
-	if subquery(v_new_node_id) then
-		g_optional := for_update_clause(v_new_node_id);
+	if subquery(v_parse_context.new_node_id) then
+		g_optional := for_update_clause(v_parse_context.new_node_id);
 		--**DIFFERENCE FROM MANUAL**: The semicolon is optional, not required.
-		g_optional := match_terminal(';', v_new_node_id);
+		g_optional := match_terminal(';', v_parse_context.new_node_id);
 		return true;
 	else
-		return pop;
+		return pop(v_parse_context);
 	end if;
 end select_statement;
 
 
 function select_list(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_parse_context parse_context;
 begin
-	v_new_node_id := push(C_SELECT_LIST, p_parent_id);
+	v_parse_context := push(C_SELECT_LIST, p_parent_id);
 
 	--**DIFFERENCE FROM MANUAL**:
 	--The top "t_alias.*" in the manual is incorrect.
 	--It implies a table alias can only be used once when it can be used many times.
 	--For example, this is a valid query: select a.*, b.* from dual a, dual b;
 	--Accordingly, the "t_alias.*" is moved a bit and is an alternative to query_name and schema.table|view|materialized_view.
-	if match_terminal('*', v_new_node_id) then
+	if match_terminal('*', v_parse_context.new_node_id) then
 		return true;
 	elsif is_unreserved_word(0) and next_type(1) = '.' and next_type(2) = '*' then
-		g_optional := match_unreserved_word(C_AMBIG_qn_t_v_mv_alias, v_new_node_id) and match_terminal('.', v_new_node_id) and match_terminal('*', v_new_node_id);
+		g_optional := match_unreserved_word(C_AMBIG_qn_t_v_mv_alias, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_terminal('*', v_parse_context.new_node_id);
 	elsif is_unreserved_word(0) and next_type(1) = '.' and is_unreserved_word(2) and next_type(3) = '.' and next_type(4) = '*' then
-		g_optional := match_unreserved_word(C_AMBIG_schema, v_new_node_id) and match_terminal('.', v_new_node_id) and match_unreserved_word(C_AMBIG_qn_t_v_mv_alias, v_new_node_id) and match_terminal('.', v_new_node_id) and match_terminal('*', v_new_node_id);
-	elsif expr(v_new_node_id) then
-		if match_terminal('AS', v_new_node_id) then
-			if match_unreserved_word(C_ALIAS, v_new_node_id) then
+		g_optional := match_unreserved_word(C_AMBIG_schema, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_unreserved_word(C_AMBIG_qn_t_v_mv_alias, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_terminal('*', v_parse_context.new_node_id);
+	elsif expr(v_parse_context.new_node_id) then
+		if match_terminal('AS', v_parse_context.new_node_id) then
+			if match_unreserved_word(C_ALIAS, v_parse_context.new_node_id) then
 				null;
 			else
 				parse_error('c_alias', $$plsql_line);
 			end if;
 		else
-			g_optional := match_unreserved_word(C_ALIAS, v_new_node_id);
+			g_optional := match_unreserved_word(C_ALIAS, v_parse_context.new_node_id);
 		end if;
 	else
-		return pop;
+		return pop(v_parse_context);
 	end if;
 
 	loop
-		if match_terminal(',', v_new_node_id) then
+		if match_terminal(',', v_parse_context.new_node_id) then
 			if is_unreserved_word(0) and next_type(1) = '.' and next_type(2) = '*' then
-				g_optional := match_unreserved_word(C_AMBIG_qn_t_v_mv_alias, v_new_node_id) and match_terminal('.', v_new_node_id) and match_terminal('*', v_new_node_id);
+				g_optional := match_unreserved_word(C_AMBIG_qn_t_v_mv_alias, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_terminal('*', v_parse_context.new_node_id);
 			elsif is_unreserved_word(0) and next_type(1) = '.' and is_unreserved_word(2) and next_type(3) = '.' and next_type(4) = '*' then
-				g_optional := match_unreserved_word(C_AMBIG_schema, v_new_node_id) and match_terminal('.', v_new_node_id) and match_unreserved_word(C_AMBIG_qn_t_v_mv_alias, v_new_node_id) and match_terminal('.', v_new_node_id) and match_terminal('*', v_new_node_id);
-			elsif expr(v_new_node_id) then
-				if match_terminal('AS', v_new_node_id) then
-					if match_unreserved_word(C_ALIAS, v_new_node_id) then
+				g_optional := match_unreserved_word(C_AMBIG_schema, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_unreserved_word(C_AMBIG_qn_t_v_mv_alias, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_terminal('*', v_parse_context.new_node_id);
+			elsif expr(v_parse_context.new_node_id) then
+				if match_terminal('AS', v_parse_context.new_node_id) then
+					if match_unreserved_word(C_ALIAS, v_parse_context.new_node_id) then
 						null;
 					else
 						parse_error('c_alias', $$plsql_line);
 					end if;
 				else
-					g_optional := match_unreserved_word(C_ALIAS, v_new_node_id);
+					g_optional := match_unreserved_word(C_ALIAS, v_parse_context.new_node_id);
 				end if;
 			else
 				parse_error('t_alias.*, query_name.*, schema.table|view|materialized view.*, or expr', $$plsql_line);
@@ -1074,21 +1092,21 @@ end select_list;
 
 
 function simple_case_expression(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_parse_context parse_context;
 begin
-	v_new_node_id := push(C_SIMPLE_CASE_EXPRESSION, p_parent_id);
+	v_parse_context := push(C_SIMPLE_CASE_EXPRESSION, p_parent_id);
 
-	if expr(v_new_node_id) then
-		if match_terminal('WHEN', v_new_node_id) then
-			if comparison_expr(v_new_node_id) then
-				if match_terminal('THEN', v_new_node_id) then
-					if return_expr(v_new_node_id) then
+	if expr(v_parse_context.new_node_id) then
+		if match_terminal('WHEN', v_parse_context.new_node_id) then
+			if comparison_expr(v_parse_context.new_node_id) then
+				if match_terminal('THEN', v_parse_context.new_node_id) then
+					if return_expr(v_parse_context.new_node_id) then
 
 						loop
-							if match_terminal('WHEN', v_new_node_id) then
-								if comparison_expr(v_new_node_id) then
-									if match_terminal('THEN', v_new_node_id) then
-										if return_expr(v_new_node_id) then
+							if match_terminal('WHEN', v_parse_context.new_node_id) then
+								if comparison_expr(v_parse_context.new_node_id) then
+									if match_terminal('THEN', v_parse_context.new_node_id) then
+										if return_expr(v_parse_context.new_node_id) then
 											null;
 										else
 											parse_error('return_expr', $$plsql_line);
@@ -1118,7 +1136,7 @@ begin
 			parse_error('WHEN', $$plsql_line);
 		end if;
 	else
-		return pop;
+		return pop(v_parse_context);
 	end if;
 end simple_case_expression;
 
@@ -1131,32 +1149,32 @@ end simple_case_expression;
 --**DIFFERENCE FROM MANUAL**: Timestamps are all lumped together.  "WITH TIME ZONE"
 --and "WITH LOCAL TIME ZONE" are all timestamps.
 function simple_expression_1(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_parse_context parse_context;
 begin
-	v_new_node_id := push(C_SIMPLE_EXPRESSION, p_parent_id);
+	v_parse_context := push(C_SIMPLE_EXPRESSION, p_parent_id);
 
-	if match_terminal('ROWNID', v_new_node_id) then
+	if match_terminal('ROWNID', v_parse_context.new_node_id) then
 		return true;
-	elsif match_terminal('ROWNUM', v_new_node_id) then
+	elsif match_terminal('ROWNUM', v_parse_context.new_node_id) then
 		return true;
 	elsif current_type = plsql_lexer.C_TEXT then
-		v_new_node_id := push(C_STRING, v_new_node_id);
+		v_parse_context := push(C_STRING, v_parse_context.new_node_id);
 		increment;
 		return true;
 	elsif current_type = plsql_lexer.C_NUMERIC then
-		v_new_node_id := push(C_NUMBER, v_new_node_id);
+		v_parse_context := push(C_NUMBER, v_parse_context.new_node_id);
 		increment;
 		return true;
-	elsif match_terminal('NULL', v_new_node_id) then
+	elsif match_terminal('NULL', v_parse_context.new_node_id) then
 		return true;
-	elsif match_terminal('DATE', v_new_node_id) then
+	elsif match_terminal('DATE', v_parse_context.new_node_id) then
 		if current_type = plsql_lexer.C_TEXT then
 			increment;
 			return true;
 		else
 			parse_error('date string', $$plsql_line);
 		end if;
-	elsif match_terminal('TIMESTAMP', v_new_node_id) then
+	elsif match_terminal('TIMESTAMP', v_parse_context.new_node_id) then
 		if current_type = plsql_lexer.C_TEXT then
 			increment;
 			return true;
@@ -1165,50 +1183,51 @@ begin
 		end if;
 	--TODO: interval
 	else
-		return pop;
+		return pop(v_parse_context);
 	end if;
 end simple_expression_1;
 
 
 function subquery(p_parent_id number) return boolean is
-	v_first_subquery_id number;
-	v_second_subquery_node_id number;
+	v_parse_context parse_context;
+	v_second_parse_context parse_context;
 begin
-	v_first_subquery_id := push(C_SUBQUERY, p_parent_id);
+	v_parse_context := push(C_SUBQUERY, p_parent_id);
 
 	--Third branch of diagram.
-	if match_terminal('(', v_first_subquery_id) then 
-		if subquery(v_first_subquery_id) then
-			if match_terminal(')', v_first_subquery_id) then
+	if match_terminal('(', v_parse_context.new_node_id) then 
+		if subquery(v_parse_context.new_node_id) then
+			if match_terminal(')', v_parse_context.new_node_id) then
 				--Two optional rules at the end. 
-				g_optional := order_by_clause(v_first_subquery_id);
-				g_optional := row_limiting_clause(v_first_subquery_id);
+				g_optional := order_by_clause(v_parse_context.new_node_id);
+				g_optional := row_limiting_clause(v_parse_context.new_node_id);
 				return true;
 			else
 				parse_error('")"', $$plsql_line);
 			end if;
 		else
-			return pop;
+			--???? Two pops?
+			return pop(v_parse_context);
 		end if;
 
 	--First or second branch of diagram.
 	else
 		--Assume it's a subquery (middle branch) - workaround to avoid left-recursion.
-		v_second_subquery_node_id := push(C_SUBQUERY, v_first_subquery_id);
+		v_second_parse_context := push(C_SUBQUERY, v_parse_context.new_node_id);
 
-		if query_block(v_second_subquery_node_id) then
+		if query_block(v_second_parse_context.new_node_id) then
 			--Second branch of diagram.
 			if current_value in ('UNION', 'INTERSECT', 'MINUS') then
 				loop
 					if
 					(
-						(match_terminal('UNION', v_first_subquery_id) and match_terminal('ALL', v_first_subquery_id) is not null)
+						(match_terminal('UNION', v_parse_context.new_node_id) and match_terminal('ALL', v_parse_context.new_node_id) is not null)
 						or
-						match_terminal('INTERSECT', v_first_subquery_id)
+						match_terminal('INTERSECT', v_parse_context.new_node_id)
 						or
-						match_terminal('MINUS', v_first_subquery_id)
+						match_terminal('MINUS', v_parse_context.new_node_id)
 					) then
-						if subquery(v_first_subquery_id) then
+						if subquery(v_parse_context.new_node_id) then
 							null;
 						else
 							parse_error('subquery', $$plsql_line);
@@ -1221,31 +1240,31 @@ begin
 			--First branch of diagram.
 			else
 				--Remove extra SUBQUERY, it's a plain QUERY_BLOCK.
-				v_first_subquery_id := remove_extra_subquery(v_second_subquery_node_id);
+				v_parse_context.new_node_id := remove_extra_subquery(v_second_parse_context.new_node_id);
 
 				--Two optional rules at the end. 
-				g_optional := order_by_clause(v_first_subquery_id);
-				g_optional := row_limiting_clause(v_first_subquery_id);
+				g_optional := order_by_clause(v_parse_context.new_node_id);
+				g_optional := row_limiting_clause(v_parse_context.new_node_id);
 				return true;
 			end if;
 		else
-			return pop;
+			return pop(v_parse_context);
 		end if;
 	end if;
 end subquery;
 
 
 function subquery_factoring_clause(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_parse_context parse_context;
 begin
-	v_new_node_id := push(C_SUBQUERY_FACTORING_CLAUSE, p_parent_id);
+	v_parse_context := push(C_SUBQUERY_FACTORING_CLAUSE, p_parent_id);
 
-	if match_unreserved_word(C_QUERY_NAME, v_new_node_id) then
-		if match_terminal('(', v_new_node_id) then
-			if match_unreserved_word(C_ALIAS, v_new_node_id) then
+	if match_unreserved_word(C_QUERY_NAME, v_parse_context.new_node_id) then
+		if match_terminal('(', v_parse_context.new_node_id) then
+			if match_unreserved_word(C_ALIAS, v_parse_context.new_node_id) then
 				loop
-					if match_terminal('(', v_new_node_id) then
-						if match_unreserved_word(C_ALIAS, v_new_node_id) then
+					if match_terminal('(', v_parse_context.new_node_id) then
+						if match_unreserved_word(C_ALIAS, v_parse_context.new_node_id) then
 							null;
 						else
 							parse_error('C_ALIAS', $$plsql_line);
@@ -1257,12 +1276,12 @@ begin
 			end if;
 		end if;
 
-		if match_terminal('AS', v_new_node_id) then
-			if match_terminal('(', v_new_node_id) then
-				if subquery(v_new_node_id) then
-					if match_terminal(')', v_new_node_id) then
-						g_optional := search_clause(v_new_node_id);
-						g_optional := cycle_clause(v_new_node_id);
+		if match_terminal('AS', v_parse_context.new_node_id) then
+			if match_terminal('(', v_parse_context.new_node_id) then
+				if subquery(v_parse_context.new_node_id) then
+					if match_terminal(')', v_parse_context.new_node_id) then
+						g_optional := search_clause(v_parse_context.new_node_id);
+						g_optional := cycle_clause(v_parse_context.new_node_id);
 						return true;
 					else
 						parse_error('")"', $$plsql_line);
@@ -1278,41 +1297,41 @@ begin
 		end if;
 	end if;
 
-	return pop;
+	return pop(v_parse_context);
 end subquery_factoring_clause;
 
 
 function table_reference(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_parse_context parse_context;
 begin
-	v_new_node_id := push(C_TABLE_REFERENCE, p_parent_id);
+	v_parse_context := push(C_TABLE_REFERENCE, p_parent_id);
 
-	if containers_clause(v_new_node_id) then
-		g_optional := match_unreserved_word(C_T_ALIAS, v_new_node_id);
+	if containers_clause(v_parse_context.new_node_id) then
+		g_optional := match_unreserved_word(C_T_ALIAS, v_parse_context.new_node_id);
 	elsif next_value(1) = 'ONLY' and next_value(2) = '(' then
 		increment;
 		increment;
-		if query_table_expression(v_new_node_id) then
-			if match_terminal(')', v_new_node_id) then
+		if query_table_expression(v_parse_context.new_node_id) then
+			if match_terminal(')', v_parse_context.new_node_id) then
 --				g_optional := flashback_query_clause;
 --				g_optional := pivot_clause or unpivot_clause or row_pattern_clause;
-				g_optional := match_unreserved_word(C_T_ALIAS, v_new_node_id);
+				g_optional := match_unreserved_word(C_T_ALIAS, v_parse_context.new_node_id);
 				return true;				
 			else
 				parse_error('")"', $$plsql_line);
 			end if;
 		else
 			parse_error('query_table_expression', $$plsql_line);
-			return pop;
+			return pop(v_parse_context);
 		end if;
-	elsif query_table_expression(v_new_node_id) then
-		g_optional := flashback_query_clause(v_new_node_id);
+	elsif query_table_expression(v_parse_context.new_node_id) then
+		g_optional := flashback_query_clause(v_parse_context.new_node_id);
 --		g_optional := pivot_clause or unpivot_clause or row_pattern_clause;
-		g_optional := match_unreserved_word(C_T_ALIAS, v_new_node_id);
+		g_optional := match_unreserved_word(C_T_ALIAS, v_parse_context.new_node_id);
 		return true;
 	else
 		parse_error('ONLY(query_table_expression), query_table_expression, or containers_clause', $$plsql_line);
-		return pop;
+		return pop(v_parse_context);
 	end if;
 end table_reference;
 
@@ -1321,12 +1340,12 @@ end table_reference;
 --that has a "new WORD ( ...".  Other type constructor expressions are ambiguous and
 --must be handled in post-processing.
 function type_constructor_expression_1(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_parse_context parse_context;
 begin
-	v_new_node_id := push(C_TYPE_CONSTRUCTOR_EXPRESSION, p_parent_id);
+	v_parse_context := push(C_TYPE_CONSTRUCTOR_EXPRESSION, p_parent_id);
 
 	--TODO
-	return pop;
+	return pop(v_parse_context);
 end type_constructor_expression_1;
 
 
@@ -1338,21 +1357,21 @@ end where_clause;
 
 
 function with_clause(p_parent_id number) return boolean is
-	v_new_node_id number;
+	v_parse_context parse_context;
 begin
-	v_new_node_id := push(C_WITH_CLAUSE, p_parent_id);
+	v_parse_context := push(C_WITH_CLAUSE, p_parent_id);
 
-	if match_terminal('WITH', v_new_node_id) then
+	if match_terminal('WITH', v_parse_context.new_node_id) then
 		--**DIFFERENCE FROM MANUAL**  (sort of, it matches the "Note")
 		--"Note:
 		--You cannot specify only the WITH keyword. You must specify at least one of the clauses plsql_declarations or subquery_factoring_clause."
-		if not (plsql_declarations(v_new_node_id) or subquery_factoring_clause(v_new_node_id)) then
+		if not (plsql_declarations(v_parse_context.new_node_id) or subquery_factoring_clause(v_parse_context.new_node_id)) then
 			parse_error('plsql_declarations or subquery_factoring_clause', $$plsql_line);
 		else
 			return true;
 		end if;
 	else
-		return pop;
+		return pop(v_parse_context);
 	end if;
 end with_clause;
 
