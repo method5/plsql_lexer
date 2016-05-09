@@ -323,6 +323,41 @@ begin
 end resolve_ambiguous_nodes;
 
 
+--Return the value after the matching parens.
+--ASSUMPTION: The current_type is pointing to a "(".
+function value_after_matching_parens return clob is
+	v_paren_counter number := 1;
+begin
+	--Only process if starting at '('.
+	if next_type(0) = '(' then
+		--Loop until a matching ")" is found.
+		for token_index in 1 .. (g_ast_tokens.count - g_ast_token_index) loop
+			--Increment or decrement counter.
+			if next_type(token_index) = '(' then
+				v_paren_counter := v_paren_counter + 1;
+			elsif next_type(token_index) = ')' then
+				v_paren_counter := v_paren_counter - 1;
+			end if;
+
+			--Return a value if the counter is 0.
+			if v_paren_counter = 0 then
+				--If it's the last token, return null;
+				if token_index + g_ast_token_index = g_ast_tokens.count then
+					return null;
+				--Else return the next token type.
+				else
+					return next_type(token_index+1);
+				end if;
+			end if;
+		end loop;
+
+		--Return null, nothing found
+		return null;
+	else
+		return null;
+	end if;
+end value_after_matching_parens;
+
 
 
 
@@ -379,6 +414,21 @@ begin
 	--TODO
 	return pop(v_parse_context);
 end ambiguous_expression;
+
+
+function argument(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_ARGUMENT, p_parent_id);
+
+	--TODO: Should this be some similar name for different contexts?
+	--Sometimes it's ARGUMENT, sometimes it's just expression, etc.
+	if expr(v_parse_context.new_node_id) then
+		return true;
+	else
+		return pop(v_parse_context);
+	end if;
+end argument;
 
 
 function case_expression(p_parent_id number) return boolean is
@@ -582,8 +632,8 @@ begin
 		simple_expression_1(v_parse_context.new_node_id) or
 		object_access_expression_1(v_parse_context.new_node_id) or
 		compound_expression_1(v_parse_context.new_node_id) or
-		function_expression_1(v_parse_context.new_node_id) or
 		type_constructor_expression_1(v_parse_context.new_node_id) or
+		function_expression_1(v_parse_context.new_node_id) or
 		--Could be simple_expression,
 		ambiguous_expression(v_parse_context.new_node_id)
 	then
@@ -787,13 +837,73 @@ end model_expression;
 --This function only covers the easy parts of OBJECT_ACCESS_EXPRESSION, anything
 --that has a "( ... ) . ".  Other object access  expressions are ambiguous and
 --must be handled in post-processing.
+--**DIFFERENCE FROM MANUAL**: The attribute/method/arguments can repeat.  For example,
+--  think of a method that returns an object that has a method.
 function object_access_expression_1(p_parent_id number) return boolean is
 	v_parse_context parse_context;
+
+	function attribute_method_args return boolean is
+	begin
+		if match_terminal('.', v_parse_context.new_node_id) then
+			if is_unreserved_word(0) then
+				if next_type(1) = '(' then
+					g_optional := match_unreserved_word('method', v_parse_context.new_node_id);
+					g_optional := match_terminal('(', v_parse_context.new_node_id);
+					if argument(v_parse_context.new_node_id) then
+						loop
+							if match_terminal(',', v_parse_context.new_node_id) then
+								if argument(v_parse_context.new_node_id) then
+									return null;
+								else
+									parse_error('argument', $$plsql_line);
+								end if;
+							else
+								exit;
+							end if;
+						end loop;
+					elsif match_terminal(')', v_parse_context.new_node_id) then
+						null;
+					else
+						parse_error('argument or ")"', $$plsql_line);
+					end if;
+
+					if not match_terminal(')', v_parse_context.new_node_id) then
+						parse_error('")', $$plsql_line);
+					end if;
+				else
+					g_optional := match_unreserved_word('attribute', v_parse_context.new_node_id);
+				end if;
+
+				return true;
+
+			else
+				parse_error('attribute or method', $$plsql_line);
+			end if;
+		else
+			return false;
+		end if;
+	end attribute_method_args;
+
 begin
 	v_parse_context := push(C_OBJECT_ACCESS_EXPRESSION, p_parent_id);
 
-	--TODO
-	return pop(v_parse_context);
+	if current_type = '(' and value_after_matching_parens = '.' then
+		g_optional := match_terminal('(', v_parse_context.new_node_id);
+		if expr(v_parse_context.new_node_id) then
+			if match_terminal(')', v_parse_context.new_node_id) then
+				loop
+					exit when not attribute_method_args;
+				end loop;
+				return true;
+			else
+				parse_error('")"', $$plsql_line);
+			end if;
+		else
+			parse_error('expr', $$plsql_line);
+		end if;
+	else
+		return pop(v_parse_context);
+	end if;
 end object_access_expression_1;
 
 

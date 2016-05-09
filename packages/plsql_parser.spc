@@ -58,6 +58,7 @@ create or replace type node_table is table of node;
 
 --Not listed:
 C_ALIAS                          constant varchar2(100) := 'alias';
+C_ARGUMENT                       constant varchar2(100) := 'argument';
 C_COMPARISON_EXPR                constant varchar2(100) := 'comparison_expr';
 C_ELSE_EXPR                      constant varchar2(100) := 'else_expr';
 C_FUNCTION_EXPRESSION            constant varchar2(100) := 'function_expression';
