@@ -147,21 +147,43 @@ function get_reserved_words return string_table is
 	v_dummy varchar2(1);
 	v_reserved_words string_table := string_table();
 begin
-	for reserved_words in
-	(
-		select *
-		from v$reserved_words
-		order by keyword
-	) loop
-		begin
-			execute immediate 'select dummy from dual '||reserved_words.keyword into v_dummy;
-		exception when others then
-			v_reserved_words.extend;
-			v_reserved_words(v_reserved_words.count) := reserved_words.keyword;
-			--For testing.
-			--dbms_output.put_line('Failed: '||reserved_words.keyword||', Reserved: '||reserved_words.reserved);
-		end;
-	end loop;
+	--Use pre-generated list for specific versions.
+	if dbms_db_version.version||'.'||dbms_db_version.release = '12.1' then
+		v_reserved_words := string_table(
+			'!','!=','$','&','(',')','*','+',',','-','.','/',':',';','<','<<','<=','=','=>',
+			'>','>=','?','@','ACCESS','ADD','ALL','ALTER','AND','ANY','AS','ASC','AUDIT',
+			'BETWEEN','BY','CHAR','CHECK','CLUSTER','COLUMN','COMMENT','COMPRESS','CONNECT',
+			'CREATE','CURRENT','DATE','DECIMAL','DEFAULT','DELETE','DESC','DISTINCT','DROP',
+			'ELSE','EXCLUSIVE','EXISTS','FILE','FLOAT','FOR','FROM','GRANT','GROUP','HAVING',
+			'IDENTIFIED','IMMEDIATE','IN','INCREMENT','INDEX','INITIAL','INSERT','INTEGER',
+			'INTERSECT','INTO','IS','LEVEL','LIKE','LOCK','LONG','MAXEXTENTS','MINUS',
+			'MLSLABEL','MODE','MODIFY','NOAUDIT','NOCOMPRESS','NOT','NOWAIT','NULL','NUMBER',
+			'OF','OFFLINE','ON','ONLINE','OPTION','OR','ORDER','PCTFREE','PRIOR','PUBLIC',
+			'RAW','RENAME','RESOURCE','REVOKE','ROW','ROWID','ROWNUM','ROWS','SELECT',
+			'SESSION','SET','SHARE','SIZE','SMALLINT','START','SUCCESSFUL','SYNONYM',
+			'SYSDATE','TABLE','THEN','TO','TRIGGER','UID','UNION','UNIQUE','UPDATE','USER',
+			'VALIDATE','VALUES','VARCHAR','VARCHAR2','VIEW','WHENEVER','WHERE','WITH','[',
+			']','^','{','|','}'
+		);
+	--TODO: Pre-generate for 11.2
+	--Otherwise dynamically determine list.
+	else
+		for reserved_words in
+		(
+			select *
+			from v$reserved_words
+			order by keyword
+		) loop
+			begin
+				execute immediate 'select dummy from dual '||reserved_words.keyword into v_dummy;
+			exception when others then
+				v_reserved_words.extend;
+				v_reserved_words(v_reserved_words.count) := reserved_words.keyword;
+				--For testing.
+				--dbms_output.put_line('Failed: '||reserved_words.keyword||', Reserved: '||reserved_words.reserved);
+			end;
+		end loop;
+	end if;
 
 	return v_reserved_words;
 end get_reserved_words;
