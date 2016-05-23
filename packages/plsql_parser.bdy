@@ -30,7 +30,9 @@ type parse_context is record
 --Temporary constants for ambiguous intermediate nodes that must be resolved later.
 C_AMBIG_schema                   constant varchar2(100) := 'C_AMBIG_schema';
 C_AMBIG_qn_t_v_mv_alias          constant varchar2(100) := 'C_AMBIG_qn_t_v_mv_alias';
-
+--One of: cluster,column,function,materialized view,operator,package,procedure,query,
+--  schema,schema,table,type,view
+C_AMBIG_CCFMOPPQSSTTV             constant varchar2(100) := 'C_AMBIG_ccfmoppqssttv';
 
 
 
@@ -381,6 +383,55 @@ begin
 end value_after_matching_parens;
 
 
+--Return the values after a combination of words, dots, parentheses, and database links.
+--ASSUMPTION: The current value starts with a non-reserved word.
+procedure values_after_wrd_dot_paren_lnk(p_value_after1 out clob, p_value_after2 out clob, p_value_after3 out clob) is
+	v_paren_counter number := 1;
+begin
+	--First value must be a non-reserved word.
+	if is_unreserved_word(0) then
+		--TODO
+		null;
+	end if;
+
+		
+
+
+
+--C_AMBIG_CCFMOPPSSTTV
+
+
+/*
+	--Only process if starting at '('.
+	if next_type(0) = '(' then
+		--Loop until a matching ")" is found.
+		for token_index in 1 .. (g_ast_tokens.count - g_ast_token_index) loop
+			--Increment or decrement counter.
+			if next_type(token_index) = '(' then
+				v_paren_counter := v_paren_counter + 1;
+			elsif next_type(token_index) = ')' then
+				v_paren_counter := v_paren_counter - 1;
+			end if;
+
+			--Return a value if the counter is 0.
+			if v_paren_counter = 0 then
+				--If it's the last token, return null;
+				if token_index + g_ast_token_index = g_ast_tokens.count then
+					return null;
+				--Else return the next token type.
+				else
+					return next_type(token_index+1);
+				end if;
+			end if;
+		end loop;
+
+		--Return null, nothing found
+		return null;
+	else
+		return null;
+	end if;
+*/
+end values_after_wrd_dot_paren_lnk;
 
 
 
@@ -735,11 +786,32 @@ end for_update_clause;
 --expressions are ambiguous and must be handled in post-processing.
 function function_expression_1(p_parent_id number) return boolean is
 	v_parse_context parse_context;
+
+	v_value_after1 clob;
+	v_value_after2 clob;
+	v_value_after3 clob;
 begin
 	v_parse_context := push(C_FUNCTION_EXPRESSION, p_parent_id);
 
-	--TODO
-	return pop(v_parse_context);
+	--Look for aggregate or analytic keywords.
+	values_after_wrd_dot_paren_lnk(v_value_after1, v_value_after2, v_value_after3);
+	if
+	(
+		(
+			v_value_after1 in ('OVER', 'KEEP') and
+			v_value_after2 = '('
+		)
+		or
+		(
+			v_value_after1 = 'WITHIN' and
+			v_value_after2 = 'GROUP' and
+			v_value_after3 = '('
+		)
+	) then
+		null;
+	else
+		return pop(v_parse_context);
+	end if;
 end function_expression_1;
 
 
