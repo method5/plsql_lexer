@@ -29,6 +29,7 @@ type parse_context is record
 
 --Temporary constants for ambiguous intermediate nodes that must be resolved later.
 C_AMBIG_schema                   constant varchar2(100) := 'C_AMBIG_schema';
+C_AMBIG_func_agg_or_analytic     constant varchar2(100) := 'C_AMBIG_func_agg_or_analytic';
 C_AMBIG_qn_t_v_mv_alias          constant varchar2(100) := 'C_AMBIG_qn_t_v_mv_alias';
 --One of: cluster,column,function,materialized view,operator,package,procedure,query,
 --  schema,schema,table,type,view
@@ -90,6 +91,12 @@ function current_type return varchar2 is begin
 		return null;
 	end;
 end current_type;
+
+
+procedure disambig_agg_or_analytic(p_node_type varchar2, p_node_id number) is
+begin
+	g_nodes(p_node_id).type := p_node_type;
+end disambig_agg_or_analytic;
 
 
 procedure increment(p_increment number default 1) is begin
@@ -383,56 +390,6 @@ begin
 end value_after_matching_parens;
 
 
---Return the values after a combination of words, dots, parentheses, and database links.
---ASSUMPTION: The current value starts with a non-reserved word.
-procedure values_after_wrd_dot_paren_lnk(p_value_after1 out clob, p_value_after2 out clob, p_value_after3 out clob) is
-	v_paren_counter number := 1;
-begin
-	--First value must be a non-reserved word.
-	if is_unreserved_word(0) then
-		--TODO
-		null;
-	end if;
-
-		
-
-
-
---C_AMBIG_CCFMOPPSSTTV
-
-
-/*
-	--Only process if starting at '('.
-	if next_type(0) = '(' then
-		--Loop until a matching ")" is found.
-		for token_index in 1 .. (g_ast_tokens.count - g_ast_token_index) loop
-			--Increment or decrement counter.
-			if next_type(token_index) = '(' then
-				v_paren_counter := v_paren_counter + 1;
-			elsif next_type(token_index) = ')' then
-				v_paren_counter := v_paren_counter - 1;
-			end if;
-
-			--Return a value if the counter is 0.
-			if v_paren_counter = 0 then
-				--If it's the last token, return null;
-				if token_index + g_ast_token_index = g_ast_tokens.count then
-					return null;
-				--Else return the next token type.
-				else
-					return next_type(token_index+1);
-				end if;
-			end if;
-		end loop;
-
-		--Return null, nothing found
-		return null;
-	else
-		return null;
-	end if;
-*/
-end values_after_wrd_dot_paren_lnk;
-
 
 
 
@@ -445,6 +402,7 @@ function containers_clause(p_parent_id number) return boolean;
 function flashback_query_clause(p_parent_id number) return boolean;
 function for_update_clause(p_parent_id number) return boolean;
 function function_expression_1(p_parent_id number) return boolean;
+function dblink(p_parent_id number) return boolean;
 function else_clause(p_parent_id number) return boolean;
 function else_expr(p_parent_id number) return boolean;
 function expr(p_parent_id number) return boolean;
@@ -460,6 +418,7 @@ function order_by_clause(p_parent_id number) return boolean;
 function placeholder_expression(p_parent_id number) return boolean;
 function plsql_declarations(p_parent_id number) return boolean;
 function query_block(p_parent_id number) return boolean;
+function query_partition_clause(p_parent_id number) return boolean;
 function query_table_expression(p_parent_id number) return boolean;
 function return_expr(p_parent_id number) return boolean;
 function row_limiting_clause(p_parent_id number) return boolean;
@@ -475,6 +434,7 @@ function subquery_factoring_clause(p_parent_id number) return boolean;
 function table_reference(p_parent_id number) return boolean;
 function type_constructor_expression_1(p_parent_id number) return boolean;
 function where_clause(p_parent_id number) return boolean;
+function windowing_clause(p_parent_id number) return boolean;
 function with_clause(p_parent_id number) return boolean;
 
 
@@ -487,6 +447,23 @@ begin
 	--TODO
 	return pop(v_parse_context);
 end ambiguous_expression;
+
+
+--Assumption: This is only called where it is required.
+--This function always returns true - analytic clauses can be empty.
+--For example: select count(*) over () from dual;
+function analytic_clause(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_ANALYTIC_CLAUSE, p_parent_id);
+
+	g_optional := query_partition_clause(v_parse_context.new_node_id);
+	if order_by_clause(v_parse_context.new_node_id) then
+		g_optional := windowing_clause(v_parse_context.new_node_id);
+	end if;
+
+	return true;
+end analytic_clause;
 
 
 function argument(p_parent_id number) return boolean is
@@ -618,6 +595,45 @@ begin
 	--TODO
 	return pop(v_parse_context);
 end cycle_clause;
+
+
+--**DIFFERENCE FROM MANUAL**: The dblink may contain the initial "@".
+--It's cleaner to store it in the link instead of in the containing object.
+function dblink(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_DBLINK, p_parent_id);
+
+	if match_terminal('@', v_parse_context.new_node_id) then
+		if match_unreserved_word('database', v_parse_context.new_node_id) then
+			loop
+				if match_terminal('.', v_parse_context.new_node_id) then
+					if match_unreserved_word('domain', v_parse_context.new_node_id) then
+						null;
+					else
+						parse_error('domain', $$plsql_line);
+					end if;
+				else
+					exit;
+				end if;
+			end loop;
+
+			if match_terminal('@', v_parse_context.new_node_id) then
+				if match_unreserved_word('connection_qualifier', v_parse_context.new_node_id) then
+					return true;
+				else
+					parse_error('connection_qualifier', $$plsql_line);
+				end if;
+			end if;
+
+			return true;
+		else
+			parse_error('database', $$plsql_line);
+		end if;
+	else
+		return pop(v_parse_context);
+	end if;
+end dblink;
 
 
 --Datetime expressions must be handled after the expressions are created,
@@ -785,33 +801,186 @@ end for_update_clause;
 --that has a trailing "OVER (", "KEEP (", or "WITHIN GROUP (".  Other function
 --expressions are ambiguous and must be handled in post-processing.
 function function_expression_1(p_parent_id number) return boolean is
+	v_first_parse_context parse_context;
 	v_parse_context parse_context;
 
-	v_value_after1 clob;
-	v_value_after2 clob;
-	v_value_after3 clob;
-begin
-	v_parse_context := push(C_FUNCTION_EXPRESSION, p_parent_id);
+	--TODO: Make this more global?
+	--Assumption: This was called right after a "(".
+	procedure arguments is
+	begin
+		if argument(v_parse_context.new_node_id) then
+			loop
+				if match_terminal(',', v_parse_context.new_node_id) then
+					if argument(v_parse_context.new_node_id) then
+						exit;
+					else
+						parse_error('argument', $$plsql_line);
+					end if;
+				else
+					exit;
+				end if;
+			end loop;
+		elsif match_terminal(')', v_parse_context.new_node_id) then
+			null;
+		else
+			parse_error('argument or ")"', $$plsql_line);
+		end if;
+	end arguments;
 
-	--Look for aggregate or analytic keywords.
-	values_after_wrd_dot_paren_lnk(v_value_after1, v_value_after2, v_value_after3);
-	if
-	(
-		(
-			v_value_after1 in ('OVER', 'KEEP') and
-			v_value_after2 = '('
-		)
-		or
-		(
-			v_value_after1 = 'WITHIN' and
-			v_value_after2 = 'GROUP' and
-			v_value_after3 = '('
-		)
-	) then
-		null;
+	--Assumption: This was called after an "... ORDER BY" or "," (as part of an order section).
+	procedure order_by_item is
+	begin
+		if expr(v_parse_context.new_node_id) then
+			g_optional := match_terminal('DESC', v_parse_context.new_node_id) or match_terminal('ASC', v_parse_context.new_node_id);
+			if match_terminal('NULLS', v_parse_context.new_node_id) then
+				if match_terminal('FIRST', v_parse_context.new_node_id) or match_terminal('LAST', v_parse_context.new_node_id) then
+					null;
+				else
+					parse_error('FIRST or LAST', $$plsql_line);
+				end if;
+			end if;
+		else
+			parse_error('expr', $$plsql_line);
+		end if;
+	end order_by_item;
+
+	--This OVER is always optional.
+	function over_query_partition_clause return boolean is
+	begin
+		--Match like this because there is no pop.
+		--**DIFFERENCE FROM MANUAL**: Manual is missing the "(" and ")" around the query_partition_clause.
+		if next_value(0) = 'OVER' and next_value(1) = '(' then
+			g_optional := match_terminal('OVER', v_parse_context.new_node_id);
+			g_optional := match_terminal('(', v_parse_context.new_node_id);
+			if query_partition_clause(v_parse_context.new_node_id) then
+				if match_terminal(')', v_parse_context.new_node_id) then
+					return true;
+				else
+					parse_error('")"', $$plsql_line);
+				end if;
+			else
+				parse_error('query_partition_clause', $$plsql_line);
+			end if;
+		else
+			return false;
+		end if;
+	end over_query_partition_clause;
+begin
+	v_first_parse_context := push(C_FUNCTION_EXPRESSION, p_parent_id);
+	v_parse_context := push(C_AMBIG_func_agg_or_analytic, p_parent_id);
+
+	--Match the function part (words and dots, with parens and links thrown in)
+	--
+	--First value must be a non-reserved word.
+	if match_unreserved_word(C_AMBIG_CCFMOPPQSSTTV, v_parse_context.new_node_id) then
+
+		--Initial Link, link-parens, or parens.
+		if dblink(v_parse_context.new_node_id) then
+			if match_terminal('(', v_parse_context.new_node_id) then
+				g_optional := match_terminal('DISTINCT', v_parse_context.new_node_id) or match_terminal('ALL', v_parse_context.new_node_id);
+				arguments;
+			end if;
+		elsif match_terminal('(', v_parse_context.new_node_id) then
+			g_optional := match_terminal('DISTINCT', v_parse_context.new_node_id) or match_terminal('ALL', v_parse_context.new_node_id);
+			arguments;
+		end if;
+
+		--Series: (DOT WORD (LINK PARENS|LINK|PARENS))*
+		loop
+			if match_terminal('.', v_parse_context.new_node_id) then
+				if match_unreserved_word(C_AMBIG_CCFMOPPQSSTTV, v_parse_context.new_node_id) then
+					--Link, link-parens, or parens.
+					if dblink(v_parse_context.new_node_id) then
+						if match_terminal('(', v_parse_context.new_node_id) then
+							g_optional := match_terminal('DISTINCT', v_parse_context.new_node_id) or match_terminal('ALL', v_parse_context.new_node_id);
+							arguments;
+						end if;
+					elsif match_terminal('(', v_parse_context.new_node_id) then
+						g_optional := match_terminal('DISTINCT', v_parse_context.new_node_id) or match_terminal('ALL', v_parse_context.new_node_id);
+						arguments;
+					end if;
+				else
+					parse_error('unreserved word', $$plsql_line);
+				end if;
+			else
+				exit;
+			end if;
+		end loop;
+
+		--Aggregate or analytic part.
+		if match_terminal('OVER', v_parse_context.new_node_id) and match_terminal('(', v_parse_context.new_node_id) then
+			if analytic_clause(v_parse_context.new_node_id) then
+				if match_terminal(')', v_parse_context.new_node_id) then
+					disambig_agg_or_analytic(C_ANALYTIC_FUNCTION, v_parse_context.new_node_id);
+					return true;
+				else
+					parse_error('")"', $$plsql_line);
+				end if;
+			else
+				parse_error('analytic_clause', $$plsql_line);
+			end if;
+		elsif match_terminal('WITHIN', v_parse_context.new_node_id) and match_terminal('GROUP', v_parse_context.new_node_id) and match_terminal('(', v_parse_context.new_node_id) then
+			if order_by_clause(v_parse_context.new_node_id) then
+				if match_terminal(')', v_parse_context.new_node_id) then
+					if over_query_partition_clause then
+						disambig_agg_or_analytic(C_ANALYTIC_FUNCTION, v_parse_context.new_node_id);
+					else
+						disambig_agg_or_analytic(C_AGGREGATE_FUNCTION, v_parse_context.new_node_id);
+					end if;
+					return true;
+				else
+					parse_error('")"', $$plsql_line);
+				end if;
+			else
+				parse_error('order_by_clause', $$plsql_line);
+			end if;
+		elsif match_terminal('KEEP', v_parse_context.new_node_id) and match_terminal('(', v_parse_context.new_node_id) then
+			if match_terminal('DENSE_RANK', v_parse_context.new_node_id) then
+				if match_terminal('FIRST', v_parse_context.new_node_id) or match_terminal('LAST', v_parse_context.new_node_id) then
+					if match_terminal('ORDER', v_parse_context.new_node_id) then
+						if match_terminal('BY', v_parse_context.new_node_id) then
+
+							order_by_item;
+
+							loop
+								if match_terminal(',', v_parse_context.new_node_id) then
+									order_by_item;
+								else
+									exit;
+								end if;
+							end loop;
+
+							if match_terminal(')', v_parse_context.new_node_id) then
+								if over_query_partition_clause then
+									disambig_agg_or_analytic(C_ANALYTIC_FUNCTION, v_parse_context.new_node_id);
+								else
+									disambig_agg_or_analytic(C_AGGREGATE_FUNCTION, v_parse_context.new_node_id);
+								end if;
+								return true;
+							else
+								parse_error('")"', $$plsql_line);
+							end if;
+						else
+							parse_error('BY', $$plsql_line);
+						end if;
+					else
+						parse_error('ORDER', $$plsql_line);
+					end if;
+				else
+					parse_error('FIRST or LAST', $$plsql_line);
+				end if;
+			else
+				parse_error('DENSE_RANK', $$plsql_line);
+			end if;
+		else
+			return pop(v_first_parse_context);
+		end if;
+
+		return true;
 	else
-		return pop(v_parse_context);
+		return pop(v_first_parse_context);
 	end if;
+
 end function_expression_1;
 
 
@@ -1113,6 +1282,16 @@ begin
 		return pop(v_parse_context);
 	end if;
 end query_block;
+
+
+function query_partition_clause(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_QUERY_PARTITION_CLAUSE, p_parent_id);
+
+	--TODO
+	return pop(v_parse_context);
+end query_partition_clause;
 
 
 function query_table_expression(p_parent_id number) return boolean is
@@ -1558,6 +1737,16 @@ begin
 	--TODO
 	return true;
 end where_clause;
+
+
+function windowing_clause(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_WINDOWING_CLAUSE, p_parent_id);
+
+	--TODO
+	return pop(v_parse_context);
+end windowing_clause;
 
 
 function with_clause(p_parent_id number) return boolean is

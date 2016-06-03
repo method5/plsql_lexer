@@ -57,6 +57,7 @@ create or replace type node_table is table of node;
 --Constants that are not auto-generated.
 
 --Not listed:
+C_AGGREGATE_FUNCTION             constant varchar2(100) := 'aggregate_function';
 C_ALIAS                          constant varchar2(100) := 'alias';
 C_ARGUMENT                       constant varchar2(100) := 'argument';
 C_COMPARISON_EXPR                constant varchar2(100) := 'comparison_expr';

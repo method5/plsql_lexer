@@ -482,34 +482,39 @@ procedure test_1_character_punctuation is
 begin
 	--Note that "$" is not included here.  "$" is only a token in a row pattern
 	--matching context.  See the separate unit tests for row pattern matching.
-	assert_equals('1-char punctuation: 01', '@ % ^ * ( ) - + = [ ] { } | : ; < , > . / ? EOF', lex(q'[@%^*()-+=[]{}|:;<,>./?]'));
-	assert_equals('1-char punctuation: 02', '@',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 1));
-	assert_equals('1-char punctuation: 03', '%',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 2));
-	assert_equals('1-char punctuation: 04', '^',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 3));
-	assert_equals('1-char punctuation: 05', '*',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 4));
-	assert_equals('1-char punctuation: 06', '(',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 5));
-	assert_equals('1-char punctuation: 07', ')',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 6));
-	assert_equals('1-char punctuation: 08', '-',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 7));
-	assert_equals('1-char punctuation: 09', '+',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 8));
-	assert_equals('1-char punctuation: 10', '=',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 9));
-	assert_equals('1-char punctuation: 11', '[',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 10));
-	assert_equals('1-char punctuation: 12', ']',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 11));
-	assert_equals('1-char punctuation: 13', '{',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 12));
-	assert_equals('1-char punctuation: 14', '}',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 13));
-	assert_equals('1-char punctuation: 15', '|',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 14));
-	assert_equals('1-char punctuation: 16', ':',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 15));
-	assert_equals('1-char punctuation: 17', ';',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 16));
-	assert_equals('1-char punctuation: 18', '<',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 17));
-	assert_equals('1-char punctuation: 19', ',',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 18));
-	assert_equals('1-char punctuation: 20', '>',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 19));
-	assert_equals('1-char punctuation: 21', '.',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 20));
-	assert_equals('1-char punctuation: 22', '/',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 21));
-	assert_equals('1-char punctuation: 23', '?',  get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 22));
-	assert_equals('1-char punctuation: 24', null, get_value_n(q'[@%^*()-+=[]{}|:;<,>./?]', 23));
+	assert_equals('1-char punctuation: 01', '! @ % ^ * ( ) - + = [ ] { } | : ; < , > . / ? EOF', lex(q'[!@%^*()-+=[]{}|:;<,>./?]'));
+	assert_equals('1-char punctuation: 02', '!',  get_value_n(q'[!@%^*()-+=[]{}|:;<,>./?]', 1));
+	assert_equals('1-char punctuation: 03', '@',  get_value_n(q'[!@%^*()-+=[]{}|:;<,>./?]', 2));
+	assert_equals('1-char punctuation: 04', '%',  get_value_n(q'[!@%^*()-+=[]{}|:;<,>./?]', 3));
+	assert_equals('1-char punctuation: 05', '^',  get_value_n(q'[!@%^*()-+=[]{}|:;<,>./?]', 4));
+	assert_equals('1-char punctuation: 06', '*',  get_value_n(q'[!@%^*()-+=[]{}|:;<,>./?]', 5));
+	assert_equals('1-char punctuation: 07', '(',  get_value_n(q'[!@%^*()-+=[]{}|:;<,>./?]', 6));
+	assert_equals('1-char punctuation: 08', ')',  get_value_n(q'[!@%^*()-+=[]{}|:;<,>./?]', 7));
+	assert_equals('1-char punctuation: 09', '-',  get_value_n(q'[!@%^*()-+=[]{}|:;<,>./?]', 8));
+	assert_equals('1-char punctuation: 10', '+',  get_value_n(q'[!@%^*()-+=[]{}|:;<,>./?]', 9));
+	assert_equals('1-char punctuation: 11', '=',  get_value_n(q'[!@%^*()-+=[]{}|:;<,>./?]', 10));
+	assert_equals('1-char punctuation: 12', '[',  get_value_n(q'[!@%^*()-+=[]{}|:;<,>./?]', 11));
+	assert_equals('1-char punctuation: 13', ']',  get_value_n(q'[!@%^*()-+=[]{}|:;<,>./?]', 12));
+	assert_equals('1-char punctuation: 14', '{',  get_value_n(q'[!@%^*()-+=[]{}|:;<,>./?]', 13));
+	assert_equals('1-char punctuation: 15', '}',  get_value_n(q'[!@%^*()-+=[]{}|:;<,>./?]', 14));
+	assert_equals('1-char punctuation: 16', '|',  get_value_n(q'[!@%^*()-+=[]{}|:;<,>./?]', 15));
+	assert_equals('1-char punctuation: 17', ':',  get_value_n(q'[!@%^*()-+=[]{}|:;<,>./?]', 16));
+	assert_equals('1-char punctuation: 18', ';',  get_value_n(q'[!@%^*()-+=[]{}|:;<,>./?]', 17));
+	assert_equals('1-char punctuation: 19', '<',  get_value_n(q'[!@%^*()-+=[]{}|:;<,>./?]', 18));
+	assert_equals('1-char punctuation: 20', ',',  get_value_n(q'[!@%^*()-+=[]{}|:;<,>./?]', 19));
+	assert_equals('1-char punctuation: 21', '>',  get_value_n(q'[!@%^*()-+=[]{}|:;<,>./?]', 20));
+	assert_equals('1-char punctuation: 22', '.',  get_value_n(q'[!@%^*()-+=[]{}|:;<,>./?]', 21));
+	assert_equals('1-char punctuation: 23', '/',  get_value_n(q'[!@%^*()-+=[]{}|:;<,>./?]', 22));
+	assert_equals('1-char punctuation: 24', '?',  get_value_n(q'[!@%^*()-+=[]{}|:;<,>./?]', 23));
+	assert_equals('1-char punctuation: 25', null, get_value_n(q'[!@%^*()-+=[]{}|:;<,>./?]', 24));
 
 	assert_equals('1-char punctuation: realistic example',
 		'<< word >> word whitespace word whitespace word := numeric ; whitespace word whitespace word ; whitespace word ; EOF',
 		lex(q'[<<my_label>>declare v_test number:=1; begin null; end;]'));
+
+	assert_equals('@!= ambiguity',
+		'word whitespace * whitespace word whitespace word whitespace word whitespace word @ ! = word whitespace word whitespace numeric != numeric EOF',
+		lex(q'[select * from dual where sysdate@!=sysdate and 1!=2]'));
 end test_1_character_punctuation;
 
 
