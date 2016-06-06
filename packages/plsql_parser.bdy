@@ -28,12 +28,14 @@ type parse_context is record
 );
 
 --Temporary constants for ambiguous intermediate nodes that must be resolved later.
-C_AMBIG_schema                   constant varchar2(100) := 'C_AMBIG_schema';
-C_AMBIG_func_agg_or_analytic     constant varchar2(100) := 'C_AMBIG_func_agg_or_analytic';
-C_AMBIG_qn_t_v_mv_alias          constant varchar2(100) := 'C_AMBIG_qn_t_v_mv_alias';
+--
 --One of: cluster,column,function,materialized view,operator,package,procedure,query,
 --  schema,schema,table,type,view
-C_AMBIG_CCFMOPPQSSTTV             constant varchar2(100) := 'C_AMBIG_ccfmoppqssttv';
+C_AMBIG_CCFMOPPQSSTTV            constant varchar2(100) := 'C_AMBIG_ccfmoppqssttv';
+C_AMBIG_expression               constant varchar2(100) := 'C_AMBIG_expression';
+C_AMBIG_func_agg_or_analytic     constant varchar2(100) := 'C_AMBIG_func_agg_or_analytic';
+C_AMBIG_qn_t_v_mv_alias          constant varchar2(100) := 'C_AMBIG_qn_t_v_mv_alias';
+C_AMBIG_schema                   constant varchar2(100) := 'C_AMBIG_schema';
 
 
 
@@ -393,11 +395,15 @@ end value_after_matching_parens;
 
 
 
+
+
+
 -------------------------------------------------------------------------------
 --Production Rules.
 -------------------------------------------------------------------------------
 
 --Forward declarations so functions can be placed in alphabetical order.
+function argument(p_parent_id number) return boolean;
 function containers_clause(p_parent_id number) return boolean;
 function flashback_query_clause(p_parent_id number) return boolean;
 function for_update_clause(p_parent_id number) return boolean;
@@ -436,13 +442,18 @@ function type_constructor_expression_1(p_parent_id number) return boolean;
 function where_clause(p_parent_id number) return boolean;
 function windowing_clause(p_parent_id number) return boolean;
 function with_clause(p_parent_id number) return boolean;
+function words_dots_parens_links(p_parse_context parse_context) return boolean;
 
 
 --?????
 function ambiguous_expression(p_parent_id number) return boolean is
 	v_parse_context parse_context;
 begin
---	v_parse_context.new_node_id := v_parse_context := push(C_AMBIGUOUS_EXPRESSION, p_parent_id);
+	v_parse_context := push(C_AMBIG_expression, p_parent_id);
+
+
+
+--C_AMBIG_CCFMOPPQSSTTV
 
 	--TODO
 	return pop(v_parse_context);
@@ -479,6 +490,31 @@ begin
 		return pop(v_parse_context);
 	end if;
 end argument;
+
+
+--Not a standard production rule.  No push/pop.
+--Assumption: This was called right after a "(".
+procedure arguments(p_parse_context parse_context) is
+begin
+	if argument(p_parse_context.new_node_id) then
+
+		loop
+			if match_terminal(',', p_parse_context.new_node_id) then
+				if argument(p_parse_context.new_node_id) then
+					exit;
+				else
+					parse_error('argument', $$plsql_line);
+				end if;
+			else
+				exit;
+			end if;
+		end loop;
+	elsif match_terminal(')', p_parse_context.new_node_id) then
+		null;
+	else
+		parse_error('argument or ")"', $$plsql_line);
+	end if;
+end arguments;
 
 
 function case_expression(p_parent_id number) return boolean is
@@ -723,7 +759,6 @@ begin
 		compound_expression_1(v_parse_context.new_node_id) or
 		type_constructor_expression_1(v_parse_context.new_node_id) or
 		function_expression_1(v_parse_context.new_node_id) or
-		--Could be simple_expression,
 		ambiguous_expression(v_parse_context.new_node_id)
 	then
 		g_optional := datetime_expression(v_parse_context.new_node_id);
@@ -804,29 +839,6 @@ function function_expression_1(p_parent_id number) return boolean is
 	v_first_parse_context parse_context;
 	v_parse_context parse_context;
 
-	--TODO: Make this more global?
-	--Assumption: This was called right after a "(".
-	procedure arguments is
-	begin
-		if argument(v_parse_context.new_node_id) then
-			loop
-				if match_terminal(',', v_parse_context.new_node_id) then
-					if argument(v_parse_context.new_node_id) then
-						exit;
-					else
-						parse_error('argument', $$plsql_line);
-					end if;
-				else
-					exit;
-				end if;
-			end loop;
-		elsif match_terminal(')', v_parse_context.new_node_id) then
-			null;
-		else
-			parse_error('argument or ")"', $$plsql_line);
-		end if;
-	end arguments;
-
 	--Assumption: This was called after an "... ORDER BY" or "," (as part of an order section).
 	procedure order_by_item is
 	begin
@@ -869,44 +881,7 @@ begin
 	v_first_parse_context := push(C_FUNCTION_EXPRESSION, p_parent_id);
 	v_parse_context := push(C_AMBIG_func_agg_or_analytic, p_parent_id);
 
-	--Match the function part (words and dots, with parens and links thrown in)
-	--
-	--First value must be a non-reserved word.
-	if match_unreserved_word(C_AMBIG_CCFMOPPQSSTTV, v_parse_context.new_node_id) then
-
-		--Initial Link, link-parens, or parens.
-		if dblink(v_parse_context.new_node_id) then
-			if match_terminal('(', v_parse_context.new_node_id) then
-				g_optional := match_terminal('DISTINCT', v_parse_context.new_node_id) or match_terminal('ALL', v_parse_context.new_node_id);
-				arguments;
-			end if;
-		elsif match_terminal('(', v_parse_context.new_node_id) then
-			g_optional := match_terminal('DISTINCT', v_parse_context.new_node_id) or match_terminal('ALL', v_parse_context.new_node_id);
-			arguments;
-		end if;
-
-		--Series: (DOT WORD (LINK PARENS|LINK|PARENS))*
-		loop
-			if match_terminal('.', v_parse_context.new_node_id) then
-				if match_unreserved_word(C_AMBIG_CCFMOPPQSSTTV, v_parse_context.new_node_id) then
-					--Link, link-parens, or parens.
-					if dblink(v_parse_context.new_node_id) then
-						if match_terminal('(', v_parse_context.new_node_id) then
-							g_optional := match_terminal('DISTINCT', v_parse_context.new_node_id) or match_terminal('ALL', v_parse_context.new_node_id);
-							arguments;
-						end if;
-					elsif match_terminal('(', v_parse_context.new_node_id) then
-						g_optional := match_terminal('DISTINCT', v_parse_context.new_node_id) or match_terminal('ALL', v_parse_context.new_node_id);
-						arguments;
-					end if;
-				else
-					parse_error('unreserved word', $$plsql_line);
-				end if;
-			else
-				exit;
-			end if;
-		end loop;
-
+	if words_dots_parens_links(v_parse_context) then
 		--Aggregate or analytic part.
 		if match_terminal('OVER', v_parse_context.new_node_id) and match_terminal('(', v_parse_context.new_node_id) then
 			if analytic_clause(v_parse_context.new_node_id) then
@@ -975,12 +950,9 @@ begin
 		else
 			return pop(v_first_parse_context);
 		end if;
-
-		return true;
 	else
 		return pop(v_first_parse_context);
 	end if;
-
 end function_expression_1;
 
 
@@ -1767,6 +1739,55 @@ begin
 		return pop(v_parse_context);
 	end if;
 end with_clause;
+
+
+--Not a standard production rule.  No push/pop.
+function words_dots_parens_links(p_parse_context parse_context) return boolean is
+begin
+	--Match the function part (words and dots, with parens and links thrown in)
+	--
+	--First value must be a non-reserved word.
+	if match_unreserved_word(C_AMBIG_CCFMOPPQSSTTV, p_parse_context.new_node_id) then
+
+		--Initial Link, link-parens, or parens.
+		if dblink(p_parse_context.new_node_id) then
+			if match_terminal('(', p_parse_context.new_node_id) then
+				g_optional := match_terminal('DISTINCT', p_parse_context.new_node_id) or match_terminal('ALL', p_parse_context.new_node_id);
+				arguments(p_parse_context);
+			end if;
+		elsif match_terminal('(', p_parse_context.new_node_id) then
+			g_optional := match_terminal('DISTINCT', p_parse_context.new_node_id) or match_terminal('ALL', p_parse_context.new_node_id);
+			arguments(p_parse_context);
+		end if;
+
+		--Series: (DOT WORD (LINK PARENS|LINK|PARENS))*
+		loop
+			if match_terminal('.', p_parse_context.new_node_id) then
+				if match_unreserved_word(C_AMBIG_CCFMOPPQSSTTV, p_parse_context.new_node_id) then
+					--Link, link-parens, or parens.
+					if dblink(p_parse_context.new_node_id) then
+						if match_terminal('(', p_parse_context.new_node_id) then
+							g_optional := match_terminal('DISTINCT', p_parse_context.new_node_id) or match_terminal('ALL', p_parse_context.new_node_id);
+							arguments(p_parse_context);
+						end if;
+					elsif match_terminal('(', p_parse_context.new_node_id) then
+						g_optional := match_terminal('DISTINCT', p_parse_context.new_node_id) or match_terminal('ALL', p_parse_context.new_node_id);
+						arguments(p_parse_context);
+					end if;
+				else
+					parse_error('unreserved word', $$plsql_line);
+				end if;
+			else
+				exit;
+			end if;
+		end loop;
+
+		return true;
+	else
+		return false;
+	end if;
+end words_dots_parens_links;
+
 
 
 
