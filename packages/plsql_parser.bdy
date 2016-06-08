@@ -445,18 +445,17 @@ function with_clause(p_parent_id number) return boolean;
 function words_dots_parens_links(p_parse_context parse_context) return boolean;
 
 
---?????
+--This can be a lot of different expressions.
 function ambiguous_expression(p_parent_id number) return boolean is
 	v_parse_context parse_context;
 begin
 	v_parse_context := push(C_AMBIG_expression, p_parent_id);
 
-
-
---C_AMBIG_CCFMOPPQSSTTV
-
-	--TODO
-	return pop(v_parse_context);
+	if words_dots_parens_links(v_parse_context) then
+		return true;
+	else
+		return pop(v_parse_context);
+	end if;
 end ambiguous_expression;
 
 
@@ -832,6 +831,54 @@ begin
 end for_update_clause;
 
 
+--**DIFFERENCE FROM MANUAL**: The manual does not use a FROM_CLAUSE, the nodes are just directly under QUERY_BLOCK.
+function from_clause(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_FROM_CLAUSE, p_parent_id);
+
+	if match_terminal('FROM', v_parse_context.new_node_id) then
+		if
+		(
+			table_reference(v_parse_context.new_node_id) or
+			join_clause(v_parse_context.new_node_id) or
+			(
+				match_terminal('(', v_parse_context.new_node_id) and
+				join_clause(v_parse_context.new_node_id) and
+				match_terminal(')', v_parse_context.new_node_id)
+			)
+		) then
+			loop
+				if match_terminal(',', v_parse_context.new_node_id) then
+					if
+					(
+						table_reference(v_parse_context.new_node_id) or
+						join_clause(v_parse_context.new_node_id) or
+						(
+							match_terminal('(', v_parse_context.new_node_id) and
+							join_clause(v_parse_context.new_node_id) and
+							match_terminal(')', v_parse_context.new_node_id)
+						)
+					) then
+						null;
+					else
+						parse_error('table_reference, join_clause, or ( join_clause )', $$plsql_line);
+					end if;
+				else
+					exit;
+				end if;
+			end loop;
+
+			return true;
+		else
+			parse_error('table_reference, join_clause, or ( join_clause )', $$plsql_line);
+		end if;
+	else
+		return pop(v_parse_context);
+	end if;
+end from_clause;
+
+
 --This function only covers the easy parts of FUNCTION_EXPRESSION, anything
 --that has a trailing "OVER (", "KEEP (", or "WITHIN GROUP (".  Other function
 --expressions are ambiguous and must be handled in post-processing.
@@ -1204,46 +1251,13 @@ begin
 		g_optional := hint(v_parse_context.new_node_id);
 		g_optional := match_terminal('DISTINCT', v_parse_context.new_node_id) or match_terminal('UNIQUE', v_parse_context.new_node_id) or match_terminal('ALL', v_parse_context.new_node_id);
 		if select_list(v_parse_context.new_node_id) then
-			if match_terminal('FROM', v_parse_context.new_node_id) then
-				if
-				(
-					table_reference(v_parse_context.new_node_id) or
-					join_clause(v_parse_context.new_node_id) or
-					(
-						match_terminal('(', v_parse_context.new_node_id) and
-						join_clause(v_parse_context.new_node_id) and
-						match_terminal(')', v_parse_context.new_node_id)
-					)
-				) then
-					loop
-						if match_terminal(',', v_parse_context.new_node_id) then
-							if
-							(
-								table_reference(v_parse_context.new_node_id) or
-								join_clause(v_parse_context.new_node_id) or
-								(
-									match_terminal('(', v_parse_context.new_node_id) and
-									join_clause(v_parse_context.new_node_id) and
-									match_terminal(')', v_parse_context.new_node_id)
-								)
-							) then
-								null;
-							else
-								parse_error('table_reference, join_clause, or ( join_clause )', $$plsql_line);
-							end if;
-						else
-							exit;
-						end if;
-					end loop;
-
-					g_optional := where_clause(v_parse_context.new_node_id);
-					g_optional := hierarchical_query_clause(v_parse_context.new_node_id);
-					g_optional := group_by_clause(v_parse_context.new_node_id);
-					g_optional := model_clause(v_parse_context.new_node_id);
-					return true;
-				else
-					parse_error('table_reference, join_clause, or ( join_clause )', $$plsql_line);
-				end if;
+			--**DIFFERENCE FROM MANUAL**: The manual does not use a FROM_CLAUSE, the nodes are just directly under QUERY_BLOCK.
+			if from_clause(v_parse_context.new_node_id) then
+				g_optional := where_clause(v_parse_context.new_node_id);
+				g_optional := hierarchical_query_clause(v_parse_context.new_node_id);
+				g_optional := group_by_clause(v_parse_context.new_node_id);
+				g_optional := model_clause(v_parse_context.new_node_id);
+				return true;
 			else
 				parse_error('FROM', $$plsql_line);
 			end if;
