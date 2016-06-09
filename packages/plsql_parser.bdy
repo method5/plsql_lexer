@@ -29,14 +29,14 @@ type parse_context is record
 
 --Temporary constants for ambiguous intermediate nodes that must be resolved later.
 --
---One of: cluster,column,function,materialized view,operator,package,procedure,query,
---  schema,schema,table,type,view
+--One of: cluster,column,function,materialized view,operator,package,procedure,query,schema,synonym,table,type,view
 C_AMBIG_CCFMOPPQSSTTV            constant varchar2(100) := 'C_AMBIG_ccfmoppqssttv';
+--One of: cluster,materialized view,query_name,schema,synonym,table,view
+C_AMBIG_CMQSSTV                  constant varchar2(100) := 'C_AMBIG_cmqsstv';
 C_AMBIG_expression               constant varchar2(100) := 'C_AMBIG_expression';
 C_AMBIG_func_agg_or_analytic     constant varchar2(100) := 'C_AMBIG_func_agg_or_analytic';
 C_AMBIG_qn_t_v_mv_alias          constant varchar2(100) := 'C_AMBIG_qn_t_v_mv_alias';
 C_AMBIG_schema                   constant varchar2(100) := 'C_AMBIG_schema';
-
 
 
 
@@ -437,6 +437,8 @@ function simple_expression_1(p_parent_id number) return boolean;
 function scalar_subquery_expression(p_parent_id number) return boolean;
 function subquery(p_parent_id number) return boolean;
 function subquery_factoring_clause(p_parent_id number) return boolean;
+function subquery_restriction_clause(p_parent_id number) return boolean;
+function table_collection_expression(p_parent_id number) return boolean;
 function table_reference(p_parent_id number) return boolean;
 function type_constructor_expression_1(p_parent_id number) return boolean;
 function where_clause(p_parent_id number) return boolean;
@@ -834,10 +836,9 @@ end for_update_clause;
 --**DIFFERENCE FROM MANUAL**: The manual does not use a FROM_CLAUSE, the nodes are just directly under QUERY_BLOCK.
 function from_clause(p_parent_id number) return boolean is
 	v_parse_context parse_context;
-begin
-	v_parse_context := push(C_FROM_CLAUSE, p_parent_id);
 
-	if match_terminal('FROM', v_parse_context.new_node_id) then
+	function from_item return boolean is
+	begin
 		if
 		(
 			table_reference(v_parse_context.new_node_id) or
@@ -848,18 +849,19 @@ begin
 				match_terminal(')', v_parse_context.new_node_id)
 			)
 		) then
+			return true;
+		else
+			return false;
+		end if;
+	end from_item;
+begin
+	v_parse_context := push(C_FROM_CLAUSE, p_parent_id);
+
+	if match_terminal('FROM', v_parse_context.new_node_id) then
+		if from_item then
 			loop
 				if match_terminal(',', v_parse_context.new_node_id) then
-					if
-					(
-						table_reference(v_parse_context.new_node_id) or
-						join_clause(v_parse_context.new_node_id) or
-						(
-							match_terminal('(', v_parse_context.new_node_id) and
-							join_clause(v_parse_context.new_node_id) and
-							match_terminal(')', v_parse_context.new_node_id)
-						)
-					) then
+					if from_item then
 						null;
 					else
 						parse_error('table_reference, join_clause, or ( join_clause )', $$plsql_line);
@@ -1282,13 +1284,51 @@ end query_partition_clause;
 
 function query_table_expression(p_parent_id number) return boolean is
 	v_parse_context parse_context;
+
+	--Not a standard production rule.  No push/pop.
+	function words_dots_links return boolean is
+	begin
+		--First value must be a non-reserved word.
+		if match_unreserved_word(C_AMBIG_CMQSSTV, v_parse_context.new_node_id) then
+			g_optional := dblink(v_parse_context.new_node_id);
+
+			--Series: (DOT WORD LINK)*
+			loop
+				if match_terminal('.', v_parse_context.new_node_id) then
+					if match_unreserved_word(C_AMBIG_CMQSSTV, v_parse_context.new_node_id) then
+						g_optional := dblink(v_parse_context.new_node_id);
+					else
+						parse_error('unreserved word', $$plsql_line);
+					end if;
+				else
+					exit;
+				end if;
+			end loop;
+
+			return true;
+		else
+			return false;
+		end if;
+	end words_dots_links;
 begin
 	v_parse_context := push(C_QUERY_TABLE_EXPRESSION, p_parent_id);
 
-	--TODO:
-	--lateral, table_collection_expression, schema., etc.
-
-	if match_unreserved_word(C_QUERY_NAME, v_parse_context.new_node_id) then
+	if next_value(0) = 'LATERAL' and next_value(1) = '(' then
+		g_optional := match_terminal('LATERAL', v_parse_context.new_node_id);
+		g_optional := match_terminal('(', v_parse_context.new_node_id);
+		if subquery(v_parse_context.new_node_id) then
+			g_optional := subquery_restriction_clause(v_parse_context.new_node_id);
+			if match_terminal(')', v_parse_context.new_node_id) then
+				return true;
+			else
+				parse_error('")"', $$plsql_line);
+			end if;
+		else
+			parse_error('subquery', $$plsql_line);
+		end if;
+	elsif table_collection_expression(v_parse_context.new_node_id) then
+		return true;
+	elsif words_dots_links then
 		return true;
 	end if;
 
@@ -1670,6 +1710,26 @@ begin
 end subquery_factoring_clause;
 
 
+function subquery_restriction_clause(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_SUBQUERY_RESTRICTION_CLAUSE, p_parent_id);
+
+	--TODO
+	return pop(v_parse_context);
+end subquery_restriction_clause;
+
+
+function table_collection_expression(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_TABLE_COLLECTION_EXPRESSION, p_parent_id);
+
+	--TODO
+	return pop(v_parse_context);
+end table_collection_expression;
+
+
 function table_reference(p_parent_id number) return boolean is
 	v_parse_context parse_context;
 begin
@@ -1677,9 +1737,9 @@ begin
 
 	if containers_clause(v_parse_context.new_node_id) then
 		g_optional := match_unreserved_word(C_T_ALIAS, v_parse_context.new_node_id);
-	elsif next_value(1) = 'ONLY' and next_value(2) = '(' then
-		increment;
-		increment;
+	elsif next_value(0) = 'ONLY' and next_value(1) = '(' then
+		g_optional := match_terminal('ONLY', v_parse_context.new_node_id);
+		g_optional := match_terminal('(', v_parse_context.new_node_id);
 		if query_table_expression(v_parse_context.new_node_id) then
 			if match_terminal(')', v_parse_context.new_node_id) then
 --				g_optional := flashback_query_clause;
@@ -1691,7 +1751,6 @@ begin
 			end if;
 		else
 			parse_error('query_table_expression', $$plsql_line);
-			return pop(v_parse_context);
 		end if;
 	elsif query_table_expression(v_parse_context.new_node_id) then
 		g_optional := flashback_query_clause(v_parse_context.new_node_id);
@@ -1700,7 +1759,6 @@ begin
 		return true;
 	else
 		parse_error('ONLY(query_table_expression), query_table_expression, or containers_clause', $$plsql_line);
-		return pop(v_parse_context);
 	end if;
 end table_reference;
 
@@ -1801,6 +1859,8 @@ begin
 		return false;
 	end if;
 end words_dots_parens_links;
+
+
 
 
 
