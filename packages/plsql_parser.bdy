@@ -106,6 +106,59 @@ procedure increment(p_increment number default 1) is begin
 end increment;
 
 
+--Compound conditions are left-recursive and are found after the parsing.
+--To fix this, add 2 nodes in the middle of the tree and shift others down.
+--That is, convert:
+--  condition
+--    null_condition
+--    ...
+--to:
+--  condition (OLD)
+--    compound_condition (NEW)
+--      condition (NEW)
+--        null_condition (OLD)
+--        ...
+--
+--Return the compound_condition node, since that will be a new parent.
+function insert_compound_condition(p_node_id number) return number is
+begin
+	g_nodes.extend;
+	g_nodes.extend;
+
+	--Shift nodes down, increase parent_id by 2.
+	for i in reverse p_node_id + 1 .. g_nodes.count loop
+		--DEBUG
+		dbms_output.put_line(i);
+
+		g_nodes(i) := node(
+			id => g_nodes(i-2).id + 2,
+			type => g_nodes(i-2).type,
+			parent_id => g_nodes(i-2).parent_id + 2,
+			lexer_token => g_nodes(i-2).lexer_token
+		);
+	end loop;
+
+	--Create new compound_condition and condition nodes.
+	g_nodes(p_node_id + 1) := node(
+		id => p_node_id + 1,
+		type => 'compound_condition',
+		parent_id => p_node_id,
+		lexer_token => g_nodes(p_node_id + 2).lexer_token
+	);
+
+	g_nodes(p_node_id + 2) := node(
+		id => p_node_id + 2,
+		type => 'condition',
+		parent_id => p_node_id + 1,
+		lexer_token => g_nodes(p_node_id + 3).lexer_token
+	);
+
+	dbms_output.put_line('test');
+
+	return p_node_id + 1;
+end insert_compound_condition;
+
+
 function match_terminal(p_value varchar2, p_parent_id in number) return boolean is
 	v_parse_context parse_context;
 begin
@@ -406,7 +459,8 @@ end value_after_matching_parens;
 function argument(p_parent_id number) return boolean;
 function between_condition(p_parent_id number) return boolean;
 function comparison_condition(p_parent_id number) return boolean;
-function compound_condition(p_parent_id number) return boolean;
+function compound_condition_1(p_parent_id number) return boolean;
+function condition(p_parent_id number) return boolean;
 function containers_clause(p_parent_id number) return boolean;
 function flashback_query_clause(p_parent_id number) return boolean;
 function for_update_clause(p_parent_id number) return boolean;
@@ -587,14 +641,31 @@ begin
 end comparison_expr;
 
 
-function compound_condition(p_parent_id number) return boolean is
+--The easy types of compound_condition.  The left-recursive one will be handled later.
+function compound_condition_1(p_parent_id number) return boolean is
 	v_parse_context parse_context;
 begin
 	v_parse_context := push(C_COMPOUND_CONDITION, p_parent_id);
 
-	--TODO
-	return pop(v_parse_context);
-end compound_condition;
+	if match_terminal('(', v_parse_context.new_node_id) then
+		if condition(v_parse_context.new_node_id) then
+			if match_terminal(')', v_parse_context.new_node_id) then
+				return true;
+			else
+				parse_error('")"', $$plsql_line);
+			end if;
+		end if;
+	elsif match_terminal('NOT', v_parse_context.new_node_id) then
+		if condition(v_parse_context.new_node_id) then
+			return true;
+		end if;
+	--Can't do this, left recursion would cause an infinite loop.
+	--elsif condition(v_parse_context.new_node_id) then
+	--....
+	else
+		return pop(v_parse_context);
+	end if;
+end compound_condition_1;
 
 
 --This function only covers the easy parts of COMPOUND_EXPRESSION, anything
@@ -629,10 +700,14 @@ end compound_expression_1;
 
 function condition(p_parent_id number) return boolean is
 	v_parse_context parse_context;
+	v_compound_condition_node_id number;
 begin
 	v_parse_context := push(C_CONDITION, p_parent_id);
 
 	if
+		--Order is a bit different than in the manual.
+		--compound_condition must be first to catch the "(".
+		compound_condition_1(v_parse_context.new_node_id) or
 		comparison_condition(v_parse_context.new_node_id) or
 		floating_point_condition(v_parse_context.new_node_id) or
 		--**DIFFERENCE FROM MANUAL**: Logical condition is not a real thing, see compound_condition instead.
@@ -646,11 +721,19 @@ begin
 		null_condition(v_parse_context.new_node_id) or
 		XML_condition(v_parse_context.new_node_id) or
 		JSON_condition(v_parse_context.new_node_id) or
-		compound_condition(v_parse_context.new_node_id) or
 		exists_condition(v_parse_context.new_node_id) or
 		in_condition(v_parse_context.new_node_id) or
 		is_of_type_condition(v_parse_context.new_node_id)
 	then
+		--Check for left-recursive compound_conditions.
+		if match_terminal('AND', v_parse_context.new_node_id) or match_terminal('OR', v_parse_context.new_node_id) then
+			v_compound_condition_node_id := insert_compound_condition(v_parse_context.new_node_id);
+			if condition(v_compound_condition_node_id) then
+				return true;
+			else
+				parse_error('condition', $$plsql_line);
+			end if;
+		end if;
 		return true;
 	else
 		return pop(v_parse_context);
