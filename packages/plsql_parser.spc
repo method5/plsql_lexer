@@ -60,16 +60,21 @@ create or replace type node_table is table of node;
 C_AGGREGATE_FUNCTION             constant varchar2(100) := 'aggregate_function';
 C_ALIAS                          constant varchar2(100) := 'alias';
 C_ARGUMENT                       constant varchar2(100) := 'argument';
+C_COMPARISON_CONDITION           constant varchar2(100) := 'comparison_condition';
 C_COMPARISON_EXPR                constant varchar2(100) := 'comparison_expr';
 C_ELSE_EXPR                      constant varchar2(100) := 'else_expr';
 C_FROM_CLAUSE                    constant varchar2(100) := 'from_clause';
 C_FUNCTION_EXPRESSION            constant varchar2(100) := 'function_expression';
 C_HOST_VARIABLE                  constant varchar2(100) := 'host_variable';
 C_INDICATOR_VARIABLE             constant varchar2(100) := 'indicator_variable';
+C_MODEL_CONDITION                constant varchar2(100) := 'model_condition';
+C_MULTISET_CONDITION             constant varchar2(100) := 'multiset_condition';
+C_PATTERN_MATCHING_CONDITION     constant varchar2(100) := 'pattern_matching_condition';
 C_QUERY_NAME                     constant varchar2(100) := 'query_name';
 C_RETURN_EXPR                    constant varchar2(100) := 'return_expr';
 C_SCALAR_SUBQUERY_EXPRESSION     constant varchar2(100) := 'scalar_subquery_expression';
 C_T_ALIAS                        constant varchar2(100) := 't_alias';
+C_XML_CONDITION                  constant varchar2(100) := 'xml_condition';
 --"SELECT" collides with the "SELECT" terminal.
 C_SELECT_STATEMENT               constant varchar2(100) := 'select_statement';
 

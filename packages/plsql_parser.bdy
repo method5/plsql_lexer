@@ -404,6 +404,9 @@ end value_after_matching_parens;
 
 --Forward declarations so functions can be placed in alphabetical order.
 function argument(p_parent_id number) return boolean;
+function between_condition(p_parent_id number) return boolean;
+function comparison_condition(p_parent_id number) return boolean;
+function compound_condition(p_parent_id number) return boolean;
 function containers_clause(p_parent_id number) return boolean;
 function flashback_query_clause(p_parent_id number) return boolean;
 function for_update_clause(p_parent_id number) return boolean;
@@ -411,16 +414,25 @@ function function_expression_1(p_parent_id number) return boolean;
 function dblink(p_parent_id number) return boolean;
 function else_clause(p_parent_id number) return boolean;
 function else_expr(p_parent_id number) return boolean;
+function exists_condition(p_parent_id number) return boolean;
 function expr(p_parent_id number) return boolean;
+function floating_point_condition(p_parent_id number) return boolean;
 function group_by_clause(p_parent_id number) return boolean;
 function hierarchical_query_clause(p_parent_id number) return boolean;
 function hint(p_parent_id number) return boolean;
+function in_condition(p_parent_id number) return boolean;
 function interval_expression(p_parent_id number) return boolean;
+function is_of_type_condition(p_parent_id number) return boolean;
 function join_clause(p_parent_id number) return boolean;
+function JSON_condition(p_parent_id number) return boolean;
+function model_condition(p_parent_id number) return boolean;
 function model_clause(p_parent_id number) return boolean;
 function model_expression(p_parent_id number) return boolean;
+function multiset_condition(p_parent_id number) return boolean;
+function null_condition(p_parent_id number) return boolean;
 function object_access_expression_1(p_parent_id number) return boolean;
 function order_by_clause(p_parent_id number) return boolean;
+function pattern_matching_condition(p_parent_id number) return boolean;
 function placeholder_expression(p_parent_id number) return boolean;
 function plsql_declarations(p_parent_id number) return boolean;
 function query_block(p_parent_id number) return boolean;
@@ -445,6 +457,8 @@ function where_clause(p_parent_id number) return boolean;
 function windowing_clause(p_parent_id number) return boolean;
 function with_clause(p_parent_id number) return boolean;
 function words_dots_parens_links(p_parse_context parse_context) return boolean;
+function XML_condition(p_parent_id number) return boolean;
+
 
 
 --This can be a lot of different expressions.
@@ -518,6 +532,16 @@ begin
 end arguments;
 
 
+function between_condition(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_BETWEEN_CONDITION, p_parent_id);
+
+	--TODO
+	return pop(v_parse_context);
+end between_condition;
+
+
 function case_expression(p_parent_id number) return boolean is
 	v_parse_context parse_context;
 begin
@@ -540,6 +564,16 @@ begin
 end case_expression;
 
 
+function comparison_condition(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_COMPARISON_CONDITION, p_parent_id);
+
+	--TODO
+	return pop(v_parse_context);
+end comparison_condition;
+
+
 function comparison_expr(p_parent_id number) return boolean is
 	v_parse_context parse_context;
 begin
@@ -551,6 +585,16 @@ begin
 		return pop(v_parse_context);
 	end if;
 end comparison_expr;
+
+
+function compound_condition(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_COMPOUND_CONDITION, p_parent_id);
+
+	--TODO
+	return pop(v_parse_context);
+end compound_condition;
 
 
 --This function only covers the easy parts of COMPOUND_EXPRESSION, anything
@@ -588,8 +632,29 @@ function condition(p_parent_id number) return boolean is
 begin
 	v_parse_context := push(C_CONDITION, p_parent_id);
 
-	--TODO
-	return pop(v_parse_context);
+	if
+		comparison_condition(v_parse_context.new_node_id) or
+		floating_point_condition(v_parse_context.new_node_id) or
+		--**DIFFERENCE FROM MANUAL**: Logical condition is not a real thing, see compound_condition instead.
+		--logical_condition
+		model_condition(v_parse_context.new_node_id) or
+		multiset_condition(v_parse_context.new_node_id) or
+		pattern_matching_condition(v_parse_context.new_node_id) or
+		--**DIFFERENCE FROM MANUAL**: This is called between_condition.
+		--range_condition
+		between_condition(v_parse_context.new_node_id) or
+		null_condition(v_parse_context.new_node_id) or
+		XML_condition(v_parse_context.new_node_id) or
+		JSON_condition(v_parse_context.new_node_id) or
+		compound_condition(v_parse_context.new_node_id) or
+		exists_condition(v_parse_context.new_node_id) or
+		in_condition(v_parse_context.new_node_id) or
+		is_of_type_condition(v_parse_context.new_node_id)
+	then
+		return true;
+	else
+		return pop(v_parse_context);
+	end if;
 end condition;
 
 
@@ -715,6 +780,16 @@ begin
 end else_expr;
 
 
+function exists_condition(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_EXISTS_CONDITION, p_parent_id);
+
+	--TODO
+	return pop(v_parse_context);
+end exists_condition;
+
+
 --**MANUAL ERROR**: "variable_expression" should be named "placeholder_expression".
 function expr(p_parent_id number) return boolean is
 	v_parse_context parse_context;
@@ -826,6 +901,16 @@ begin
 end flashback_query_clause;
 
 
+function floating_point_condition(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_FLOATING_POINT_CONDITION, p_parent_id);
+
+	--TODO
+	return pop(v_parse_context);
+end floating_point_condition;
+
+
 function for_update_clause(p_parent_id number) return boolean is
 begin
 	--TODO
@@ -841,8 +926,8 @@ function from_clause(p_parent_id number) return boolean is
 	begin
 		if
 		(
-			table_reference(v_parse_context.new_node_id) or
 			join_clause(v_parse_context.new_node_id) or
+			table_reference(v_parse_context.new_node_id) or
 			(
 				match_terminal('(', v_parse_context.new_node_id) and
 				join_clause(v_parse_context.new_node_id) and
@@ -1068,6 +1153,16 @@ exception when subscript_beyond_count then
 end hint;
 
 
+function in_condition(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_IN_CONDITION, p_parent_id);
+
+	--TODO
+	return pop(v_parse_context);
+end in_condition;
+
+
 --Bind variables can be either a non-reserved word or a postive integer (digits only).
 function indicator_variable(p_parent_id number) return boolean is
 	v_parse_context parse_context;
@@ -1093,19 +1188,54 @@ begin
 end interval_expression;
 
 
-function join_clause(p_parent_id number) return boolean is
+function is_of_type_condition(p_parent_id number) return boolean is
+	v_parse_context parse_context;
 begin
+	v_parse_context := push(C_IS_OF_TYPE_CONDITION, p_parent_id);
+
 	--TODO
-	return true;
+	return pop(v_parse_context);
+end is_of_type_condition;
+
+
+function join_clause(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_JOIN_CLAUSE, p_parent_id);
+
+	--TODO
+	return pop(v_parse_context);
 end join_clause;
 
 
+function JSON_condition(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_JSON_CONDITION, p_parent_id);
+
+	--TODO
+	return pop(v_parse_context);
+end JSON_condition;
+
 
 function model_clause(p_parent_id number) return boolean is
+	v_parse_context parse_context;
 begin
+	v_parse_context := push(C_MODEL_CLAUSE, p_parent_id);
+
 	--TODO
-	return true;
+	return pop(v_parse_context);
 end model_clause;
+
+
+function model_condition(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_MODEL_CONDITION, p_parent_id);
+
+	--TODO
+	return pop(v_parse_context);
+end model_condition;
 
 
 function model_expression(p_parent_id number) return boolean is
@@ -1116,6 +1246,34 @@ begin
 	--TODO
 	return pop(v_parse_context);
 end model_expression;
+
+
+function multiset_condition(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_MULTISET_CONDITION, p_parent_id);
+
+	--TODO
+	return pop(v_parse_context);
+end multiset_condition;
+
+
+function null_condition(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_NULL_CONDITION, p_parent_id);
+
+	if expr(v_parse_context.new_node_id) then
+		if match_terminal('IS', v_parse_context.new_node_id) then
+			g_optional := match_terminal('NOT', v_parse_context.new_node_id);
+			if match_terminal('NULL', v_parse_context.new_node_id) then
+				return true;
+			end if;
+		end if;
+	end if;
+
+	return pop(v_parse_context);
+end null_condition;
 
 
 --This function only covers the easy parts of OBJECT_ACCESS_EXPRESSION, anything
@@ -1196,6 +1354,16 @@ begin
 	--TODO
 	return true;
 end order_by_clause;
+
+
+function pattern_matching_condition(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_PATTERN_MATCHING_CONDITION, p_parent_id);
+
+	--TODO
+	return pop(v_parse_context);
+end pattern_matching_condition;
 
 
 function placeholder_expression(p_parent_id number) return boolean is
@@ -1777,9 +1945,19 @@ end type_constructor_expression_1;
 
 
 function where_clause(p_parent_id number) return boolean is
+	v_parse_context parse_context;
 begin
-	--TODO
-	return true;
+	v_parse_context := push(C_WHERE_CLAUSE, p_parent_id);
+
+	if match_terminal('WHERE', v_parse_context.new_node_id) then
+		if condition(v_parse_context.new_node_id) then
+			return true;
+		else
+			parse_error('conditoin', $$plsql_line);
+		end if;
+	else
+		return pop(v_parse_context);
+	end if;
 end where_clause;
 
 
@@ -1859,6 +2037,16 @@ begin
 		return false;
 	end if;
 end words_dots_parens_links;
+
+
+function XML_condition(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_XML_CONDITION, p_parent_id);
+
+	--TODO
+	return pop(v_parse_context);
+end XML_condition;
 
 
 
