@@ -469,6 +469,7 @@ end value_after_matching_parens;
 --Forward declarations so functions can be placed in alphabetical order.
 function argument(p_parent_id number) return boolean;
 function between_condition(p_parent_id number) return boolean;
+function collection_expression(p_parent_id number) return boolean;
 function comparison_condition(p_parent_id number) return boolean;
 function compound_condition_1(p_parent_id number) return boolean;
 function condition(p_parent_id number) return boolean;
@@ -503,6 +504,7 @@ function null_condition(p_parent_id number) return boolean;
 function object_access_expression_1(p_parent_id number) return boolean;
 function order_by_clause(p_parent_id number) return boolean;
 function outer_join_clause(p_parent_id number) return boolean;
+function outer_join_type(p_parent_id number) return boolean;
 function pattern_matching_condition(p_parent_id number) return boolean;
 function placeholder_expression(p_parent_id number) return boolean;
 function plsql_declarations(p_parent_id number) return boolean;
@@ -529,6 +531,7 @@ function where_clause(p_parent_id number) return boolean;
 function windowing_clause(p_parent_id number) return boolean;
 function with_clause(p_parent_id number) return boolean;
 function words_dots_parens_links(p_parse_context parse_context) return boolean;
+function unpivot_clause(p_parent_id number) return boolean;
 function XML_condition(p_parent_id number) return boolean;
 
 
@@ -634,6 +637,21 @@ begin
 		return pop(v_parse_context);
 	end if;
 end case_expression;
+
+
+--TODO: I'm not sure how to handle this.  This is really just a subset of expr but
+--I don't want to re-define that.
+function collection_expression(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_COLLECTION_EXPRESSION, p_parent_id);
+
+	if expr(v_parse_context.new_node_id) then
+		return true;
+	else
+		return pop(v_parse_context);
+	end if;
+end collection_expression;
 
 
 function comparison_condition(p_parent_id number) return boolean is
@@ -784,7 +802,21 @@ function cross_outer_apply_clause(p_parent_id number) return boolean is
 begin
 	v_parse_context := push(C_CROSS_OUTER_APPLY_CLAUSE, p_parent_id);
 
-	--TODO
+	if match_terminal_or_list(string_table('CROSS', 'OUTER'), v_parse_context.new_node_id) then
+		if match_terminal('APPLY', v_parse_context.new_node_id) then
+			if
+				table_reference(v_parse_context.new_node_id) or
+				collection_expression(v_parse_context.new_node_id)
+			then
+				return true;
+			else
+				parse_error('table_reference, collection_expression', $$plsql_line);
+			end if;
+		else
+			parse_error('APPLY', $$plsql_line);
+		end if;
+	end if;
+
 	return pop(v_parse_context);
 end cross_outer_apply_clause;
 
@@ -1077,9 +1109,12 @@ end floating_point_condition;
 
 
 function for_update_clause(p_parent_id number) return boolean is
+	v_parse_context parse_context;
 begin
+	v_parse_context := push(C_FOR_UPDATE_CLAUSE, p_parent_id);
+
 	--TODO
-	return true;
+	return pop(v_parse_context);
 end for_update_clause;
 
 
@@ -1256,9 +1291,12 @@ end function_expression_1;
 
 
 function group_by_clause(p_parent_id number) return boolean is
+	v_parse_context parse_context;
 begin
+	v_parse_context := push(C_GROUP_BY_CLAUSE, p_parent_id);
+
 	--TODO
-	return true;
+	return pop(v_parse_context);
 end group_by_clause;
 
 
@@ -1291,9 +1329,12 @@ end group_comparison_condition;
 
 
 function hierarchical_query_clause(p_parent_id number) return boolean is
+	v_parse_context parse_context;
 begin
+	v_parse_context := push(C_HIERARCHICAL_QUERY_CLAUSE, p_parent_id);
+
 	--TODO
-	return true;
+	return pop(v_parse_context);
 end hierarchical_query_clause;
 
 
@@ -1642,9 +1683,12 @@ end object_access_expression_1;
 
 
 function order_by_clause(p_parent_id number) return boolean is
+	v_parse_context parse_context;
 begin
+	v_parse_context := push(C_ORDER_BY_CLAUSE, p_parent_id);
+
 	--TODO
-	return true;
+	return pop(v_parse_context);
 end order_by_clause;
 
 
@@ -1663,9 +1707,77 @@ function outer_join_clause(p_parent_id number) return boolean is
 begin
 	v_parse_context := push(C_OUTER_JOIN_CLAUSE, p_parent_id);
 
-	--TODO
+	g_optional := query_partition_clause(v_parse_context.new_node_id);
+	g_optional := match_terminal('NATURAL', v_parse_context.new_node_id);
+	if outer_join_type(v_parse_context.new_node_id) then
+		if match_terminal('JOIN', v_parse_context.new_node_id) then
+			if table_reference(v_parse_context.new_node_id) then
+				g_optional := query_partition_clause(v_parse_context.new_node_id);
+				if match_terminal('ON', v_parse_context.new_node_id) then
+					if condition(v_parse_context.new_node_id) then
+						return true;
+					else
+						parse_error('condition', $$plsql_line);
+					end if;
+				elsif match_terminal('USING', v_parse_context.new_node_id) then
+					if match_terminal('(', v_parse_context.new_node_id) then
+						if match_unreserved_word('column', v_parse_context.new_node_id) then
+							loop
+								if match_unreserved_word(',', v_parse_context.new_node_id) then
+									if match_unreserved_word('column', v_parse_context.new_node_id) then
+										null;
+									else
+										parse_error('column', $$plsql_line);
+									end if;
+								else
+									exit;
+								end if;
+							end loop;
+
+							if match_terminal(')', v_parse_context.new_node_id) then
+								return true;
+							else
+								parse_error('")"', $$plsql_line);
+							end if;
+						else
+							parse_error('column', $$plsql_line);
+						end if;
+					else
+						parse_error('"("', $$plsql_line);
+					end if;
+				else
+					parse_error('ON, USING', $$plsql_line);
+				end if;
+			end if;
+		end if;
+	end if;
+
 	return pop(v_parse_context);
 end outer_join_clause;
+
+
+function outer_join_type(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_OUTER_JOIN_TYPE, p_parent_id);
+
+	if match_terminal_or_list(string_table('FULL', 'LEFT', 'RIGHT'), v_parse_context.new_node_id) then
+		g_optional := match_terminal('OUTER', v_parse_context.new_node_id);
+		return true;
+	else
+		return pop(v_parse_context);
+	end if;
+end outer_join_type;
+
+
+function pivot_clause(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_PIVOT_CLAUSE, p_parent_id);
+
+	--TODO
+	return pop(v_parse_context);
+end pivot_clause;
 
 
 function placeholder_expression(p_parent_id number) return boolean is
@@ -1747,7 +1859,26 @@ function query_partition_clause(p_parent_id number) return boolean is
 begin
 	v_parse_context := push(C_QUERY_PARTITION_CLAUSE, p_parent_id);
 
-	--TODO
+	if match_terminal('PARTITION', v_parse_context.new_node_id) then
+		if match_terminal('BY', v_parse_context.new_node_id) then
+			if match_terminal('(', v_parse_context.new_node_id) then
+				if expressions(v_parse_context.new_node_id) then
+					if match_terminal(')', v_parse_context.new_node_id) then
+						return true;
+					else
+						parse_error('")"', $$plsql_line);
+					end if;
+				else
+					parse_error('expr', $$plsql_line);
+				end if;
+			elsif expressions(v_parse_context.new_node_id) then
+				return true;
+			else
+				parse_error('expr, (expr)', $$plsql_line);
+			end if;
+		end if;
+	end if;
+
 	return pop(v_parse_context);
 end query_partition_clause;
 
@@ -1820,10 +1951,23 @@ end return_expr;
 
 
 function row_limiting_clause(p_parent_id number) return boolean is
+	v_parse_context parse_context;
 begin
+	v_parse_context := push(C_ROW_LIMITING_CLAUSE, p_parent_id);
+
 	--TODO
-	return true;
+	return pop(v_parse_context);
 end row_limiting_clause;
+
+
+function row_pattern_clause(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_ROW_PATTERN_CLAUSE, p_parent_id);
+
+	--TODO
+	return pop(v_parse_context);
+end row_pattern_clause;
 
 
 function scalar_subquery_expression(p_parent_id number) return boolean is
@@ -1887,9 +2031,12 @@ end searched_case_expression;
 
 
 function search_clause(p_parent_id number) return boolean is
+	v_parse_context parse_context;
 begin
+	v_parse_context := push(C_SEARCH_CLAUSE, p_parent_id);
+
 	--TODO
-	return true;
+	return pop(v_parse_context);
 end search_clause;
 
 
@@ -2216,7 +2363,31 @@ function table_collection_expression(p_parent_id number) return boolean is
 begin
 	v_parse_context := push(C_TABLE_COLLECTION_EXPRESSION, p_parent_id);
 
-	--TODO
+	if match_terminal('TABLE', v_parse_context.new_node_id) then
+		if match_terminal('(', v_parse_context.new_node_id) then
+			if collection_expression(v_parse_context.new_node_id) then
+				if match_terminal(')', v_parse_context.new_node_id) then
+					if match_terminal('(', v_parse_context.new_node_id) then
+						if match_terminal('+', v_parse_context.new_node_id) then
+							if match_terminal(')', v_parse_context.new_node_id) then
+								null;
+							else
+								parse_error('")"', $$plsql_line);
+							end if;
+						else
+							parse_error('"+"', $$plsql_line);
+						end if;
+					end if;
+					return true;
+				else
+					parse_error('")"', $$plsql_line);
+				end if;
+			else
+				parse_error('collection_expression', $$plsql_line);
+			end if;
+		end if;
+	end if;
+
 	return pop(v_parse_context);
 end table_collection_expression;
 
@@ -2233,8 +2404,8 @@ begin
 		g_optional := match_terminal('(', v_parse_context.new_node_id);
 		if query_table_expression(v_parse_context.new_node_id) then
 			if match_terminal(')', v_parse_context.new_node_id) then
---				g_optional := flashback_query_clause;
---				g_optional := pivot_clause or unpivot_clause or row_pattern_clause;
+				g_optional := flashback_query_clause(v_parse_context.new_node_id);
+				g_optional := pivot_clause(v_parse_context.new_node_id) or unpivot_clause(v_parse_context.new_node_id) or row_pattern_clause(v_parse_context.new_node_id);
 				g_optional := match_unreserved_word(C_T_ALIAS, v_parse_context.new_node_id);
 				return true;				
 			else
@@ -2245,7 +2416,7 @@ begin
 		end if;
 	elsif query_table_expression(v_parse_context.new_node_id) then
 		g_optional := flashback_query_clause(v_parse_context.new_node_id);
---		g_optional := pivot_clause or unpivot_clause or row_pattern_clause;
+		g_optional := pivot_clause(v_parse_context.new_node_id) or unpivot_clause(v_parse_context.new_node_id) or row_pattern_clause(v_parse_context.new_node_id);
 		g_optional := match_unreserved_word(C_T_ALIAS, v_parse_context.new_node_id);
 		return true;
 	else
@@ -2265,6 +2436,16 @@ begin
 	--TODO
 	return pop(v_parse_context);
 end type_constructor_expression_1;
+
+
+function unpivot_clause(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_UNPIVOT_CLAUSE, p_parent_id);
+
+	--TODO
+	return pop(v_parse_context);
+end unpivot_clause;
 
 
 function where_clause(p_parent_id number) return boolean is

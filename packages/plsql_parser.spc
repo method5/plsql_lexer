@@ -60,6 +60,7 @@ create or replace type node_table is table of node;
 C_AGGREGATE_FUNCTION             constant varchar2(100) := 'aggregate_function';
 C_ALIAS                          constant varchar2(100) := 'alias';
 C_ARGUMENT                       constant varchar2(100) := 'argument';
+C_COLLECTION_EXPRESSION          constant varchar2(100) := 'collection_expression';
 C_COMPARISON_CONDITION           constant varchar2(100) := 'comparison_condition';
 C_COMPARISON_EXPR                constant varchar2(100) := 'comparison_expr';
 C_ELSE_EXPR                      constant varchar2(100) := 'else_expr';
