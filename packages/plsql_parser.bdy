@@ -106,30 +106,27 @@ procedure increment(p_increment number default 1) is begin
 end increment;
 
 
---Compound conditions are left-recursive and are found after the parsing.
+--Compound expressions and conditions are left-recursive and are found after the parsing.
 --To fix this, add 2 nodes in the middle of the tree and shift others down.
 --That is, convert:
---  condition
---    null_condition
+--  expr|cond
+--    simple_expression|condition
 --    ...
 --to:
---  condition (OLD)
---    compound_condition (NEW)
---      condition (NEW)
---        null_condition (OLD)
+--  expr|cond (OLD)
+--    compound_expression|condition (NEW)
+--      expr|condition (NEW)
+--        simple_expression|condition (OLD)
 --        ...
 --
---Return the compound_condition node, since that will be a new parent.
-function insert_compound_condition(p_node_id number) return number is
+--Return the compound_* node, since that will be a new parent.
+function insert_compound_expr_or_cond(p_node_id number, p_compound_name varchar2, p_name varchar2) return number is
 begin
 	g_nodes.extend;
 	g_nodes.extend;
 
 	--Shift nodes down, increase parent_id by 2.
 	for i in reverse p_node_id + 1 .. g_nodes.count loop
-		--DEBUG
-		dbms_output.put_line(i);
-
 		g_nodes(i) := node(
 			id => g_nodes(i-2).id + 2,
 			type => g_nodes(i-2).type,
@@ -138,25 +135,27 @@ begin
 		);
 	end loop;
 
-	--Create new compound_condition and condition nodes.
+	--Create new compound_expression|condition and expr|cond nodes.
 	g_nodes(p_node_id + 1) := node(
 		id => p_node_id + 1,
-		type => 'compound_condition',
+		type => p_compound_name,
 		parent_id => p_node_id,
 		lexer_token => g_nodes(p_node_id + 2).lexer_token
 	);
 
 	g_nodes(p_node_id + 2) := node(
 		id => p_node_id + 2,
-		type => 'condition',
+		type => p_name,
 		parent_id => p_node_id + 1,
 		lexer_token => g_nodes(p_node_id + 3).lexer_token
 	);
 
-	dbms_output.put_line('test');
-
 	return p_node_id + 1;
-end insert_compound_condition;
+end insert_compound_expr_or_cond;
+
+
+
+
 
 
 function match_terminal(p_value varchar2, p_parent_id in number) return boolean is
@@ -771,7 +770,7 @@ begin
 	then
 		--Check for left-recursive compound_conditions.
 		if next_value(0) in ('AND', 'IN') then
-			v_compound_condition_node_id := insert_compound_condition(v_parse_context.new_node_id);
+			v_compound_condition_node_id := insert_compound_expr_or_cond(v_parse_context.new_node_id, 'compound_condition', 'condition');
 			g_optional := match_terminal_or_list(string_table('AND', 'IN'), v_compound_condition_node_id);
 			if condition(v_compound_condition_node_id) then
 				return true;
@@ -946,6 +945,7 @@ end exists_condition;
 --**MANUAL ERROR**: "variable_expression" should be named "placeholder_expression".
 function expr(p_parent_id number) return boolean is
 	v_parse_context parse_context;
+	v_compound_expression_node_id number;
 begin
 	v_parse_context := push(C_EXPR, p_parent_id);
 
@@ -973,7 +973,6 @@ begin
 
 	But there's a lot of ambiguity so different expression types must be broken up
 	and much of it resolved later.
-
 */
 
 	if
@@ -990,6 +989,17 @@ begin
 		function_expression_1(v_parse_context.new_node_id) or
 		ambiguous_expression(v_parse_context.new_node_id)
 	then
+		--Check for left-recursive compound_expression.
+		if next_value(0) in ('*', '/', '+', '-', '||') then
+			v_compound_expression_node_id := insert_compound_expr_or_cond(v_parse_context.new_node_id, 'compound_expression', 'expr');
+			g_optional := match_terminal_or_list(string_table('*', '/', '+', '-', '||'), v_compound_expression_node_id);
+			if expr(v_compound_expression_node_id) then
+				return true;
+			else
+				parse_error('expr', $$plsql_line);
+			end if;
+		end if;
+
 		g_optional := datetime_expression(v_parse_context.new_node_id);
 		return true;
 	else
