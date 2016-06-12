@@ -473,6 +473,7 @@ function comparison_condition(p_parent_id number) return boolean;
 function compound_condition_1(p_parent_id number) return boolean;
 function condition(p_parent_id number) return boolean;
 function containers_clause(p_parent_id number) return boolean;
+function cross_outer_apply_clause(p_parent_id number) return boolean;
 function expressions(p_parent_id number) return boolean;
 function flashback_query_clause(p_parent_id number) return boolean;
 function for_update_clause(p_parent_id number) return boolean;
@@ -489,6 +490,7 @@ function group_comparison_condition(p_parent_id number) return boolean;
 function hierarchical_query_clause(p_parent_id number) return boolean;
 function hint(p_parent_id number) return boolean;
 function in_condition(p_parent_id number) return boolean;
+function inner_cross_join_clause(p_parent_id number) return boolean;
 function interval_expression(p_parent_id number) return boolean;
 function is_of_type_condition(p_parent_id number) return boolean;
 function join_clause(p_parent_id number) return boolean;
@@ -500,6 +502,7 @@ function multiset_condition(p_parent_id number) return boolean;
 function null_condition(p_parent_id number) return boolean;
 function object_access_expression_1(p_parent_id number) return boolean;
 function order_by_clause(p_parent_id number) return boolean;
+function outer_join_clause(p_parent_id number) return boolean;
 function pattern_matching_condition(p_parent_id number) return boolean;
 function placeholder_expression(p_parent_id number) return boolean;
 function plsql_declarations(p_parent_id number) return boolean;
@@ -774,6 +777,16 @@ begin
 	--TODO
 	return pop(v_parse_context);
 end containers_clause;
+
+
+function cross_outer_apply_clause(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_CROSS_OUTER_APPLY_CLAUSE, p_parent_id);
+
+	--TODO
+	return pop(v_parse_context);
+end cross_outer_apply_clause;
 
 
 function cursor_expression(p_parent_id number) return boolean is
@@ -1358,6 +1371,84 @@ begin
 end indicator_variable;
 
 
+function inner_cross_join_clause(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_INNER_CROSS_JOIN_CLAUSE, p_parent_id);
+
+	if
+	(
+		(match_terminal('INNER', v_parse_context.new_node_id) and match_terminal('JOIN', v_parse_context.new_node_id))
+		or
+		match_terminal('JOIN', v_parse_context.new_node_id)
+	) then
+		if table_reference(v_parse_context.new_node_id) then
+			if match_terminal('ON', v_parse_context.new_node_id) then
+				if condition(v_parse_context.new_node_id) then
+					return true;
+				else
+					parse_error('condition', $$plsql_line);
+				end if;
+			elsif match_terminal('USING', v_parse_context.new_node_id) then
+				if match_terminal('(', v_parse_context.new_node_id) then
+					if match_unreserved_word('column', v_parse_context.new_node_id) then
+						loop
+							if match_unreserved_word(',', v_parse_context.new_node_id) then
+								if match_unreserved_word('column', v_parse_context.new_node_id) then
+									null;
+								else
+									parse_error('column', $$plsql_line);
+								end if;
+							else
+								exit;
+							end if;
+						end loop;
+
+						if match_terminal(')', v_parse_context.new_node_id) then
+							return true;
+						else
+							parse_error('")"', $$plsql_line);
+						end if;
+					else
+						parse_error('column', $$plsql_line);
+					end if;
+				else
+					parse_error('"("', $$plsql_line);
+				end if;
+
+			else
+				parse_error('ON, USING', $$plsql_line);
+			end if;
+		else
+			parse_error('table_reference', $$plsql_line);
+		end if;
+	elsif match_terminal('CROSS', v_parse_context.new_node_id) then
+		if match_terminal('JOIN', v_parse_context.new_node_id) then
+			if table_reference(v_parse_context.new_node_id) then
+				return true;
+			else
+				parse_error('table_reference', $$plsql_line);
+			end if;
+		else
+			parse_error('JOIN', $$plsql_line);
+		end if;
+	elsif match_terminal('NATURAL', v_parse_context.new_node_id) then
+		g_optional := match_terminal('INNER', v_parse_context.new_node_id);
+		if match_terminal('JOIN', v_parse_context.new_node_id) then
+			if table_reference(v_parse_context.new_node_id) then
+				return true;
+			else
+				parse_error('table_reference', $$plsql_line);
+			end if;
+		else
+			parse_error('JOIN', $$plsql_line);
+		end if;
+	else
+		return pop(v_parse_context);
+	end if;
+end inner_cross_join_clause;
+
+
 function interval_expression(p_parent_id number) return boolean is
 	v_parse_context parse_context;
 begin
@@ -1383,7 +1474,28 @@ function join_clause(p_parent_id number) return boolean is
 begin
 	v_parse_context := push(C_JOIN_CLAUSE, p_parent_id);
 
-	--TODO
+	if table_reference(v_parse_context.new_node_id) then
+		if
+			inner_cross_join_clause(v_parse_context.new_node_id) or
+			outer_join_clause(v_parse_context.new_node_id) or
+			cross_outer_apply_clause(v_parse_context.new_node_id)
+		then
+			loop
+				if
+					inner_cross_join_clause(v_parse_context.new_node_id) or
+					outer_join_clause(v_parse_context.new_node_id) or
+					cross_outer_apply_clause(v_parse_context.new_node_id)
+				then
+					null;
+				else
+					exit;
+				end if;
+			end loop;
+
+			return true;
+		end if;
+	end if;
+
 	return pop(v_parse_context);
 end join_clause;
 
@@ -1544,6 +1656,16 @@ begin
 	--TODO
 	return pop(v_parse_context);
 end pattern_matching_condition;
+
+
+function outer_join_clause(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_OUTER_JOIN_CLAUSE, p_parent_id);
+
+	--TODO
+	return pop(v_parse_context);
+end outer_join_clause;
 
 
 function placeholder_expression(p_parent_id number) return boolean is
