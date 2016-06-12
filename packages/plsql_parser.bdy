@@ -173,6 +173,17 @@ begin
 end match_terminal;
 
 
+function match_terminal_or_list(p_values string_table, p_parent_id in number) return boolean is
+begin
+	for i in 1 .. p_values.count loop
+		if match_terminal(p_values(i), p_parent_id) then
+			return true;
+		end if;
+	end loop;
+	return false;
+end match_terminal_or_list;
+
+
 function next_value(p_increment number default 1) return clob is begin
 	begin
 		return upper(g_ast_tokens(g_ast_token_index+p_increment).value);
@@ -462,6 +473,7 @@ function comparison_condition(p_parent_id number) return boolean;
 function compound_condition_1(p_parent_id number) return boolean;
 function condition(p_parent_id number) return boolean;
 function containers_clause(p_parent_id number) return boolean;
+function expressions(p_parent_id number) return boolean;
 function flashback_query_clause(p_parent_id number) return boolean;
 function for_update_clause(p_parent_id number) return boolean;
 function function_expression_1(p_parent_id number) return boolean;
@@ -470,8 +482,10 @@ function else_clause(p_parent_id number) return boolean;
 function else_expr(p_parent_id number) return boolean;
 function exists_condition(p_parent_id number) return boolean;
 function expr(p_parent_id number) return boolean;
+function expression_list(p_parent_id number) return boolean;
 function floating_point_condition(p_parent_id number) return boolean;
 function group_by_clause(p_parent_id number) return boolean;
+function group_comparison_condition(p_parent_id number) return boolean;
 function hierarchical_query_clause(p_parent_id number) return boolean;
 function hint(p_parent_id number) return boolean;
 function in_condition(p_parent_id number) return boolean;
@@ -501,6 +515,7 @@ function select_statement(p_parent_id number) return boolean;
 function simple_case_expression(p_parent_id number) return boolean;
 function simple_expression_1(p_parent_id number) return boolean;
 function scalar_subquery_expression(p_parent_id number) return boolean;
+function simple_comparison_condition(p_parent_id number) return boolean;
 function subquery(p_parent_id number) return boolean;
 function subquery_factoring_clause(p_parent_id number) return boolean;
 function subquery_restriction_clause(p_parent_id number) return boolean;
@@ -623,8 +638,15 @@ function comparison_condition(p_parent_id number) return boolean is
 begin
 	v_parse_context := push(C_COMPARISON_CONDITION, p_parent_id);
 
-	--TODO
-	return pop(v_parse_context);
+	if
+		--Group is more specific and should come first.
+		group_comparison_condition(v_parse_context.new_node_id) or
+		simple_comparison_condition(v_parse_context.new_node_id)
+	then
+		return true;
+	else
+		return pop(v_parse_context);
+	end if;
 end comparison_condition;
 
 
@@ -647,13 +669,14 @@ function compound_condition_1(p_parent_id number) return boolean is
 begin
 	v_parse_context := push(C_COMPOUND_CONDITION, p_parent_id);
 
-	if match_terminal('(', v_parse_context.new_node_id) then
-		if condition(v_parse_context.new_node_id) then
-			if match_terminal(')', v_parse_context.new_node_id) then
-				return true;
-			else
-				parse_error('")"', $$plsql_line);
-			end if;
+	if
+		match_terminal('(', v_parse_context.new_node_id) and
+		condition(v_parse_context.new_node_id)
+	then
+		if match_terminal(')', v_parse_context.new_node_id) then
+			return true;
+		else
+			parse_error('")"', $$plsql_line);
 		end if;
 	elsif match_terminal('NOT', v_parse_context.new_node_id) then
 		if condition(v_parse_context.new_node_id) then
@@ -726,14 +749,16 @@ begin
 		is_of_type_condition(v_parse_context.new_node_id)
 	then
 		--Check for left-recursive compound_conditions.
-		if match_terminal('AND', v_parse_context.new_node_id) or match_terminal('OR', v_parse_context.new_node_id) then
+		if next_value(0) in ('AND', 'IN') then
 			v_compound_condition_node_id := insert_compound_condition(v_parse_context.new_node_id);
+			g_optional := match_terminal_or_list(string_table('AND', 'IN'), v_compound_condition_node_id);
 			if condition(v_compound_condition_node_id) then
 				return true;
 			else
 				parse_error('condition', $$plsql_line);
 			end if;
 		end if;
+
 		return true;
 	else
 		return pop(v_parse_context);
@@ -974,6 +999,50 @@ type_constructor_expression
 end expr;
 
 
+function expression_list(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_EXPRESSION_LIST, p_parent_id);
+
+	if expressions(v_parse_context.new_node_id) then
+		return true;
+	elsif match_terminal('(', v_parse_context.new_node_id) then
+		if expressions(v_parse_context.new_node_id) then
+			if match_terminal(')', v_parse_context.new_node_id) then
+				return true;
+			else
+				parse_error('")"', $$plsql_line);
+			end if;
+		end if;
+	end if;
+
+	return pop(v_parse_context);
+end expression_list;
+
+
+--Not a real production rule.
+--Used for comma-separated expressions but *NOT* the same thing as expression_list.
+--TODO: This might be a good place to disregard the manual and just make them all expression lists.
+function expressions(p_parent_id number) return boolean is
+begin
+	if expr(p_parent_id) then
+		loop
+			if match_terminal(',', p_parent_id) then
+				if expr(p_parent_id) then
+					return true;
+				else
+					parse_error('expr', $$plsql_line);
+				end if;
+			else
+				exit;
+			end if;
+		end loop;
+	else
+		return false;
+	end if;
+end expressions;
+
+
 function flashback_query_clause(p_parent_id number) return boolean is
 	v_parse_context parse_context;
 begin
@@ -1178,6 +1247,34 @@ begin
 	--TODO
 	return true;
 end group_by_clause;
+
+
+function group_comparison_condition(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_GROUP_COMPARISON_CONDITION, p_parent_id);
+
+	if expr(v_parse_context.new_node_id) then
+		if match_terminal_or_list(string_table('=', '!=', '^=', '<>', '>', '<', '>=', '<='), v_parse_context.new_node_id) then
+			if match_terminal_or_list(string_table('ANY', 'SOME', 'ALL'), v_parse_context.new_node_id) then
+				if match_terminal('(', v_parse_context.new_node_id) then
+					dbms_output.put_line('asdf');
+					if subquery(v_parse_context.new_node_id) or expression_list(v_parse_context.new_node_id) then
+						if match_terminal(')', v_parse_context.new_node_id) then
+							return true;
+						else
+							parse_error('")"', $$plsql_line);
+						end if;
+					end if;
+				end if;
+			end if;
+		end if;
+	--**DIFFERENCE FROM MANUAL**: Ignore the bottom half of group_comparison_condition, it doesn't makse sense.
+	--It implies this SQL statement is valid: select 1 from dual where (1,2) > any (3,4)
+	end if;
+
+	return pop(v_parse_context);
+end group_comparison_condition;
 
 
 function hierarchical_query_clause(p_parent_id number) return boolean is
@@ -1799,6 +1896,27 @@ begin
 		return pop(v_parse_context);
 	end if;
 end simple_case_expression;
+
+
+function simple_comparison_condition(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_SIMPLE_COMPARISON_CONDITION, p_parent_id);
+
+	if expr(v_parse_context.new_node_id) then
+		if match_terminal_or_list(string_table('=', '!=', '^=', '<>', '>', '<', '>=', '<='), v_parse_context.new_node_id) then
+			if expr(v_parse_context.new_node_id) then
+				return true;
+			else
+				parse_error('expr', $$plsql_line);
+			end if;
+		end if;
+	--**DIFFERENCE FROM MANUAL**: Ignore the bottom half of simple_comparison_condition, it doesn't makse sense.
+	--It implies this SQL statement is valid: select 1 from dual where (1,2) > (3,4)
+	end if;
+
+	return pop(v_parse_context);
+end simple_comparison_condition;
 
 
 --This function only covers the easy parts of SIMPLE_EXPRESSION, basically everything
