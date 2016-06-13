@@ -29,13 +29,17 @@ type parse_context is record
 
 --Temporary constants for ambiguous intermediate nodes that must be resolved later.
 --
---One of: cluster,column,function,materialized view,operator,package,procedure,query,schema,synonym,table,type,view
-C_AMBIG_CCFMOPPQSSTTV            constant varchar2(100) := 'C_AMBIG_ccfmoppqssttv';
---One of: cluster,materialized view,query_name,schema,synonym,table,view
-C_AMBIG_CMQSSTV                  constant varchar2(100) := 'C_AMBIG_cmqsstv';
+--One of: cluster,column,function,materialized view,operator,package,procedure,query,schema,table,type,view  (synonyms are resolved)
+--Used in expressions.
+C_AMBIG_CCFMOPPQSTTV             constant varchar2(100) := 'C_AMBIG_ccfmoppqsttv';
+--One of: cluster,materialized view,query_name,schema,table,view  (synonyms are resolved)
+--Used in query_table_expression
+C_AMBIG_CMQSTV                   constant varchar2(100) := 'C_AMBIG_cmqstv';
 C_AMBIG_expression               constant varchar2(100) := 'C_AMBIG_expression';
 C_AMBIG_func_agg_or_analytic     constant varchar2(100) := 'C_AMBIG_func_agg_or_analytic';
-C_AMBIG_qn_t_v_mv_alias          constant varchar2(100) := 'C_AMBIG_qn_t_v_mv_alias';
+--One of : query_name, cluster, table, view, materialized view, alias  (synonyms are resolved)
+--These are things in select_list that can have a ".*"
+C_AMBIG_qn_c_t_v_mv_alias          constant varchar2(100) := 'C_AMBIG_qn_t_v_mv_alias';
 
 
 
@@ -417,6 +421,11 @@ end is_unreserved_word;
 --table alias, query name, table, view, or a materialized view.
 procedure resolve_ambiguous_nodes is
 begin
+	--C_AMBIG_CMQSTV
+	--One of: cluster,materialized view,query_name,schema,table,view  (synonyms are resolved)
+	--Used in query_table_expression
+
+
 	--TODO
 	null;
 end resolve_ambiguous_nodes;
@@ -1903,13 +1912,13 @@ function query_table_expression(p_parent_id number) return boolean is
 	function words_dots_links return boolean is
 	begin
 		--First value must be a non-reserved word.
-		if match_unreserved_word(C_AMBIG_CMQSSTV, v_parse_context.new_node_id) then
+		if match_unreserved_word(C_AMBIG_CMQSTV, v_parse_context.new_node_id) then
 			g_optional := dblink(v_parse_context.new_node_id);
 
 			--Series: (DOT WORD LINK)*
 			loop
 				if match_terminal('.', v_parse_context.new_node_id) then
-					if match_unreserved_word(C_AMBIG_CMQSSTV, v_parse_context.new_node_id) then
+					if match_unreserved_word(C_AMBIG_CMQSTV, v_parse_context.new_node_id) then
 						g_optional := dblink(v_parse_context.new_node_id);
 					else
 						parse_error('unreserved word', $$plsql_line);
@@ -2084,9 +2093,9 @@ begin
 	if match_terminal('*', v_parse_context.new_node_id) then
 		return true;
 	elsif is_unreserved_word(0) and next_type(1) = '.' and next_type(2) = '*' then
-		g_optional := match_unreserved_word(C_AMBIG_qn_t_v_mv_alias, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_terminal('*', v_parse_context.new_node_id);
+		g_optional := match_unreserved_word(C_AMBIG_qn_c_t_v_mv_alias, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_terminal('*', v_parse_context.new_node_id);
 	elsif is_unreserved_word(0) and next_type(1) = '.' and is_unreserved_word(2) and next_type(3) = '.' and next_type(4) = '*' then
-		g_optional := match_unreserved_word('schema', v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_unreserved_word(C_AMBIG_qn_t_v_mv_alias, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_terminal('*', v_parse_context.new_node_id);
+		g_optional := match_unreserved_word('schema', v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_unreserved_word(C_AMBIG_qn_c_t_v_mv_alias, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_terminal('*', v_parse_context.new_node_id);
 	elsif expr(v_parse_context.new_node_id) then
 		if match_terminal('AS', v_parse_context.new_node_id) then
 			if match_unreserved_word(C_ALIAS, v_parse_context.new_node_id) then
@@ -2104,9 +2113,9 @@ begin
 	loop
 		if match_terminal(',', v_parse_context.new_node_id) then
 			if is_unreserved_word(0) and next_type(1) = '.' and next_type(2) = '*' then
-				g_optional := match_unreserved_word(C_AMBIG_qn_t_v_mv_alias, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_terminal('*', v_parse_context.new_node_id);
+				g_optional := match_unreserved_word(C_AMBIG_qn_c_t_v_mv_alias, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_terminal('*', v_parse_context.new_node_id);
 			elsif is_unreserved_word(0) and next_type(1) = '.' and is_unreserved_word(2) and next_type(3) = '.' and next_type(4) = '*' then
-				g_optional := match_unreserved_word('schema', v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_unreserved_word(C_AMBIG_qn_t_v_mv_alias, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_terminal('*', v_parse_context.new_node_id);
+				g_optional := match_unreserved_word('schema', v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_unreserved_word(C_AMBIG_qn_c_t_v_mv_alias, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_terminal('*', v_parse_context.new_node_id);
 			elsif expr(v_parse_context.new_node_id) then
 				if match_terminal('AS', v_parse_context.new_node_id) then
 					if match_unreserved_word(C_ALIAS, v_parse_context.new_node_id) then
@@ -2314,10 +2323,11 @@ begin
 end subquery;
 
 
-function subquery_factoring_clause(p_parent_id number) return boolean is
+--**DIFFERENCE FROM MANUAL**  This rule was created to manage multiple items in subquery_factoring_clause.
+function subquery_factoring_item(p_parent_id number) return boolean is
 	v_parse_context parse_context;
 begin
-	v_parse_context := push(C_SUBQUERY_FACTORING_CLAUSE, p_parent_id);
+	v_parse_context := push(C_SUBQUERY_FACTORING_ITEM, p_parent_id);
 
 	if match_unreserved_word(C_QUERY_NAME, v_parse_context.new_node_id) then
 		if match_terminal('(', v_parse_context.new_node_id) then
@@ -2355,6 +2365,31 @@ begin
 		else
 			parse_error('AS', $$plsql_line);
 		end if;
+	end if;
+
+	return pop(v_parse_context);
+end subquery_factoring_item;
+
+
+function subquery_factoring_clause(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_SUBQUERY_FACTORING_CLAUSE, p_parent_id);
+
+	if subquery_factoring_item(v_parse_context.new_node_id) then
+		loop
+			if match_terminal(',', v_parse_context.new_node_id) then
+				if subquery_factoring_item(v_parse_context.new_node_id) then
+					null;
+				else
+					parse_error('subquery_factoring_item', $$plsql_line);
+				end if;
+			else
+				exit;
+			end if;
+		end loop;
+
+		return true;
 	end if;
 
 	return pop(v_parse_context);
@@ -2514,7 +2549,7 @@ begin
 	--Match the function part (words and dots, with parens and links thrown in)
 	--
 	--First value must be a non-reserved word.
-	if match_unreserved_word(C_AMBIG_CCFMOPPQSSTTV, p_parse_context.new_node_id) then
+	if match_unreserved_word(C_AMBIG_CCFMOPPQSTTV, p_parse_context.new_node_id) then
 
 		--Initial Link, link-parens, or parens.
 		if dblink(p_parse_context.new_node_id) then
@@ -2530,7 +2565,7 @@ begin
 		--Series: (DOT WORD (LINK PARENS|LINK|PARENS))*
 		loop
 			if match_terminal('.', p_parse_context.new_node_id) then
-				if match_unreserved_word(C_AMBIG_CCFMOPPQSSTTV, p_parse_context.new_node_id) then
+				if match_unreserved_word(C_AMBIG_CCFMOPPQSTTV, p_parse_context.new_node_id) then
 					--Link, link-parens, or parens.
 					if dblink(p_parse_context.new_node_id) then
 						if match_terminal('(', p_parse_context.new_node_id) then
