@@ -39,12 +39,17 @@ Raises: ORA-20123 for parse errors.  The SQLERRM contains the production rule an
 Returns  - NODE_TABLE (todo)
 
 --TODO: Put these in installer if this ever works.
+drop type node force;
+
+create or replace type number_table is table of number;
+
 create or replace type node is object
 (
     id                  number,         --Unique identifier for the node.
     type                varchar2(4000), --String to represent the node type.  See the constants in PARSER.
     parent_id           number,         --Unique identifier of the node's parent.
-	lexer_token         token           --Token information.
+	lexer_token         token,          --Token information.
+	child_ids           number_table    --Unique identifiers of node's children.
 );
 create or replace type node_table is table of node;
 

@@ -36,7 +36,6 @@ C_AMBIG_CMQSSTV                  constant varchar2(100) := 'C_AMBIG_cmqsstv';
 C_AMBIG_expression               constant varchar2(100) := 'C_AMBIG_expression';
 C_AMBIG_func_agg_or_analytic     constant varchar2(100) := 'C_AMBIG_func_agg_or_analytic';
 C_AMBIG_qn_t_v_mv_alias          constant varchar2(100) := 'C_AMBIG_qn_t_v_mv_alias';
-C_AMBIG_schema                   constant varchar2(100) := 'C_AMBIG_schema';
 
 
 
@@ -54,7 +53,7 @@ function push(p_node_type in varchar2, p_parent_id in number) return parse_conte
 	v_parse_context parse_context;
 begin
 	g_nodes.extend;
-	g_nodes(g_nodes.count) := node(id => g_nodes.count, type => p_node_type, parent_id => p_parent_id, lexer_token => g_ast_tokens(g_ast_token_index));
+	g_nodes(g_nodes.count) := node(id => g_nodes.count, type => p_node_type, parent_id => p_parent_id, lexer_token => g_ast_tokens(g_ast_token_index), child_ids => null);
 	v_parse_context.new_node_id := g_nodes.count;
 	v_parse_context.ast_token_index_before := g_ast_token_index;
 	return v_parse_context;
@@ -131,7 +130,8 @@ begin
 			id => g_nodes(i-2).id + 2,
 			type => g_nodes(i-2).type,
 			parent_id => g_nodes(i-2).parent_id + 2,
-			lexer_token => g_nodes(i-2).lexer_token
+			lexer_token => g_nodes(i-2).lexer_token,
+			child_ids => g_nodes(i-2).child_ids
 		);
 	end loop;
 
@@ -140,14 +140,16 @@ begin
 		id => p_node_id + 1,
 		type => p_compound_name,
 		parent_id => p_node_id,
-		lexer_token => g_nodes(p_node_id + 2).lexer_token
+		lexer_token => g_nodes(p_node_id + 2).lexer_token,
+		child_ids => g_nodes(p_node_id + 2).child_ids
 	);
 
 	g_nodes(p_node_id + 2) := node(
 		id => p_node_id + 2,
 		type => p_name,
 		parent_id => p_node_id + 1,
-		lexer_token => g_nodes(p_node_id + 3).lexer_token
+		lexer_token => g_nodes(p_node_id + 3).lexer_token,
+		child_ids => g_nodes(p_node_id + 3).child_ids
 	);
 
 	return p_node_id + 1;
@@ -282,7 +284,8 @@ begin
 			id => g_nodes(i).id - 1,
 			type => g_nodes(i).type,
 			parent_id => g_nodes(i).parent_id - 1,
-			lexer_token => g_nodes(i).lexer_token
+			lexer_token => g_nodes(i).lexer_token,
+			child_ids => g_nodes(i).child_ids
 		);
 	end loop;
 
@@ -1386,7 +1389,7 @@ begin
 		--True if it's a hint.
 		elsif g_parse_tree_tokens(i).type = plsql_lexer.c_comment and substr(g_parse_tree_tokens(i).value, 1, 3) in ('--+', '/*+') then
 			--Replace node that points to abstract token with node that points to comment.
-			g_nodes(g_nodes.count) := node(id => g_nodes.count, type => C_HINT, parent_id => p_parent_id, lexer_token => g_parse_tree_tokens(i));
+			g_nodes(g_nodes.count) := node(id => g_nodes.count, type => C_HINT, parent_id => p_parent_id, lexer_token => g_parse_tree_tokens(i), child_ids => null);
 			return true;
 		end if;
 	end loop;
@@ -2083,7 +2086,7 @@ begin
 	elsif is_unreserved_word(0) and next_type(1) = '.' and next_type(2) = '*' then
 		g_optional := match_unreserved_word(C_AMBIG_qn_t_v_mv_alias, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_terminal('*', v_parse_context.new_node_id);
 	elsif is_unreserved_word(0) and next_type(1) = '.' and is_unreserved_word(2) and next_type(3) = '.' and next_type(4) = '*' then
-		g_optional := match_unreserved_word(C_AMBIG_schema, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_unreserved_word(C_AMBIG_qn_t_v_mv_alias, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_terminal('*', v_parse_context.new_node_id);
+		g_optional := match_unreserved_word('schema', v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_unreserved_word(C_AMBIG_qn_t_v_mv_alias, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_terminal('*', v_parse_context.new_node_id);
 	elsif expr(v_parse_context.new_node_id) then
 		if match_terminal('AS', v_parse_context.new_node_id) then
 			if match_unreserved_word(C_ALIAS, v_parse_context.new_node_id) then
@@ -2103,7 +2106,7 @@ begin
 			if is_unreserved_word(0) and next_type(1) = '.' and next_type(2) = '*' then
 				g_optional := match_unreserved_word(C_AMBIG_qn_t_v_mv_alias, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_terminal('*', v_parse_context.new_node_id);
 			elsif is_unreserved_word(0) and next_type(1) = '.' and is_unreserved_word(2) and next_type(3) = '.' and next_type(4) = '*' then
-				g_optional := match_unreserved_word(C_AMBIG_schema, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_unreserved_word(C_AMBIG_qn_t_v_mv_alias, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_terminal('*', v_parse_context.new_node_id);
+				g_optional := match_unreserved_word('schema', v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_unreserved_word(C_AMBIG_qn_t_v_mv_alias, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_terminal('*', v_parse_context.new_node_id);
 			elsif expr(v_parse_context.new_node_id) then
 				if match_terminal('AS', v_parse_context.new_node_id) then
 					if match_unreserved_word(C_ALIAS, v_parse_context.new_node_id) then
@@ -2621,6 +2624,9 @@ begin
 	if current_value is not null then
 		parse_error('<empty token>', $$plsql_line);
 	end if;
+
+	--Set CHILD_IDs, which are all NULL right now but must be set for tree walking.
+	syntax_tree.add_child_ids(g_nodes);
 
 	--Second-pass to resolve ambiguous nodes.
 	resolve_ambiguous_nodes;
