@@ -420,10 +420,62 @@ end is_unreserved_word;
 --For example, "select a.* ..." - the "a" can be multiple things, such as a
 --table alias, query name, table, view, or a materialized view.
 procedure resolve_ambiguous_nodes is
+
+	function is_query_name_from_cte(p_index number) return boolean is
+		v_ambig_cmqstv clob := g_nodes(p_index).lexer_token.value;
+		v_ancestor_query_block node;
+		v_with_clause node;
+		v_subquery_factoring_clause node;
+		v_subquery_factoring_items node_table;
+	begin
+		--Ancestor query_name.
+		v_ancestor_query_block := syntax_tree.get_first_ancest_node_by_type(g_nodes, p_index, c_query_block);
+
+		loop
+			--Stop looping when no more query_blocks are found.
+			if v_ancestor_query_block is null then
+				exit;
+			else
+				--Child with_clause.
+				v_with_clause := syntax_tree.get_child_node_by_type(g_nodes, v_ancestor_query_block.id, C_WITH_CLAUSE, 1);
+				if v_with_clause is not null then
+					--Child subquery_factoring_clause.
+					v_subquery_factoring_clause := syntax_tree.get_child_node_by_type(g_nodes, v_with_clause.id, C_SUBQUERY_FACTORING_CLAUSE, 1);
+					if v_subquery_factoring_clause is not null then
+						--Children subquery_factoring_item
+						v_subquery_factoring_items := syntax_tree.get_children_node_by_type(g_nodes, v_subquery_factoring_clause.id, C_SUBQUERY_FACTORING_ITEM);
+						--Look for matching name.
+						for i in 1 .. v_subquery_factoring_items.count loop
+							if syntax_tree.are_names_equal(v_ambig_cmqstv, v_subquery_factoring_items(i).lexer_token.value) then
+								return true;
+							end if;
+						end loop;
+					end if;
+				end if;
+			end if;
+
+			--If not found, go up another query_block and try again.
+			v_ancestor_query_block := syntax_tree.get_first_ancest_node_by_type(g_nodes, v_ancestor_query_block.parent_id, c_query_block);
+		end loop;
+
+		--Nothing found.
+		return false;
+	end;
+
 begin
 	--C_AMBIG_CMQSTV
 	--One of: cluster,materialized view,query_name,schema,table,view  (synonyms are resolved)
 	--Used in query_table_expression
+
+	--Loop through all the nodes.
+	for i in 1 .. g_nodes.count loop
+		--Look for this type of abmiguity.
+		if g_nodes(i).type = C_AMBIG_CMQSTV then
+			if is_query_name_from_cte(i) then
+				g_nodes(i).type := c_query_name;
+			end if;
+		end if;
+	end loop;
 
 
 	--TODO
@@ -1388,7 +1440,6 @@ begin
 
 	--Use "-1" to start at previous node and then iterate forward.
 	v_parse_token_index := g_map_between_parse_and_ast(g_ast_token_index-1);
-	dbms_output.put_line('Parse token index: '||v_parse_token_index);
 
 	--Start from parse tree token after the last node.
 	for i in v_parse_token_index+1 .. g_parse_tree_tokens.count loop
