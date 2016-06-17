@@ -79,6 +79,7 @@ C_PATTERN_MATCHING_CONDITION     constant varchar2(100) := 'pattern_matching_con
 C_QUERY_NAME                     constant varchar2(100) := 'query_name';
 C_RETURN_EXPR                    constant varchar2(100) := 'return_expr';
 C_SCALAR_SUBQUERY_EXPRESSION     constant varchar2(100) := 'scalar_subquery_expression';
+C_SCHEMA                         constant varchar2(100) := 'schema';
 C_SUBQUERY_FACTORING_ITEM        constant varchar2(100) := 'subquery_factoring_item';
 C_T_ALIAS                        constant varchar2(100) := 't_alias';
 C_XML_CONDITION                  constant varchar2(100) := 'xml_condition';

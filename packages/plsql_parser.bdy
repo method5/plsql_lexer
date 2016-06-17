@@ -32,14 +32,17 @@ type parse_context is record
 --One of: cluster,column,function,materialized view,operator,package,procedure,query,schema,table,type,view  (synonyms are resolved)
 --Used in expressions.
 C_AMBIG_CCFMOPPQSTTV             constant varchar2(100) := 'C_AMBIG_ccfmoppqsttv';
---One of: cluster,materialized view,query_name,schema,table,view  (synonyms are resolved)
+--One of: cluster,materialized view,query_name,table,view  (synonyms are resolved)
 --Used in query_table_expression
-C_AMBIG_CMQSTV                   constant varchar2(100) := 'C_AMBIG_cmqstv';
+C_AMBIG_CMQTV                    constant varchar2(100) := 'C_AMBIG_cmqtv';
+--One of: cluster,materialized view,table,view  (synonyms are resolved)
+--Used in query_table_expression
+C_AMBIG_CMTV                     constant varchar2(100) := 'C_AMBIG_cmtv';
 C_AMBIG_expression               constant varchar2(100) := 'C_AMBIG_expression';
 C_AMBIG_func_agg_or_analytic     constant varchar2(100) := 'C_AMBIG_func_agg_or_analytic';
 --One of : query_name, cluster, table, view, materialized view, alias  (synonyms are resolved)
 --These are things in select_list that can have a ".*"
-C_AMBIG_qn_c_t_v_mv_alias          constant varchar2(100) := 'C_AMBIG_qn_t_v_mv_alias';
+C_AMBIG_qn_c_t_v_mv_alias        constant varchar2(100) := 'C_AMBIG_qn_t_v_mv_alias';
 
 
 
@@ -462,24 +465,29 @@ procedure resolve_ambiguous_nodes is
 		return false;
 	end;
 
-begin
-	--C_AMBIG_CMQSTV
-	--One of: cluster,materialized view,query_name,schema,table,view  (synonyms are resolved)
-	--Used in query_table_expression
-
-	--Loop through all the nodes.
-	for i in 1 .. g_nodes.count loop
-		--Look for this type of abmiguity.
-		if g_nodes(i).type = C_AMBIG_CMQSTV then
-			if is_query_name_from_cte(i) then
-				g_nodes(i).type := c_query_name;
+	--Replace C_AMBIG_CMQTV with "query_name" if the name is from a CTE.
+	procedure resolve_query_name is
+	begin
+		--Loop through all the nodes.
+		for i in 1 .. g_nodes.count loop
+			--Look for this type of abmiguity.
+			if g_nodes(i).type = C_AMBIG_CMQTV then
+				if is_query_name_from_cte(i) then
+					g_nodes(i).type := c_query_name;
+				end if;
 			end if;
-		end if;
-	end loop;
+		end loop;
+	end resolve_query_name;
+
+begin
+	--C_AMBIG_CMQTV
+	--One of: cluster,materialized view,query_name,table,view  (synonyms are resolved)
+	--Used in query_table_expression
+	resolve_query_name;
+	--TODO - more for C_AMBIG_CMQTV
 
 
-	--TODO
-	null;
+	--TODO - other ambiguities.
 end resolve_ambiguous_nodes;
 
 
@@ -1958,32 +1966,6 @@ end query_partition_clause;
 
 function query_table_expression(p_parent_id number) return boolean is
 	v_parse_context parse_context;
-
-	--Not a standard production rule.  No push/pop.
-	function words_dots_links return boolean is
-	begin
-		--First value must be a non-reserved word.
-		if match_unreserved_word(C_AMBIG_CMQSTV, v_parse_context.new_node_id) then
-			g_optional := dblink(v_parse_context.new_node_id);
-
-			--Series: (DOT WORD LINK)*
-			loop
-				if match_terminal('.', v_parse_context.new_node_id) then
-					if match_unreserved_word(C_AMBIG_CMQSTV, v_parse_context.new_node_id) then
-						g_optional := dblink(v_parse_context.new_node_id);
-					else
-						parse_error('unreserved word', $$plsql_line);
-					end if;
-				else
-					exit;
-				end if;
-			end loop;
-
-			return true;
-		else
-			return false;
-		end if;
-	end words_dots_links;
 begin
 	v_parse_context := push(C_QUERY_TABLE_EXPRESSION, p_parent_id);
 
@@ -2002,8 +1984,23 @@ begin
 		end if;
 	elsif table_collection_expression(v_parse_context.new_node_id) then
 		return true;
-	elsif words_dots_links then
-		return true;
+	elsif is_unreserved_word(0) then
+		--Has a schema name.
+		if next_type(1) = '.' then
+			g_optional := match_unreserved_word(C_SCHEMA, v_parse_context.new_node_id);
+			g_optional := match_terminal('.', v_parse_context.new_node_id);
+			if match_unreserved_word(C_AMBIG_CMTV, v_parse_context.new_node_id) then
+				g_optional := dblink(v_parse_context.new_node_id);
+				return true;
+			else
+				parse_error('cluster, materialized view, table, view', $$plsql_line);
+			end if;
+		--No schema name.
+		else
+			g_optional := match_unreserved_word(C_AMBIG_CMQTV, v_parse_context.new_node_id);
+			g_optional := dblink(v_parse_context.new_node_id);
+			return true;
+		end if;
 	end if;
 
 	return pop(v_parse_context);
@@ -2146,7 +2143,7 @@ begin
 	elsif is_unreserved_word(0) and next_type(1) = '.' and next_type(2) = '*' then
 		g_optional := match_unreserved_word(C_AMBIG_qn_c_t_v_mv_alias, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_terminal('*', v_parse_context.new_node_id);
 	elsif is_unreserved_word(0) and next_type(1) = '.' and is_unreserved_word(2) and next_type(3) = '.' and next_type(4) = '*' then
-		g_optional := match_unreserved_word('schema', v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_unreserved_word(C_AMBIG_qn_c_t_v_mv_alias, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_terminal('*', v_parse_context.new_node_id);
+		g_optional := match_unreserved_word(C_SCHEMA, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_unreserved_word(C_AMBIG_qn_c_t_v_mv_alias, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_terminal('*', v_parse_context.new_node_id);
 	elsif expr(v_parse_context.new_node_id) then
 		if match_terminal('AS', v_parse_context.new_node_id) then
 			if match_unreserved_word(C_ALIAS, v_parse_context.new_node_id) then
@@ -2166,7 +2163,7 @@ begin
 			if is_unreserved_word(0) and next_type(1) = '.' and next_type(2) = '*' then
 				g_optional := match_unreserved_word(C_AMBIG_qn_c_t_v_mv_alias, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_terminal('*', v_parse_context.new_node_id);
 			elsif is_unreserved_word(0) and next_type(1) = '.' and is_unreserved_word(2) and next_type(3) = '.' and next_type(4) = '*' then
-				g_optional := match_unreserved_word('schema', v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_unreserved_word(C_AMBIG_qn_c_t_v_mv_alias, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_terminal('*', v_parse_context.new_node_id);
+				g_optional := match_unreserved_word(C_SCHEMA, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_unreserved_word(C_AMBIG_qn_c_t_v_mv_alias, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_terminal('*', v_parse_context.new_node_id);
 			elsif expr(v_parse_context.new_node_id) then
 				if match_terminal('AS', v_parse_context.new_node_id) then
 					if match_unreserved_word(C_ALIAS, v_parse_context.new_node_id) then
