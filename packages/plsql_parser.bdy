@@ -422,7 +422,7 @@ end is_unreserved_word;
 --Purpose: Resolve nodes that are ambiguous offline or at the beginning of parsing.
 --For example, "select a.* ..." - the "a" can be multiple things, such as a
 --table alias, query name, table, view, or a materialized view.
-procedure resolve_ambiguous_nodes is
+procedure resolve_ambiguous_nodes(p_user varchar2) is
 
 	function is_query_name_from_cte(p_index number) return boolean is
 		v_ambig_cmqstv clob := g_nodes(p_index).lexer_token.value;
@@ -463,7 +463,7 @@ procedure resolve_ambiguous_nodes is
 
 		--Nothing found.
 		return false;
-	end;
+	end is_query_name_from_cte;
 
 	--Replace C_AMBIG_CMQTV with "query_name" if the name is from a CTE.
 	procedure resolve_query_name is
@@ -479,13 +479,133 @@ procedure resolve_ambiguous_nodes is
 		end loop;
 	end resolve_query_name;
 
-begin
-	--C_AMBIG_CMQTV
-	--One of: cluster,materialized view,query_name,table,view  (synonyms are resolved)
-	--Used in query_table_expression
-	resolve_query_name;
-	--TODO - more for C_AMBIG_CMQTV
+	--Purpose: Create definer's rights function to simplify name resolution.
+	procedure create_get_object_type_func(p_user varchar2) is
+		v_name_already_exists exception;
+		pragma exception_init(v_name_already_exists, -955);
+		pragma autonomous_transaction;
+	begin
+		execute immediate replace(q'[
+			create function "$$P_USER$$".temp_get_object_type_for_parse
+			--This temporary function was created by PLSQL_PARSER to resolve objects.
+			--It is completley safe to drop this function.
+			--It was supposed to have been dropped as part of the parsing functions, something
+			--must have went wrong.
+			--
+			--Returns: OBJECT_TYPE, and only the most relevant one if there are duplicates.
+			--	For example: MView trumps table, cluster trumps table, table trumps table partition.
+			--	Will return NULL if nothing is found.
+			(
+				p_owner varchar2,
+				p_object_name varchar2,
+				p_is_owner_implicit boolean,
+				p_dblink varchar2 default null
+			) return varchar2 is
+				v_object_type varchar2(4000);
+				v_public varchar2(30);
+			begin
+				--Search for "PUBLIC" if schema name was implicit.
+				if p_is_owner_implicit then
+					v_public := 'PUBLIC';
+				end if;
 
+				--Resolve duplicates.  Clusters and materialized views also create a table but
+				--should be counted only as a cluster or materialized view.
+				select coalesce(is_cluster, is_mv, is_synonym, is_table, is_view) object_type
+				into v_object_type
+				from
+				(
+					--Get simple object type.
+					select
+						max(case when object_type = 'CLUSTER' then 'CLUSTER' end) is_cluster,
+						max(case when object_type = 'MATERIALIZED VIEW' then 'MATERIALIZED VIEW' end) is_mv,
+						max(case when object_type = 'SYNONYM' then 'SYNONYM' end) is_synonym,
+						max(case when object_type = 'TABLE' then 'TABLE' end) is_table,
+						max(case when object_type = 'VIEW' then 'TABLE' end) is_view
+					from all_objects
+					where owner in (p_owner, v_public)
+						and object_name = p_object_name
+				);
+
+				--TODO: Recursive synonym resolution.
+
+				--TODO: Database link support.
+
+				return v_object_type;
+			end;
+		]', '$$P_USER$$', p_user);
+	--Use existing function if it already exists.
+	exception when v_name_already_exists then
+		null;
+	end create_get_object_type_func;
+
+	--Resolved cluster, materialized view, table, or view from either C_AMBIG_CMQTV or C_AMBIG_CMTV.
+	procedure resolve_cmtv(p_user varchar2) is
+		v_explicit_schema_name varchar2(32767);
+		v_object_type varchar2(4000);
+		v_query_table_expression node;
+		v_schema node;
+	begin
+		--Loop through all the nodes.
+		for i in 1 .. g_nodes.count loop
+			--Look for this type of abmiguity.
+			if g_nodes(i).type in (C_AMBIG_CMQTV, C_AMBIG_CMTV) then
+
+				--Find explicit schema name.
+				v_query_table_expression := syntax_tree.get_first_ancest_node_by_type(g_nodes, i, C_QUERY_TABLE_EXPRESSION);
+				v_schema := syntax_tree.get_child_node_by_type(g_nodes, v_query_table_expression.id, C_SCHEMA);
+				v_explicit_schema_name := v_schema.lexer_token.value;
+
+				--Implicit schema name.
+				if v_explicit_schema_name is null then
+					execute immediate replace(q'[
+						begin
+							:v_object_type := "$$P_USER$$".temp_get_object_type_for_parse(:p_owner, :p_object_name, p_is_owner_implicit => true);
+						end;
+					]', '$$P_USER$$', p_user)
+					using
+						out v_object_type,
+						p_user,
+						syntax_tree.get_data_dictionary_case(g_nodes(i).lexer_token.value);
+
+					--Throw exception if object cannot be resolved.
+					if v_object_type is null then
+						raise_application_error(-20942, 'table or view does not exist.  Could not resolve '||
+							syntax_tree.get_data_dictionary_case(g_nodes(i).lexer_token.value));
+					end if;
+				--Explicit schema name.
+				else
+					execute immediate replace(q'[
+						begin
+							:v_object_type := "$$P_USER$$".temp_get_object_type_for_parse(:p_owner, :p_object_name, p_is_owner_implicit => false);
+						end;
+					]', '$$P_USER$$', p_user)
+					using
+						out v_object_type,
+						syntax_tree.get_data_dictionary_case(v_explicit_schema_name),
+						syntax_tree.get_data_dictionary_case(g_nodes(i).lexer_token.value);
+
+					--Throw exception if object cannot be resolved.
+					if v_object_type is null then
+						raise_application_error(-20942, 'table or view does not exist.  Could not resolve '||
+							syntax_tree.get_data_dictionary_case(v_explicit_schema_name)||'.'||
+							syntax_tree.get_data_dictionary_case(g_nodes(i).lexer_token.value)||'.');
+					end if;
+				end if;
+
+				--Set the type.
+				g_nodes(i).type := lower(v_object_type);
+			end if;
+		end loop;
+	end resolve_cmtv;
+
+begin
+	--C_AMBIG_CMQTV or C_AMBIG_CMTV:
+	resolve_query_name;
+	create_get_object_type_func(p_user);
+	--TODO: Should we drop the function?  Leave it and pollute schema?
+	--drop_get_object_type_func;
+	resolve_cmtv(p_user);
 
 	--TODO - other ambiguities.
 end resolve_ambiguous_nodes;
@@ -527,7 +647,26 @@ begin
 end value_after_matching_parens;
 
 
+--Ensure the user exists.  Get the poentially case-sensitive username if necessary.
+function verify_user_get_real_name(p_user varchar2) return varchar2 is
+	v_username varchar2(4000);
+begin
+	--Verify case if the username has quotation marks.
+	if trim(p_user) like '"%"' then
+		execute immediate 'select username from dba_users where username = '''||trim('"' from p_user)||''''
+		into v_username;
+	else
+		execute immediate 'select username from dba_users where username = '''||upper(p_user)||''''
+		into v_username;
+	end if;
 
+	dbms_output.put_line('User: '||v_username);
+
+	return v_username;
+exception when no_data_found then
+	raise_application_error(-20000, 'Could not find this user: '||p_user||'.  If the '||
+		'username is case-sensitive then you must add quotation marks around the name.');
+end verify_user_get_real_name;
 
 
 
@@ -2672,9 +2811,13 @@ function parse(
 		p_source        in clob,
 		p_user          in varchar2 default user
 ) return node_table is
+	v_precise_username varchar2(32);
 begin
 	--Check input.
 	--TODO
+
+	--Find the real user name
+	v_precise_username := verify_user_get_real_name(p_user);
 
 	--Conditional compilation?
 	--TODO
@@ -2712,7 +2855,7 @@ begin
 	syntax_tree.add_child_ids(g_nodes);
 
 	--Second-pass to resolve ambiguous nodes.
-	resolve_ambiguous_nodes;
+	resolve_ambiguous_nodes(v_precise_username);
 
 	return g_nodes;
 end parse;

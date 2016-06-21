@@ -12,10 +12,12 @@ create or replace package syntax_tree is
 
 
 procedure add_child_ids(p_nodes in out node_table);
-function get_child_node_by_type(p_nodes node_table, p_node_index number, p_node_type varchar2, p_occurrence number) return node;
+function get_child_node_by_type(p_nodes node_table, p_node_index number, p_node_type varchar2, p_occurrence number default 1) return node;
 function get_children_node_by_type(p_nodes node_table, p_node_index number, p_node_type varchar2) return node_table;
 function get_first_ancest_node_by_type(p_nodes node_table, p_node_index number, p_node_type varchar2) return node;
+
 function are_names_equal(p_name1 varchar2, p_name2 varchar2) return boolean;
+function get_data_dictionary_case(p_name varchar2) return varchar2;
 
 /*
 
@@ -72,7 +74,7 @@ begin
 end;
 
 
-function get_child_node_by_type(p_nodes node_table, p_node_index number, p_node_type varchar2, p_occurrence number) return node is
+function get_child_node_by_type(p_nodes node_table, p_node_index number, p_node_type varchar2, p_occurrence number default 1) return node is
 	v_counter number := 0;
 begin
 	--TODO: Verify p_occurance
@@ -160,6 +162,21 @@ begin
 
 	return null;
 end are_names_equal;
+
+
+--Convert a name string to the case needed to match the data dictionary.
+--Examples:
+--asdf   --> ASDF
+--"asdf" --> asdf
+--"ASDF" --> ASDF
+function get_data_dictionary_case(p_name varchar2) return varchar2 is
+begin
+	if p_name like '"%"' then
+		return trim('"' from p_name);
+	else
+		return upper(p_name);
+	end if;
+end get_data_dictionary_case;
 
 
 end;
