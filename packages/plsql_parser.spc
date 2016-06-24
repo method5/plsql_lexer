@@ -1,4 +1,4 @@
-create or replace package plsql_parser is
+create or replace package plsql_parser authid current_user is
 --Copyright (C) 2016 Jon Heller.  This program is licensed under the LGPLv3.
 
 --  _____   ____    _   _  ____ _______   _    _  _____ ______  __     ________ _______ 
@@ -75,6 +75,8 @@ C_HOST_VARIABLE                  constant varchar2(100) := 'host_variable';
 C_INDICATOR_VARIABLE             constant varchar2(100) := 'indicator_variable';
 C_MODEL_CONDITION                constant varchar2(100) := 'model_condition';
 C_MULTISET_CONDITION             constant varchar2(100) := 'multiset_condition';
+C_ORDER_BY_ITEM                  constant varchar2(100) := 'order_by_item';
+C_ORDER_BY_LIST                  constant varchar2(100) := 'order_by_list';
 C_PATTERN_MATCHING_CONDITION     constant varchar2(100) := 'pattern_matching_condition';
 C_QUERY_NAME                     constant varchar2(100) := 'query_name';
 C_RETURN_EXPR                    constant varchar2(100) := 'return_expr';

@@ -1902,13 +1902,56 @@ begin
 end object_access_expression_1;
 
 
+--**DIFFERENCE FROM MANUAL**: The manual does not use a FROM_CLAUSE, the nodes are just directly under QUERY_BLOCK.
 function order_by_clause(p_parent_id number) return boolean is
 	v_parse_context parse_context;
+	v_order_by_list_pc parse_context;
+
+	function order_by_item(p_parent_id number) return boolean is
+		v_parse_context parse_context;
+	begin
+		v_parse_context := push(C_ORDER_BY_ITEM, p_parent_id);
+
+		--TODO - expression is not sufficient for this.
+		--There's also "position" and "c_alias".
+		--"position" is tricky, as "((+1.1e0))" is a position, not an expression.
+		if expr(v_parse_context.new_node_id) then
+			--TODO: ASC|DESC, NULLS FIRST|LAST.
+			return true;
+		else
+			return pop(v_parse_context);
+		end if;
+	end order_by_item;
 begin
 	v_parse_context := push(C_ORDER_BY_CLAUSE, p_parent_id);
 
-	--TODO
-	return pop(v_parse_context);
+	if match_terminal('ORDER', v_parse_context.new_node_id) then
+		g_optional := match_terminal('SIBLINGS', v_parse_context.new_node_id);
+		if match_terminal('BY', v_parse_context.new_node_id) then
+			v_order_by_list_pc := push(C_ORDER_BY_LIST, p_parent_id);
+			if order_by_item(v_order_by_list_pc.new_node_id) then
+				loop
+					if match_terminal(',', v_order_by_list_pc.new_node_id) then
+						if order_by_item(v_order_by_list_pc.new_node_id) then
+							null;
+						else
+							parse_error('order_by_item', $$plsql_line);
+						end if;
+					else
+						exit;
+					end if;
+				end loop;
+
+				return true;
+			else
+				parse_error('order_by_item', $$plsql_line);
+			end if;
+		else
+			parse_error('BY', $$plsql_line);
+		end if;
+	else
+		return pop(v_parse_context);
+	end if;
 end order_by_clause;
 
 
