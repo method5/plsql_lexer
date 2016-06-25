@@ -1393,14 +1393,18 @@ end from_clause;
 function function_expression_1(p_parent_id number) return boolean is
 	v_first_parse_context parse_context;
 	v_parse_context parse_context;
+	v_order_by_list_context parse_context;
 
 	--Assumption: This was called after an "... ORDER BY" or "," (as part of an order section).
-	procedure order_by_item is
+	procedure order_by_item(p_parent_id number) is
+		v_parse_context parse_context;
 	begin
+		v_parse_context := push(C_ORDER_BY_ITEM, p_parent_id);
+
 		if expr(v_parse_context.new_node_id) then
-			g_optional := match_terminal('DESC', v_parse_context.new_node_id) or match_terminal('ASC', v_parse_context.new_node_id);
+			g_optional := match_terminal_or_list(string_table('ASC', 'DESC'), v_parse_context.new_node_id);
 			if match_terminal('NULLS', v_parse_context.new_node_id) then
-				if match_terminal('FIRST', v_parse_context.new_node_id) or match_terminal('LAST', v_parse_context.new_node_id) then
+				if match_terminal_or_list(string_table('FIRST', 'LAST'), v_parse_context.new_node_id) then
 					null;
 				else
 					parse_error('FIRST or LAST', $$plsql_line);
@@ -1434,7 +1438,7 @@ function function_expression_1(p_parent_id number) return boolean is
 	end over_query_partition_clause;
 begin
 	v_first_parse_context := push(C_FUNCTION_EXPRESSION, p_parent_id);
-	v_parse_context := push(C_AMBIG_func_agg_or_analytic, p_parent_id);
+	v_parse_context := push(C_AMBIG_func_agg_or_analytic, v_first_parse_context.new_node_id);
 
 	if words_dots_parens_links(v_parse_context) then
 		--Aggregate or analytic part.
@@ -1470,17 +1474,19 @@ begin
 					if match_terminal('ORDER', v_parse_context.new_node_id) then
 						if match_terminal('BY', v_parse_context.new_node_id) then
 
-							order_by_item;
+							--**DIFFERENCE FROM MANUAL**: The manual does not have an ORDER_BY_LIST or ORDER_BY_ITEM.
+							v_order_by_list_context := push(C_ORDER_BY_LIST, v_parse_context.new_node_id);
+							order_by_item(v_order_by_list_context.new_node_id);
 
 							loop
-								if match_terminal(',', v_parse_context.new_node_id) then
-									order_by_item;
+								if match_terminal(',', v_order_by_list_context.new_node_id) then
+									order_by_item(v_order_by_list_context.new_node_id);
 								else
 									exit;
 								end if;
 							end loop;
 
-							if match_terminal(')', v_parse_context.new_node_id) then
+							if match_terminal(')', v_order_by_list_context.new_node_id) then
 								if over_query_partition_clause then
 									disambig_agg_or_analytic(C_ANALYTIC_FUNCTION, v_parse_context.new_node_id);
 								else
@@ -1902,11 +1908,13 @@ begin
 end object_access_expression_1;
 
 
---**DIFFERENCE FROM MANUAL**: The manual does not use a FROM_CLAUSE, the nodes are just directly under QUERY_BLOCK.
+--**DIFFERENCE FROM MANUAL**: The manual does not have an ORDER_BY_LIST or ORDER_BY_ITEM.
 function order_by_clause(p_parent_id number) return boolean is
 	v_parse_context parse_context;
 	v_order_by_list_pc parse_context;
 
+	--Note: This *cannot* be combined with the partition order_by_item.
+	--The partition version only supports expressions, this version will eventually suport "position" and "c_alias".
 	function order_by_item(p_parent_id number) return boolean is
 		v_parse_context parse_context;
 	begin
@@ -1916,7 +1924,15 @@ function order_by_clause(p_parent_id number) return boolean is
 		--There's also "position" and "c_alias".
 		--"position" is tricky, as "((+1.1e0))" is a position, not an expression.
 		if expr(v_parse_context.new_node_id) then
-			--TODO: ASC|DESC, NULLS FIRST|LAST.
+			g_optional := match_terminal_or_list(string_table('ASC', 'DESC'), v_parse_context.new_node_id);
+			if match_terminal('NULLS', v_parse_context.new_node_id) then
+				if match_terminal_or_list(string_table('FIRST', 'LAST'), v_parse_context.new_node_id) then
+					null;
+				else
+					parse_error('FIRST, LAST', $$plsql_line);
+				end if;
+			end if;
+
 			return true;
 		else
 			return pop(v_parse_context);
@@ -1928,7 +1944,7 @@ begin
 	if match_terminal('ORDER', v_parse_context.new_node_id) then
 		g_optional := match_terminal('SIBLINGS', v_parse_context.new_node_id);
 		if match_terminal('BY', v_parse_context.new_node_id) then
-			v_order_by_list_pc := push(C_ORDER_BY_LIST, p_parent_id);
+			v_order_by_list_pc := push(C_ORDER_BY_LIST, v_parse_context.new_node_id);
 			if order_by_item(v_order_by_list_pc.new_node_id) then
 				loop
 					if match_terminal(',', v_order_by_list_pc.new_node_id) then
@@ -2870,6 +2886,7 @@ begin
 	g_ast_tokens := token_table();
 	g_ast_token_index := 1;
 	g_parse_tree_tokens := plsql_lexer.lex(p_source);
+	g_map_between_parse_and_ast := number_table();
 	if g_reserved_words is null then
 		g_reserved_words := get_reserved_words;
 	end if;
