@@ -2806,6 +2806,11 @@ begin
 		elsif match_terminal('(', p_parse_context.new_node_id) then
 			g_optional := match_terminal('DISTINCT', p_parse_context.new_node_id) or match_terminal('ALL', p_parse_context.new_node_id);
 			arguments(p_parse_context);
+			if match_terminal(')', p_parse_context.new_node_id) then
+				null;
+			else
+				parse_error('")"', $$plsql_line);
+			end if;
 		end if;
 
 		--Series: (DOT WORD (LINK PARENS|LINK|PARENS))*
@@ -2817,10 +2822,20 @@ begin
 						if match_terminal('(', p_parse_context.new_node_id) then
 							g_optional := match_terminal('DISTINCT', p_parse_context.new_node_id) or match_terminal('ALL', p_parse_context.new_node_id);
 							arguments(p_parse_context);
+							if match_terminal(')', p_parse_context.new_node_id) then
+								null;
+							else
+								parse_error('")"', $$plsql_line);
+							end if;
 						end if;
 					elsif match_terminal('(', p_parse_context.new_node_id) then
 						g_optional := match_terminal('DISTINCT', p_parse_context.new_node_id) or match_terminal('ALL', p_parse_context.new_node_id);
 						arguments(p_parse_context);
+						if match_terminal(')', p_parse_context.new_node_id) then
+							null;
+						else
+							parse_error('")"', $$plsql_line);
+						end if;
 					end if;
 				else
 					parse_error('unreserved word', $$plsql_line);
