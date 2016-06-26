@@ -725,6 +725,7 @@ function return_expr(p_parent_id number) return boolean;
 function row_limiting_clause(p_parent_id number) return boolean;
 function searched_case_expression(p_parent_id number) return boolean;
 function search_clause(p_parent_id number) return boolean;
+function select_clause(p_parent_id number) return boolean;
 function select_list(p_parent_id number) return boolean;
 function select_statement(p_parent_id number) return boolean;
 function simple_case_expression(p_parent_id number) return boolean;
@@ -2110,22 +2111,17 @@ function query_block(p_parent_id number) return boolean is
 begin
 	v_parse_context := push(C_QUERY_BLOCK, p_parent_id);
 	g_optional := with_clause(v_parse_context.new_node_id);
-	if match_terminal('SELECT', v_parse_context.new_node_id) then
-		g_optional := hint(v_parse_context.new_node_id);
-		g_optional := match_terminal('DISTINCT', v_parse_context.new_node_id) or match_terminal('UNIQUE', v_parse_context.new_node_id) or match_terminal('ALL', v_parse_context.new_node_id);
-		if select_list(v_parse_context.new_node_id) then
-			--**DIFFERENCE FROM MANUAL**: The manual does not use a FROM_CLAUSE, the nodes are just directly under QUERY_BLOCK.
-			if from_clause(v_parse_context.new_node_id) then
-				g_optional := where_clause(v_parse_context.new_node_id);
-				g_optional := hierarchical_query_clause(v_parse_context.new_node_id);
-				g_optional := group_by_clause(v_parse_context.new_node_id);
-				g_optional := model_clause(v_parse_context.new_node_id);
-				return true;
-			else
-				parse_error('FROM', $$plsql_line);
-			end if;
+	--**DIFFERENCE FROM MANUAL**: The manual does not use a SELECT_CLAUSE, the nodes are just directly under QUERY_BLOCK.
+	if select_clause(v_parse_context.new_node_id) then
+		--**DIFFERENCE FROM MANUAL**: The manual does not use a FROM_CLAUSE, the nodes are just directly under QUERY_BLOCK.
+		if from_clause(v_parse_context.new_node_id) then
+			g_optional := where_clause(v_parse_context.new_node_id);
+			g_optional := hierarchical_query_clause(v_parse_context.new_node_id);
+			g_optional := group_by_clause(v_parse_context.new_node_id);
+			g_optional := model_clause(v_parse_context.new_node_id);
+			return true;
 		else
-			parse_error('select_list', $$plsql_line);
+			parse_error('FROM', $$plsql_line);
 		end if;
 	else
 		return pop(v_parse_context);
@@ -2306,6 +2302,25 @@ begin
 	--TODO
 	return pop(v_parse_context);
 end search_clause;
+
+
+function select_clause(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_SELECT_CLAUSE, p_parent_id);
+
+	if match_terminal('SELECT', v_parse_context.new_node_id) then
+		g_optional := hint(v_parse_context.new_node_id);
+		g_optional := match_terminal_or_list(string_table('DISTINCT', 'UNIQUE', 'ALL'), v_parse_context.new_node_id);
+		if select_list(v_parse_context.new_node_id) then
+			return true;
+		else
+			parse_error('select_list', $$plsql_line);
+		end if;
+	else
+		return pop(v_parse_context);
+	end if;
+end select_clause;
 
 
 --select::=
