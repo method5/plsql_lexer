@@ -2326,10 +2326,10 @@ begin
 end select_statement;
 
 
-function select_list(p_parent_id number) return boolean is
+function select_item(p_parent_id number) return boolean is
 	v_parse_context parse_context;
-begin
-	v_parse_context := push(C_SELECT_LIST, p_parent_id);
+begin	
+	v_parse_context := push(C_SELECT_ITEM, p_parent_id);
 
 	--**DIFFERENCE FROM MANUAL**:
 	--The top "t_alias.*" in the manual is incorrect.
@@ -2340,8 +2340,10 @@ begin
 		return true;
 	elsif is_unreserved_word(0) and next_type(1) = '.' and next_type(2) = '*' then
 		g_optional := match_unreserved_word(C_AMBIG_qn_c_t_v_mv_alias, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_terminal('*', v_parse_context.new_node_id);
+		return true;
 	elsif is_unreserved_word(0) and next_type(1) = '.' and is_unreserved_word(2) and next_type(3) = '.' and next_type(4) = '*' then
 		g_optional := match_unreserved_word(C_SCHEMA, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_unreserved_word(C_AMBIG_qn_c_t_v_mv_alias, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_terminal('*', v_parse_context.new_node_id);
+		return true;
 	elsif expr(v_parse_context.new_node_id) then
 		if match_terminal('AS', v_parse_context.new_node_id) then
 			if match_unreserved_word(C_ALIAS, v_parse_context.new_node_id) then
@@ -2352,26 +2354,30 @@ begin
 		else
 			g_optional := match_unreserved_word(C_ALIAS, v_parse_context.new_node_id);
 		end if;
+		return true;
+	else
+		return pop(v_parse_context);
+	end if;
+end select_item;
+
+
+function select_list(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+	v_first_select_item parse_context;
+begin
+	v_parse_context := push(C_SELECT_LIST, p_parent_id);
+	--**DIFFERENCE FROM MANUAL**: SELECT_ITEM does not exist in the manual.
+
+	if select_item(v_parse_context.new_node_id) then
+		null;
 	else
 		return pop(v_parse_context);
 	end if;
 
 	loop
 		if match_terminal(',', v_parse_context.new_node_id) then
-			if is_unreserved_word(0) and next_type(1) = '.' and next_type(2) = '*' then
-				g_optional := match_unreserved_word(C_AMBIG_qn_c_t_v_mv_alias, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_terminal('*', v_parse_context.new_node_id);
-			elsif is_unreserved_word(0) and next_type(1) = '.' and is_unreserved_word(2) and next_type(3) = '.' and next_type(4) = '*' then
-				g_optional := match_unreserved_word(C_SCHEMA, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_unreserved_word(C_AMBIG_qn_c_t_v_mv_alias, v_parse_context.new_node_id) and match_terminal('.', v_parse_context.new_node_id) and match_terminal('*', v_parse_context.new_node_id);
-			elsif expr(v_parse_context.new_node_id) then
-				if match_terminal('AS', v_parse_context.new_node_id) then
-					if match_unreserved_word(C_ALIAS, v_parse_context.new_node_id) then
-						null;
-					else
-						parse_error('c_alias', $$plsql_line);
-					end if;
-				else
-					g_optional := match_unreserved_word(C_ALIAS, v_parse_context.new_node_id);
-				end if;
+			if select_item(v_parse_context.new_node_id) then
+				null;
 			else
 				parse_error('t_alias.*, query_name.*, schema.table|view|materialized view.*, or expr', $$plsql_line);
 			end if;
@@ -2381,7 +2387,6 @@ begin
 	end loop;
 
 	return true;
-
 end select_list;
 
 

@@ -80,6 +80,7 @@ C_ORDER_BY_LIST                  constant varchar2(100) := 'order_by_list';
 C_PATTERN_MATCHING_CONDITION     constant varchar2(100) := 'pattern_matching_condition';
 C_QUERY_NAME                     constant varchar2(100) := 'query_name';
 C_RETURN_EXPR                    constant varchar2(100) := 'return_expr';
+C_SELECT_ITEM                    constant varchar2(100) := 'select_item';
 C_SCALAR_SUBQUERY_EXPRESSION     constant varchar2(100) := 'scalar_subquery_expression';
 C_SCHEMA                         constant varchar2(100) := 'schema';
 C_SUBQUERY_FACTORING_ITEM        constant varchar2(100) := 'subquery_factoring_item';
