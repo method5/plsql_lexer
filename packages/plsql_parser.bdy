@@ -29,9 +29,9 @@ type parse_context is record
 
 --Temporary constants for ambiguous intermediate nodes that must be resolved later.
 --
---One of: cluster,column,function,materialized view,operator,package,procedure,query,schema,table,type,view  (synonyms are resolved)
+--One of: cluster,column,function,materialized view,operator,package,procedure,pseudocolumn,query,schema,table,type,view  (synonyms are resolved)
 --Used in expressions.
-C_AMBIG_CCFMOPPQSTTV             constant varchar2(100) := 'C_AMBIG_ccfmoppqsttv';
+C_AMBIG_CCFMOPPPQSTTV            constant varchar2(100) := 'C_AMBIG_ccfmopppqsttv';
 --One of: cluster,materialized view,query_name,table,view  (synonyms are resolved)
 --Used in query_table_expression
 C_AMBIG_CMQTV                    constant varchar2(100) := 'C_AMBIG_cmqtv';
@@ -718,6 +718,7 @@ function outer_join_type(p_parent_id number) return boolean;
 function pattern_matching_condition(p_parent_id number) return boolean;
 function placeholder_expression(p_parent_id number) return boolean;
 function plsql_declarations(p_parent_id number) return boolean;
+function pseudocolumn_1(p_parent_id number) return boolean;
 function query_block(p_parent_id number) return boolean;
 function query_partition_clause(p_parent_id number) return boolean;
 function query_table_expression(p_parent_id number) return boolean;
@@ -1195,6 +1196,7 @@ begin
 		model_expression(v_parse_context.new_node_id) or
 		scalar_subquery_expression(v_parse_context.new_node_id) or
 		simple_expression_1(v_parse_context.new_node_id) or
+		pseudocolumn_1(v_parse_context.new_node_id) or
 		object_access_expression_1(v_parse_context.new_node_id) or
 		compound_expression_1(v_parse_context.new_node_id) or
 		type_constructor_expression_1(v_parse_context.new_node_id) or
@@ -1561,8 +1563,54 @@ function hierarchical_query_clause(p_parent_id number) return boolean is
 begin
 	v_parse_context := push(C_HIERARCHICAL_QUERY_CLAUSE, p_parent_id);
 
-	--TODO
-	return pop(v_parse_context);
+	if match_terminal('CONNECT', v_parse_context.new_node_id) then
+		if match_terminal('BY', v_parse_context.new_node_id) then
+			g_optional := match_terminal('NOCYCLE', v_parse_context.new_node_id);
+			if condition(v_parse_context.new_node_id) then
+				if match_terminal('START', v_parse_context.new_node_id) then
+					if match_terminal('WITH', v_parse_context.new_node_id) then
+						if condition(v_parse_context.new_node_id) then
+							null;
+						else
+							parse_error('condition', $$plsql_line);
+						end if;
+					else
+						parse_error('WITH', $$plsql_line);
+					end if;
+				end if;
+				return true;
+			else
+				parse_error('condition', $$plsql_line);
+			end if;
+		else
+			parse_error('BY', $$plsql_line);
+		end if;
+	elsif match_terminal('START', v_parse_context.new_node_id) then
+		if match_terminal('WITH', v_parse_context.new_node_id) then
+			if condition(v_parse_context.new_node_id) then
+				if match_terminal('CONNECT', v_parse_context.new_node_id) then
+					if match_terminal('BY', v_parse_context.new_node_id) then
+						g_optional := match_terminal('NOCYCLE', v_parse_context.new_node_id);
+						if condition(v_parse_context.new_node_id) then
+							return true;
+						else
+							parse_error('condition', $$plsql_line);
+						end if;
+					else
+						parse_error('BY', $$plsql_line);
+					end if;
+				else
+					parse_error('CONNECT', $$plsql_line);
+				end if;
+			else
+				parse_error('condition', $$plsql_line);
+			end if;
+		else
+			parse_error('WITH', $$plsql_line);
+		end if;
+	else
+		return pop(v_parse_context);
+	end if;
 end hierarchical_query_clause;
 
 
@@ -2129,6 +2177,24 @@ begin
 end query_block;
 
 
+--This only handles the obvious pseudocolumns.  Others must be disambiguated later.
+function pseudocolumn_1(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_PSEUDOCOLUMN, p_parent_id);
+
+	if match_terminal('LEVEL', v_parse_context.new_node_id) then
+		return true;
+	elsif match_terminal('ROWNUM', v_parse_context.new_node_id) then
+		return true;
+	elsif match_terminal('ROWID', v_parse_context.new_node_id) then
+		return true;
+	else
+		return pop(v_parse_context);
+	end if;
+end;
+
+
 function query_partition_clause(p_parent_id number) return boolean is
 	v_parse_context parse_context;
 begin
@@ -2483,16 +2549,13 @@ end simple_comparison_condition;
 --**DIFFERENCE FROM MANUAL**: Date, timestamp, and interval are stored as simple expressions.
 --**DIFFERENCE FROM MANUAL**: Timestamps are all lumped together.  "WITH TIME ZONE"
 --and "WITH LOCAL TIME ZONE" are all timestamps.
+--**DIFFERENCE FROM MANUAL**: Pseudocolumns are handled separately.  ROWNUM and ROWID are pseudocolumns, not simple expressions.
 function simple_expression_1(p_parent_id number) return boolean is
 	v_parse_context parse_context;
 begin
 	v_parse_context := push(C_SIMPLE_EXPRESSION, p_parent_id);
 
-	if match_terminal('ROWNID', v_parse_context.new_node_id) then
-		return true;
-	elsif match_terminal('ROWNUM', v_parse_context.new_node_id) then
-		return true;
-	elsif current_type = plsql_lexer.C_TEXT then
+	if current_type = plsql_lexer.C_TEXT then
 		v_parse_context := push(C_STRING, v_parse_context.new_node_id);
 		increment;
 		return true;
@@ -2815,7 +2878,7 @@ begin
 	--Match the function part (words and dots, with parens and links thrown in)
 	--
 	--First value must be a non-reserved word.
-	if match_unreserved_word(C_AMBIG_CCFMOPPQSTTV, p_parse_context.new_node_id) then
+	if match_unreserved_word(C_AMBIG_CCFMOPPPQSTTV, p_parse_context.new_node_id) then
 
 		--Initial Link, link-parens, or parens.
 		if dblink(p_parse_context.new_node_id) then
@@ -2836,7 +2899,7 @@ begin
 		--Series: (DOT WORD (LINK PARENS|LINK|PARENS))*
 		loop
 			if match_terminal('.', p_parse_context.new_node_id) then
-				if match_unreserved_word(C_AMBIG_CCFMOPPQSTTV, p_parse_context.new_node_id) then
+				if match_unreserved_word(C_AMBIG_CCFMOPPPQSTTV, p_parse_context.new_node_id) then
 					--Link, link-parens, or parens.
 					if dblink(p_parse_context.new_node_id) then
 						if match_terminal('(', p_parse_context.new_node_id) then

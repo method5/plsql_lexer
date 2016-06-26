@@ -78,6 +78,7 @@ C_MULTISET_CONDITION             constant varchar2(100) := 'multiset_condition';
 C_ORDER_BY_ITEM                  constant varchar2(100) := 'order_by_item';
 C_ORDER_BY_LIST                  constant varchar2(100) := 'order_by_list';
 C_PATTERN_MATCHING_CONDITION     constant varchar2(100) := 'pattern_matching_condition';
+C_PSEUDOCOLUMN                   constant varchar2(100) := 'pseudocolumn';
 C_QUERY_NAME                     constant varchar2(100) := 'query_name';
 C_RETURN_EXPR                    constant varchar2(100) := 'return_expr';
 C_SELECT_CLAUSE                  constant varchar2(100) := 'select_clause';
