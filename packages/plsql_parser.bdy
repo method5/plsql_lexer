@@ -1,4 +1,5 @@
 create or replace package body plsql_parser is
+--See PLSQL_PARSER.SPC for documentation on this package.
 --  _____   ____    _   _  ____ _______   _    _  _____ ______  __     ________ _______ 
 -- |  __ \ / __ \  | \ | |/ __ \__   __| | |  | |/ ____|  ____| \ \   / /  ____|__   __|
 -- | |  | | |  | | |  \| | |  | | | |    | |  | | (___ | |__     \ \_/ /| |__     | |   
@@ -7,7 +8,6 @@ create or replace package body plsql_parser is
 -- |_____/ \____/  |_| \_|\____/  |_|     \____/|_____/|______|    |_|  |______|  |_|   
 -- 
 --This package is experimental and does not work yet.
-
 
 
 type number_table is table of number;

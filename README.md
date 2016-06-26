@@ -20,6 +20,10 @@ PL/SQL Lexer solves real-world language problems, in PL/SQL.
 
  - *MISPLACED_HINTS* - Find hint in the wrong place.  For example, `insert into /*+ append */ ...` is incorrect because the hint should be placed immediately after the `insert`.
 
+**Experimental**
+
+ - *PLSQL_PARSER* - Parse statements into a syntax tree.  Currently this is highly unstable and only supports a small subset of SELECT statements.
+
 See the top of each file in the packages directory for more thorough documentation.
 
 **Types**

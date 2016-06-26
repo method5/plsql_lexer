@@ -40,6 +40,10 @@ begin
 	drop_object_ignore_dne_error('drop type misplaced_hints_code_table');
 	drop_object_ignore_dne_error('drop type misplaced_hints_code_type');
 
+	drop_object_ignore_dne_error('drop type node_table');
+	drop_object_ignore_dne_error('drop type node');
+	drop_object_ignore_dne_error('drop type number_table');
+
 	drop_object_ignore_dne_error('drop type clob_table');
 	drop_object_ignore_dne_error('drop type varchar2_table');
 	drop_object_ignore_dne_error('drop type token_table_table');
@@ -47,6 +51,7 @@ begin
 	drop_object_ignore_dne_error('drop type token');
 
 	--Drop regular packages.
+	drop_object_ignore_dne_error('drop package plsql_parser');
 	drop_object_ignore_dne_error('drop package plsql_lexer');
 	drop_object_ignore_dne_error('drop package statement_classifier');
 	drop_object_ignore_dne_error('drop package statement_splitter');
