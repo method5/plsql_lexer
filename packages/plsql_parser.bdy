@@ -697,6 +697,7 @@ function expr(p_parent_id number) return boolean;
 function expression_list(p_parent_id number) return boolean;
 function floating_point_condition(p_parent_id number) return boolean;
 function group_by_clause(p_parent_id number) return boolean;
+function group_by_list(p_parent_id number) return boolean;
 function group_comparison_condition(p_parent_id number) return boolean;
 function hierarchical_query_clause(p_parent_id number) return boolean;
 function hint(p_parent_id number) return boolean;
@@ -1525,9 +1526,85 @@ function group_by_clause(p_parent_id number) return boolean is
 begin
 	v_parse_context := push(C_GROUP_BY_CLAUSE, p_parent_id);
 
-	--TODO
-	return pop(v_parse_context);
+	--**DIFFERENCE FROM MANUAL**: Manual is wrong, HAVING can come first and even GROUP BY is optional.
+	--	For example, this is a valid query: select 1 from dual having 1 = 1;
+	--**DIFFERENCE FROM MANUAL**: GROUP_BY_LIST is not in manual.
+	if match_terminal('GROUP', v_parse_context.new_node_id) then
+		if match_terminal('BY', v_parse_context.new_node_id) then
+			if group_by_list(v_parse_context.new_node_id) then
+				if match_terminal('HAVING', v_parse_context.new_node_id) then
+					if condition(v_parse_context.new_node_id) then
+						null;
+					else
+						parse_error('condition', $$plsql_line);
+					end if;
+				end if;
+				return true;
+			else
+				parse_error('group_by_list', $$plsql_line);
+			end if;
+		else
+			parse_error('BY', $$plsql_line);
+		end if;
+	elsif match_terminal('HAVING', v_parse_context.new_node_id) then
+		if condition(v_parse_context.new_node_id) then
+			if match_terminal('GROUP', v_parse_context.new_node_id) then
+				if match_terminal('BY', v_parse_context.new_node_id) then
+					if group_by_list(v_parse_context.new_node_id) then
+						null;
+					else
+						parse_error('group_by_list', $$plsql_line);
+					end if;
+				else
+					parse_error('BY', $$plsql_line);
+				end if;
+			end if;
+			return true;
+		else
+			parse_error('condition', $$plsql_line);
+		end if;
+	else
+		return pop(v_parse_context);
+	end if;
 end group_by_clause;
+
+
+function group_by_item(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_GROUP_BY_ITEM, p_parent_id);
+
+	--TODO: Add rollup_cube_clause and grouping_sets_clause.
+	if expr(v_parse_context.new_node_id) then
+		return true;
+	else
+		return pop(v_parse_context);
+	end if;
+end group_by_item;
+
+
+function group_by_list(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_GROUP_BY_LIST, p_parent_id);
+
+	if group_by_item(v_parse_context.new_node_id) then
+		loop
+			if match_terminal(',', v_parse_context.new_node_id) then
+				if group_by_item(v_parse_context.new_node_id) then
+					null;
+				else
+					parse_error('group_by_item', $$plsql_line);
+				end if;
+			else
+				exit;
+			end if;
+		end loop;
+		return true;
+	else
+		return pop(v_parse_context);
+	end if;
+end group_by_list;
 
 
 function group_comparison_condition(p_parent_id number) return boolean is
