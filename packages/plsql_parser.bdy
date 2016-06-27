@@ -685,17 +685,18 @@ function compound_condition_1(p_parent_id number) return boolean;
 function condition(p_parent_id number) return boolean;
 function containers_clause(p_parent_id number) return boolean;
 function cross_outer_apply_clause(p_parent_id number) return boolean;
-function expressions(p_parent_id number) return boolean;
-function flashback_query_clause(p_parent_id number) return boolean;
-function for_update_clause(p_parent_id number) return boolean;
-function function_expression_1(p_parent_id number) return boolean;
 function dblink(p_parent_id number) return boolean;
 function else_clause(p_parent_id number) return boolean;
 function else_expr(p_parent_id number) return boolean;
 function exists_condition(p_parent_id number) return boolean;
 function expr(p_parent_id number) return boolean;
+function expr_by_another_name(p_type varchar2, p_parent_id number) return boolean;
 function expression_list(p_parent_id number) return boolean;
+function expressions(p_parent_id number) return boolean;
+function flashback_query_clause(p_parent_id number) return boolean;
+function for_update_clause(p_parent_id number) return boolean;
 function floating_point_condition(p_parent_id number) return boolean;
+function function_expression_1(p_parent_id number) return boolean;
 function group_by_clause(p_parent_id number) return boolean;
 function group_by_list(p_parent_id number) return boolean;
 function group_comparison_condition(p_parent_id number) return boolean;
@@ -737,6 +738,7 @@ function simple_comparison_condition(p_parent_id number) return boolean;
 function subquery(p_parent_id number) return boolean;
 function subquery_factoring_clause(p_parent_id number) return boolean;
 function subquery_restriction_clause(p_parent_id number) return boolean;
+function t_alias(p_parent_id number) return boolean;
 function table_collection_expression(p_parent_id number) return boolean;
 function table_reference(p_parent_id number) return boolean;
 function type_constructor_expression_1(p_parent_id number) return boolean;
@@ -1268,6 +1270,19 @@ type_constructor_expression
 	return pop(v_parse_context);
 end expr;
 
+
+--Purpose: There are many rules that are really just subtypes of "expr".
+function expr_by_another_name(p_type varchar2, p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(p_type, p_parent_id);
+
+	if expr(v_parse_context.new_node_id) then
+		return true;
+	else
+		return pop(v_parse_context);
+	end if;
+end expr_by_another_name;
 
 function expression_list(p_parent_id number) return boolean is
 	v_parse_context parse_context;
@@ -2359,11 +2374,76 @@ end return_expr;
 
 function row_limiting_clause(p_parent_id number) return boolean is
 	v_parse_context parse_context;
+
+	function offset_section return boolean is
+	begin
+		if match_terminal('OFFSET', v_parse_context.new_node_id) then
+			if expr_by_another_name('offset', v_parse_context.new_node_id) then
+				if match_terminal_or_list(string_table('ROW', 'ROWS'), v_parse_context.new_node_id) then
+					return true;
+				else
+					parse_error('ROW, ROWS', $$plsql_line);
+				end if;
+			else
+				--This is weird because 'OFFSET' may have been consumed, but we don't
+				--want to backup all the way.
+				g_optional := pop(v_parse_context);
+				v_parse_context := push(C_ROW_LIMITING_CLAUSE, p_parent_id);
+				return false;
+			end if;
+		else
+			return false;
+		end if;
+	end offset_section;
+
+	function row_rows_only_with_ties return boolean is
+	begin
+		if match_terminal_or_list(string_table('ROW', 'ROWS'), v_parse_context.new_node_id) then
+			if match_terminal('ONLY', v_parse_context.new_node_id) then
+				return true;
+			elsif match_terminal('WITH', v_parse_context.new_node_id) then
+				if match_terminal('TIES', v_parse_context.new_node_id) then
+					return true;
+				else
+					parse_error('TIES', $$plsql_line);
+				end if;
+			else
+				parse_error('ONLY, WITH', $$plsql_line);
+			end if;
+		else
+			parse_error('ROW, ROWS', $$plsql_line);
+		end if;
+	end row_rows_only_with_ties;
+
+	--I would call this "FETCH", but that's a reserved word in PL/SQL (but not SQL).
+	function fetch_section return boolean is
+	begin
+		if match_terminal('FETCH', v_parse_context.new_node_id) then
+			if match_terminal_or_list(string_table('FIRST', 'NEXT'), v_parse_context.new_node_id) then
+				if expr(v_parse_context.new_node_id) then
+					--TODO: disambiguate either rowcount or percent
+					return row_rows_only_with_ties;
+				else
+					return row_rows_only_with_ties;
+				end if;
+			else
+				parse_error('FIRST, NEXT', v_parse_context.new_node_id);
+			end if;
+		else
+			return false;
+		end if;
+	end fetch_section;
 begin
 	v_parse_context := push(C_ROW_LIMITING_CLAUSE, p_parent_id);
 
-	--TODO
-	return pop(v_parse_context);
+	if offset_section then
+		g_optional := fetch_section;
+		return true;
+	elsif fetch_section then
+		return true;
+	else
+		return pop(v_parse_context);
+	end if;
 end row_limiting_clause;
 
 
@@ -2812,6 +2892,47 @@ begin
 end subquery_restriction_clause;
 
 
+function t_alias(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_T_ALIAS, p_parent_id);
+
+	--"model", "fetch", and "offset" are ambiguously table aliases or beginning of another clause.
+	--For example:
+	--	select 1 from dual offset;
+	--	select 1 from dual offset 1 rows;
+	--
+	--The other valid clauses start with a keyword, like "where", so they are easily handled.
+	--Other potentially ambiguous non-reserved keywords, like "right" and "outer", are handled in the from_clause.
+	if is_unreserved_word(0) then
+		if next_value(0) = 'FETCH' and next_value(1) in ('FIRST', 'NEXT') then
+			return pop(v_parse_context);
+		--These may look like expressions, but are really the beginning of new clauses.
+		elsif next_value(0) = 'OFFSET' and next_value(1) in ('OFFSET', 'FETCH', 'MODEL') then
+				increment;
+				return true;
+		elsif match_terminal('OFFSET', v_parse_context.new_node_id) then
+			if expr_by_another_name('offset', v_parse_context.new_node_id) then
+				return pop(v_parse_context);
+			else
+				--Change the node from an "OFFSET" to an alias.
+				g_optional := pop(v_parse_context);
+				v_parse_context := push(C_T_ALIAS, p_parent_id);
+				increment;
+				return true;
+			end if;
+		elsif next_value(0) = 'MODEL' then --todo: AND...
+			return pop(v_parse_context);
+		else
+			increment;
+			return true;
+		end if;
+	else
+		return pop(v_parse_context);
+	end if;
+end t_alias;
+
+
 function table_collection_expression(p_parent_id number) return boolean is
 	v_parse_context parse_context;
 begin
@@ -2852,7 +2973,7 @@ begin
 	v_parse_context := push(C_TABLE_REFERENCE, p_parent_id);
 
 	if containers_clause(v_parse_context.new_node_id) then
-		g_optional := match_unreserved_word(C_T_ALIAS, v_parse_context.new_node_id);
+		g_optional := t_alias(v_parse_context.new_node_id);
 	elsif next_value(0) = 'ONLY' and next_value(1) = '(' then
 		g_optional := match_terminal('ONLY', v_parse_context.new_node_id);
 		g_optional := match_terminal('(', v_parse_context.new_node_id);
@@ -2860,7 +2981,7 @@ begin
 			if match_terminal(')', v_parse_context.new_node_id) then
 				g_optional := flashback_query_clause(v_parse_context.new_node_id);
 				g_optional := pivot_clause(v_parse_context.new_node_id) or unpivot_clause(v_parse_context.new_node_id) or row_pattern_clause(v_parse_context.new_node_id);
-				g_optional := match_unreserved_word(C_T_ALIAS, v_parse_context.new_node_id);
+				g_optional := t_alias(v_parse_context.new_node_id);
 				return true;				
 			else
 				parse_error('")"', $$plsql_line);
@@ -2871,7 +2992,7 @@ begin
 	elsif query_table_expression(v_parse_context.new_node_id) then
 		g_optional := flashback_query_clause(v_parse_context.new_node_id);
 		g_optional := pivot_clause(v_parse_context.new_node_id) or unpivot_clause(v_parse_context.new_node_id) or row_pattern_clause(v_parse_context.new_node_id);
-		g_optional := match_unreserved_word(C_T_ALIAS, v_parse_context.new_node_id);
+		g_optional := t_alias(v_parse_context.new_node_id);
 		return true;
 	else
 		parse_error('ONLY(query_table_expression), query_table_expression, or containers_clause', $$plsql_line);
