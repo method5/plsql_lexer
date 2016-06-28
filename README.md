@@ -23,6 +23,7 @@ PL/SQL Lexer solves real-world language problems, in PL/SQL.
 **Experimental**
 
  - *PLSQL_PARSER* - Parse statements into a syntax tree.  Currently this is highly unstable and only supports a small subset of SELECT statements.
+ - *SYNTAX_TREE* - Contains methods for searching the NODE_TABLE produced by PLSQL_PARSER.
 
 See the top of each file in the packages directory for more thorough documentation.
 

@@ -36,23 +36,7 @@ P_USER   - The user who runs the statement or owns the object.  Used for object 
 
 Raises: ORA-20123 for parse errors.  The SQLERRM contains the production rule and expected values.
 
-Returns  - NODE_TABLE (todo)
-
---TODO: Put these in installer if this ever works.
-drop type node force;
-
-create or replace type number_table is table of number;
-
-create or replace type node is object
-(
-    id                  number,         --Unique identifier for the node.
-    type                varchar2(4000), --String to represent the node type.  See the constants in PARSER.
-    parent_id           number,         --Unique identifier of the node's parent.
-	lexer_token         token,          --Token information.
-	child_ids           number_table    --Unique identifiers of node's children.
-);
-create or replace type node_table is table of node;
-
+Returns  - NODE_TABLE
 
 */
 
@@ -80,9 +64,11 @@ C_MULTISET_CONDITION             constant varchar2(100) := 'multiset_condition';
 C_ORDER_BY_ITEM                  constant varchar2(100) := 'order_by_item';
 C_ORDER_BY_LIST                  constant varchar2(100) := 'order_by_list';
 C_PATTERN_MATCHING_CONDITION     constant varchar2(100) := 'pattern_matching_condition';
+C_PERCENT                        constant varchar2(100) := 'percent';
 C_PSEUDOCOLUMN                   constant varchar2(100) := 'pseudocolumn';
 C_QUERY_NAME                     constant varchar2(100) := 'query_name';
 C_RETURN_EXPR                    constant varchar2(100) := 'return_expr';
+C_ROWCOUNT                       constant varchar2(100) := 'rowcount';
 C_SELECT_CLAUSE                  constant varchar2(100) := 'select_clause';
 C_SELECT_ITEM                    constant varchar2(100) := 'select_item';
 C_SCALAR_SUBQUERY_EXPRESSION     constant varchar2(100) := 'scalar_subquery_expression';

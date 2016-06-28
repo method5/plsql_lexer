@@ -43,7 +43,7 @@ C_AMBIG_func_agg_or_analytic     constant varchar2(100) := 'C_AMBIG_func_agg_or_
 --One of : query_name, cluster, table, view, materialized view, alias  (synonyms are resolved)
 --These are things in select_list that can have a ".*"
 C_AMBIG_qn_c_t_v_mv_alias        constant varchar2(100) := 'C_AMBIG_qn_t_v_mv_alias';
-
+C_AMBIG_rowcount_or_percent      constant varchar2(100) := 'C_AMBIG_rowcount_or_percent';
 
 
 
@@ -599,6 +599,28 @@ procedure resolve_ambiguous_nodes(p_user varchar2) is
 		end loop;
 	end resolve_cmtv;
 
+	--Purpose: Resolve row_limiting_clause rowcount or percent ambiguity.
+	procedure p_AMBIG_rowcount_or_percent is
+		v_row_limiting_clause_node node;
+		v_ambiguous_node node;
+	begin
+		--Loop through all the nodes.
+		for i in 1 .. g_nodes.count loop
+			--Look for this type of abmiguity.
+			if g_nodes(i).type = C_AMBIG_rowcount_or_percent then
+				--Find the parent of the ambiguous nodes.
+				v_row_limiting_clause_node := syntax_tree.get_first_ancest_node_by_type(g_nodes, i, C_ROW_LIMITING_CLAUSE);
+				--Set to "percent" node if there is a "PERCENT" terminal.
+				if syntax_tree.get_children_node_by_type(g_nodes, v_row_limiting_clause_node.id, 'PERCENT').count >= 1 then
+					g_nodes(i).type := c_percent;
+				--Set to a "rowcount" node otherwise.
+				else
+					g_nodes(i).type := c_rowcount;
+				end if;
+			end if;
+		end loop;
+	end p_AMBIG_rowcount_or_percent;
+
 begin
 	--C_AMBIG_CMQTV or C_AMBIG_CMTV:
 	resolve_query_name;
@@ -606,6 +628,8 @@ begin
 	--TODO: Should we drop the function?  Leave it and pollute schema?
 	--drop_get_object_type_func;
 	resolve_cmtv(p_user);
+
+	p_AMBIG_rowcount_or_percent;
 
 	--TODO - other ambiguities.
 end resolve_ambiguous_nodes;
@@ -2420,8 +2444,8 @@ function row_limiting_clause(p_parent_id number) return boolean is
 	begin
 		if match_terminal('FETCH', v_parse_context.new_node_id) then
 			if match_terminal_or_list(string_table('FIRST', 'NEXT'), v_parse_context.new_node_id) then
-				if expr(v_parse_context.new_node_id) then
-					--TODO: disambiguate either rowcount or percent
+				if expr_by_another_name(C_AMBIG_rowcount_or_percent, v_parse_context.new_node_id) then
+					g_optional := match_terminal('PERCENT', v_parse_context.new_node_id);
 					return row_rows_only_with_ties;
 				else
 					return row_rows_only_with_ties;
