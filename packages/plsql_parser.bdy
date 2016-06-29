@@ -2945,7 +2945,7 @@ begin
 				increment;
 				return true;
 			end if;
-		elsif next_value(0) = 'MODEL' then --todo: AND...
+		elsif next_value(0) = 'MODEL' and next_value(1) in ('KEEP', 'IGNORE', 'RETURN', 'REFERENCE', 'MAIN', 'PARTITION', 'DIMENSION') then
 			return pop(v_parse_context);
 		else
 			increment;
