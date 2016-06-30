@@ -716,6 +716,7 @@ function dblink(p_parent_id number) return boolean;
 function else_clause(p_parent_id number) return boolean;
 function else_expr(p_parent_id number) return boolean;
 function exists_condition(p_parent_id number) return boolean;
+function explain_plan(p_parent_id number) return boolean;
 function expr(p_parent_id number) return boolean;
 function expr_by_another_name(p_type varchar2, p_parent_id number) return boolean;
 function expression_list(p_parent_id number) return boolean;
@@ -763,6 +764,8 @@ function simple_case_expression(p_parent_id number) return boolean;
 function simple_expression_1(p_parent_id number) return boolean;
 function scalar_subquery_expression(p_parent_id number) return boolean;
 function simple_comparison_condition(p_parent_id number) return boolean;
+function statement(p_parent_id number) return boolean;
+function string(p_parent_id number) return boolean;
 function subquery(p_parent_id number) return boolean;
 function subquery_factoring_clause(p_parent_id number) return boolean;
 function subquery_restriction_clause(p_parent_id number) return boolean;
@@ -1139,9 +1142,13 @@ function dml(p_parent_id number) return boolean is
 begin
 	v_parse_context := push(C_DML, p_parent_id);
 
-	if select_statement(v_parse_context.new_node_id) then
+	if
+	(
+		select_statement(v_parse_context.new_node_id) or
+		explain_plan(v_parse_context.new_node_id)
+		--TODO: Add more here
+	) then
 		return true;
-	--todo - add more here
 	else
 		return pop(v_parse_context);
 	end if;
@@ -1198,6 +1205,53 @@ begin
 	--TODO
 	return pop(v_parse_context);
 end exists_condition;
+
+
+function explain_plan(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_EXPLAIN_PLAN, p_parent_id);
+
+	if match_terminal('EXPLAIN', v_parse_context.new_node_id) then
+		if match_terminal('PLAN', v_parse_context.new_node_id) then
+
+			if match_terminal('SET', v_parse_context.new_node_id) then
+				if match_terminal('STATEMENT_ID', v_parse_context.new_node_id) then
+					if match_terminal('=', v_parse_context.new_node_id) then
+						if string(v_parse_context.new_node_id) then
+							null;
+						else
+							parse_error('string', $$plsql_line);
+						end if;
+					else
+						parse_error('"="', $$plsql_line);
+					end if;
+				else
+					parse_error('STATEMENT_ID', $$plsql_line);
+				end if;
+			end if;
+
+			if match_terminal('INTO', v_parse_context.new_node_id) then
+				--TODO
+				raise_application_error(-20000, 'INTO not implemented yet.');
+			end if;
+
+			if match_terminal('FOR', v_parse_context.new_node_id) then
+				if statement(v_parse_context.new_node_id) then
+					return true;
+				else
+					parse_error('statement', $$plsql_line);
+				end if;
+			else
+				parse_error('FOR', $$plsql_line);
+			end if;
+		else
+			parse_error('PLAN', $$plsql_line);
+		end if;
+	else
+		return pop(v_parse_context);
+	end if;
+end explain_plan;
 
 
 --**MANUAL ERROR**: "variable_expression" should be named "placeholder_expression".
@@ -2913,10 +2967,10 @@ begin
 end simple_expression_1;
 
 
-function statement return boolean is
+function statement(p_parent_id number) return boolean is
 	v_parse_context parse_context;
 begin
-	v_parse_context := push(C_STATEMENT, null);
+	v_parse_context := push(C_STATEMENT, p_parent_id);
 
 	--These Categories are based on "Types of SQL Statements" chapter of SQL Language Reference.
 	--Listed in order of which is more common.
@@ -2927,6 +2981,20 @@ begin
 		return pop(v_parse_context);
 	end if;
 end statement;
+
+
+function string(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_STRING, p_parent_id);
+
+	if next_type(0) = plsql_lexer.c_text then
+		increment;
+		return true;
+	else
+		return pop(v_parse_context);
+	end if;
+end;
 
 
 function subquery(p_parent_id number) return boolean is
@@ -3385,7 +3453,7 @@ begin
 		end if;
 	end loop;
 
-	if statement then
+	if statement(null) then
 		null;
 	else
 		parse_error('statement', $$plsql_line);

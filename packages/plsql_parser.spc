@@ -80,6 +80,7 @@ C_SELECT_ITEM                    constant varchar2(100) := 'select_item';
 C_SCALAR_SUBQUERY_EXPRESSION     constant varchar2(100) := 'scalar_subquery_expression';
 C_SCHEMA                         constant varchar2(100) := 'schema';
 C_SUBQUERY_FACTORING_ITEM        constant varchar2(100) := 'subquery_factoring_item';
+C_STATEMENT                      constant varchar2(100) := 'statement';
 C_T_ALIAS                        constant varchar2(100) := 't_alias';
 C_XML_CONDITION                  constant varchar2(100) := 'xml_condition';
 
