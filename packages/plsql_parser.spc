@@ -53,6 +53,7 @@ C_COLLECTION_EXPRESSION          constant varchar2(100) := 'collection_expressio
 C_COLUMN                         constant varchar2(100) := 'column';
 C_COMPARISON_CONDITION           constant varchar2(100) := 'comparison_condition';
 C_COMPARISON_EXPR                constant varchar2(100) := 'comparison_expr';
+C_DML                            constant varchar2(100) := 'DML';
 C_ELSE_EXPR                      constant varchar2(100) := 'else_expr';
 C_FOR_UPDATE_COLUMN_ITEM         constant varchar2(100) := 'for_update_column_item';
 C_FOR_UPDATE_COLUMN_LIST         constant varchar2(100) := 'for_update_column_list';
@@ -72,6 +73,8 @@ C_PSEUDOCOLUMN                   constant varchar2(100) := 'pseudocolumn';
 C_QUERY_NAME                     constant varchar2(100) := 'query_name';
 C_RETURN_EXPR                    constant varchar2(100) := 'return_expr';
 C_ROWCOUNT                       constant varchar2(100) := 'rowcount';
+--"SELECT" collides with the "SELECT" terminal.
+C_SELECT_STATEMENT               constant varchar2(100) := 'select';
 C_SELECT_CLAUSE                  constant varchar2(100) := 'select_clause';
 C_SELECT_ITEM                    constant varchar2(100) := 'select_item';
 C_SCALAR_SUBQUERY_EXPRESSION     constant varchar2(100) := 'scalar_subquery_expression';
@@ -79,8 +82,6 @@ C_SCHEMA                         constant varchar2(100) := 'schema';
 C_SUBQUERY_FACTORING_ITEM        constant varchar2(100) := 'subquery_factoring_item';
 C_T_ALIAS                        constant varchar2(100) := 't_alias';
 C_XML_CONDITION                  constant varchar2(100) := 'xml_condition';
---"SELECT" collides with the "SELECT" terminal.
-C_SELECT_STATEMENT               constant varchar2(100) := 'select_statement';
 
 
 --These constants were generated from the Oracle SQL Language Reference image

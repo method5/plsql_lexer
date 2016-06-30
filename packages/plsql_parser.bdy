@@ -1134,6 +1134,20 @@ begin
 end dblink;
 
 
+function dml(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_DML, p_parent_id);
+
+	if select_statement(v_parse_context.new_node_id) then
+		return true;
+	--todo - add more here
+	else
+		return pop(v_parse_context);
+	end if;
+end dml;
+
+
 --Datetime expressions must be handled after the expressions are created,
 --and inserted before the current node.
 function datetime_expression(p_parent_id number) return boolean is
@@ -2899,6 +2913,22 @@ begin
 end simple_expression_1;
 
 
+function statement return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_STATEMENT, null);
+
+	--These Categories are based on "Types of SQL Statements" chapter of SQL Language Reference.
+	--Listed in order of which is more common.
+	--TODO: Add more types.
+	if dml(v_parse_context.new_node_id) /*or ddl or transaction_control or plsql or session_control or system_control*/ then
+		return true;
+	else
+		return pop(v_parse_context);
+	end if;
+end statement;
+
+
 function subquery(p_parent_id number) return boolean is
 	v_parse_context parse_context;
 	v_second_parse_context parse_context;
@@ -3355,8 +3385,11 @@ begin
 		end if;
 	end loop;
 
-	--Classify, create statement based on classification.
-	g_optional := select_statement(null);
+	if statement then
+		null;
+	else
+		parse_error('statement', $$plsql_line);
+	end if;
 
 	--Throw error if any tokens remain.
 	if current_value is not null then
