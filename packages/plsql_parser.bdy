@@ -32,6 +32,9 @@ type parse_context is record
 --One of: cluster,column,function,materialized view,operator,package,procedure,pseudocolumn,query,schema,table,type,view  (synonyms are resolved)
 --Used in expressions.
 C_AMBIG_CCFMOPPPQSTTV            constant varchar2(100) := 'C_AMBIG_ccfmopppqsttv';
+--One of: Cluster, materialized view, table, table_alias, view (synonyms are resolved)
+--Used in for_update_clause_item.
+C_AMBIG_c_mv_t_ta_v              constant varchar2(100) := 'C_AMBIG_c_mv_t_ta_v';
 --One of: cluster,materialized view,query_name,table,view  (synonyms are resolved)
 --Used in query_table_expression
 C_AMBIG_CMQTV                    constant varchar2(100) := 'C_AMBIG_cmqtv';
@@ -44,8 +47,6 @@ C_AMBIG_func_agg_or_analytic     constant varchar2(100) := 'C_AMBIG_func_agg_or_
 --These are things in select_list that can have a ".*"
 C_AMBIG_qn_c_t_v_mv_alias        constant varchar2(100) := 'C_AMBIG_qn_t_v_mv_alias';
 C_AMBIG_rowcount_or_percent      constant varchar2(100) := 'C_AMBIG_rowcount_or_percent';
-
-
 
 
 
@@ -631,6 +632,8 @@ begin
 
 	p_AMBIG_rowcount_or_percent;
 
+	--This must come towards the end, it depends on table aliases: C_AMBIG_c_mv_t_ta_v
+
 	--TODO - other ambiguities.
 end resolve_ambiguous_nodes;
 
@@ -728,6 +731,7 @@ function hierarchical_query_clause(p_parent_id number) return boolean;
 function hint(p_parent_id number) return boolean;
 function in_condition(p_parent_id number) return boolean;
 function inner_cross_join_clause(p_parent_id number) return boolean;
+function integer_rule(p_parent_id number) return boolean;
 function interval_expression(p_parent_id number) return boolean;
 function is_of_type_condition(p_parent_id number) return boolean;
 function join_clause(p_parent_id number) return boolean;
@@ -1372,13 +1376,115 @@ begin
 end floating_point_condition;
 
 
+--**DIFFERENCE FROM MANUAL**: for_update_column_list and for_update_column_item are not in manual.
 function for_update_clause(p_parent_id number) return boolean is
 	v_parse_context parse_context;
+
+	function for_update_column_item(p_parent_id number) return boolean is
+		v_parse_context parse_context;
+		v_node_1_id number;
+		v_node_2_id number;
+		v_node_3_id number;
+	begin
+		v_parse_context := push(C_FOR_UPDATE_COLUMN_ITEM, p_parent_id);
+
+		--Accept up to 3 words and dots.
+		if match_unreserved_word('node1', v_parse_context.new_node_id) then
+			v_node_1_id := g_nodes.count;
+			if match_terminal('.', v_parse_context.new_node_id) then
+				if match_unreserved_word('node2', v_parse_context.new_node_id) then
+					v_node_2_id := g_nodes.count;
+					if match_terminal('.', v_parse_context.new_node_id) then
+						if match_unreserved_word('node3', v_parse_context.new_node_id) then
+							v_node_3_id := g_nodes.count;
+						else
+							parse_error('for update schema, table, or column', $$plsql_line);
+						end if;
+					end if;
+				else
+					parse_error('for update schema, table, or column', $$plsql_line);
+				end if;
+			end if;
+		else
+			return pop(v_parse_context);
+		end if;
+
+		--Assign values depending on the number of nodes populated.
+		--3 nodes - schema, ambiguous, column
+		if v_node_3_id is not null then
+			g_nodes(v_node_1_id).type := C_SCHEMA;
+			g_nodes(v_node_2_id).type := C_AMBIG_c_mv_t_ta_v;
+			g_nodes(v_node_3_id).type := C_COLUMN;
+		--2 nodes - ambiguous, column
+		elsif v_node_2_id is not null then
+			g_nodes(v_node_1_id).type := C_AMBIG_c_mv_t_ta_v;
+			g_nodes(v_node_2_id).type := C_COLUMN;
+		--1 node - column
+		else
+			g_nodes(v_node_1_id).type := C_COLUMN;
+		end if;
+
+		return true;
+	end for_update_column_item;
+
+	function for_update_column_list(p_parent_id number) return boolean is
+		v_parse_context parse_context;
+	begin
+		v_parse_context := push(C_FOR_UPDATE_COLUMN_LIST, p_parent_id);
+
+		if for_update_column_item(v_parse_context.new_node_id) then
+			loop
+				if match_terminal(',', v_parse_context.new_node_id) then
+					if for_update_column_item(v_parse_context.new_node_id) then
+						null;
+					else
+						parse_error('for_update_column_item', $$plsql_line);
+					end if;
+				else
+					exit;
+				end if;
+			end loop;
+			return true;
+		else
+			return pop(v_parse_context);
+		end if;
+	end for_update_column_list;
 begin
 	v_parse_context := push(C_FOR_UPDATE_CLAUSE, p_parent_id);
 
-	--TODO
-	return pop(v_parse_context);
+	if match_terminal('FOR', v_parse_context.new_node_id) then
+		if match_terminal('UPDATE', v_parse_context.new_node_id) then
+			if match_terminal('OF', v_parse_context.new_node_id) then
+				if for_update_column_list(v_parse_context.new_node_id) then
+					null;
+				else
+					parse_error('for_update_column_list', $$plsql_line);
+				end if;
+			end if;
+
+			if match_terminal('NOWAIT', v_parse_context.new_node_id) then
+				return true;
+			elsif match_terminal('WAIT', v_parse_context.new_node_id) then
+				if integer_rule(v_parse_context.new_node_id) then
+					return true;
+				else
+					parse_error('integer', $$plsql_line);
+				end if;
+			elsif match_terminal('SKIP', v_parse_context.new_node_id) then
+				if match_terminal('LOCKED', v_parse_context.new_node_id) then
+					return true;
+				else
+					parse_error('LOCKED', $$plsql_line);
+				end if;
+			else
+				parse_error('NOWAIT, WAIT, SKIP', $$plsql_line);
+			end if;
+		else
+			parse_error('UPDATE', $$plsql_line);
+		end if;
+	else
+		return pop(v_parse_context);
+	end if;
 end for_update_clause;
 
 
@@ -1881,6 +1987,21 @@ begin
 end inner_cross_join_clause;
 
 
+--Named "_rule" because INTEGER is reserved.
+function integer_rule(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push('integer', p_parent_id);
+
+	if next_type(0) = plsql_lexer.c_numeric and next_value(0) not like '%.%' then
+		increment;
+		return true;
+	else
+		return pop(v_parse_context);
+	end if;
+end integer_rule;
+
+
 function interval_expression(p_parent_id number) return boolean is
 	v_parse_context parse_context;
 begin
@@ -2019,7 +2140,7 @@ function object_access_expression_1(p_parent_id number) return boolean is
 						loop
 							if match_terminal(',', v_parse_context.new_node_id) then
 								if argument(v_parse_context.new_node_id) then
-									return null;
+									null;
 								else
 									parse_error('argument', $$plsql_line);
 								end if;
@@ -2348,6 +2469,17 @@ begin
 	if next_value(0) = 'LATERAL' and next_value(1) = '(' then
 		g_optional := match_terminal('LATERAL', v_parse_context.new_node_id);
 		g_optional := match_terminal('(', v_parse_context.new_node_id);
+		if subquery(v_parse_context.new_node_id) then
+			g_optional := subquery_restriction_clause(v_parse_context.new_node_id);
+			if match_terminal(')', v_parse_context.new_node_id) then
+				return true;
+			else
+				parse_error('")"', $$plsql_line);
+			end if;
+		else
+			parse_error('subquery', $$plsql_line);
+		end if;
+	elsif match_terminal('(', v_parse_context.new_node_id) then
 		if subquery(v_parse_context.new_node_id) then
 			g_optional := subquery_restriction_clause(v_parse_context.new_node_id);
 			if match_terminal(')', v_parse_context.new_node_id) then
