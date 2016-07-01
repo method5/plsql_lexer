@@ -54,6 +54,7 @@ start types.sql
 prompt Installing packages...
 
 start packages/plsql_lexer.plsql
+start packages/syntax_tree.plsql
 start packages/plsql_parser.spc
 start packages/plsql_parser.bdy
 start packages/statement_classifier.plsql
@@ -73,7 +74,7 @@ column object_type format a13;
 
 select owner, object_name, object_type
 from all_objects
-where object_name in ('PLSQL_LEXER', 'PLSQL_PARSER', 'STATEMENT_CLASSIFIER', 'STATEMENT_SPLITTER', 'STATEMENT_FEEDBACK', 'STATEMENT_TERMINATOR', 'MISPLACED_HINTS')
+where object_name in ('PLSQL_LEXER', 'PLSQL_PARSER', 'SYNTAX_TREE', 'STATEMENT_CLASSIFIER', 'STATEMENT_SPLITTER', 'STATEMENT_FEEDBACK', 'STATEMENT_TERMINATOR', 'MISPLACED_HINTS')
 	and owner = sys_context('userenv', 'current_schema')
 	and status <> 'VALID';
 
@@ -85,7 +86,7 @@ begin
 	select count(*)
 	into v_count
 	from all_objects
-	where object_name in ('PLSQL_LEXER', 'PLSQL_PARSER', 'STATEMENT_CLASSIFIER', 'STATEMENT_SPLITTER', 'STATEMENT_FEEDBACK', 'STATEMENT_TERMINATOR', 'MISPLACED_HINTS')
+	where object_name in ('PLSQL_LEXER', 'PLSQL_PARSER', 'SYNTAX_TREE', 'STATEMENT_CLASSIFIER', 'STATEMENT_SPLITTER', 'STATEMENT_FEEDBACK', 'STATEMENT_TERMINATOR', 'MISPLACED_HINTS')
 		and owner = sys_context('userenv', 'current_schema')
 		and status <> 'VALID';
 

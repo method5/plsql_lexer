@@ -230,6 +230,7 @@ end previous_value;
 function get_reserved_words return string_table is
 	v_dummy varchar2(1);
 	v_reserved_words string_table := string_table();
+	v_potential_reserved_words string_table;
 begin
 	--Use pre-generated list for specific versions.
 	if dbms_db_version.version||'.'||dbms_db_version.release = '12.1' then
@@ -252,17 +253,15 @@ begin
 	--TODO: Pre-generate for 11.2
 	--Otherwise dynamically determine list.
 	else
-		for reserved_words in
-		(
-			select *
-			from v$reserved_words
-			order by keyword
-		) loop
+		execute immediate 'select keyword from v$reserved_words order by keyword'
+		bulk collect into v_potential_reserved_words;
+
+		for i in 1 .. v_potential_reserved_words.count loop
 			begin
-				execute immediate 'select dummy from dual '||reserved_words.keyword into v_dummy;
+				execute immediate 'select dummy from dual '||v_potential_reserved_words(i) into v_dummy;
 			exception when others then
 				v_reserved_words.extend;
-				v_reserved_words(v_reserved_words.count) := reserved_words.keyword;
+				v_reserved_words(v_reserved_words.count) := v_potential_reserved_words(i);
 				--For testing.
 				--dbms_output.put_line('Failed: '||reserved_words.keyword||', Reserved: '||reserved_words.reserved);
 			end;

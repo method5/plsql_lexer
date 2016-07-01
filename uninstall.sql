@@ -52,6 +52,7 @@ begin
 
 	--Drop regular packages.
 	drop_object_ignore_dne_error('drop package plsql_parser');
+	drop_object_ignore_dne_error('drop package syntax_tree');
 	drop_object_ignore_dne_error('drop package plsql_lexer');
 	drop_object_ignore_dne_error('drop package statement_classifier');
 	drop_object_ignore_dne_error('drop package statement_splitter');
