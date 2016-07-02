@@ -47,7 +47,9 @@ Returns  - NODE_TABLE
 
 --Not listed:
 C_AGGREGATE_FUNCTION             constant varchar2(100) := 'aggregate_function';
-C_ALIAS                          constant varchar2(100) := 'alias';
+C_C_ALIAS                        constant varchar2(100) := 'c_alias';
+C_C_ALIAS_ITEM                   constant varchar2(100) := 'c_alias_item';
+C_C_ALIAS_LIST                   constant varchar2(100) := 'c_alias_list';
 C_ARGUMENT                       constant varchar2(100) := 'argument';
 C_COLLECTION_EXPRESSION          constant varchar2(100) := 'collection_expression';
 C_COLUMN                         constant varchar2(100) := 'column';
@@ -67,12 +69,15 @@ C_MODEL_CONDITION                constant varchar2(100) := 'model_condition';
 C_MULTISET_CONDITION             constant varchar2(100) := 'multiset_condition';
 C_ORDER_BY_ITEM                  constant varchar2(100) := 'order_by_item';
 C_ORDER_BY_LIST                  constant varchar2(100) := 'order_by_list';
+C_ORDERING_COLUMN                constant varchar2(100) := 'ordering_column';
 C_PATTERN_MATCHING_CONDITION     constant varchar2(100) := 'pattern_matching_condition';
 C_PERCENT                        constant varchar2(100) := 'percent';
 C_PSEUDOCOLUMN                   constant varchar2(100) := 'pseudocolumn';
 C_QUERY_NAME                     constant varchar2(100) := 'query_name';
 C_RETURN_EXPR                    constant varchar2(100) := 'return_expr';
 C_ROWCOUNT                       constant varchar2(100) := 'rowcount';
+C_SEARCH_ITEM                    constant varchar2(100) := 'search_item';
+C_SEARCH_LIST                    constant varchar2(100) := 'search_list';
 --"SELECT" collides with the "SELECT" terminal.
 C_SELECT_STATEMENT               constant varchar2(100) := 'select';
 C_SELECT_CLAUSE                  constant varchar2(100) := 'select_clause';
@@ -80,6 +85,7 @@ C_SELECT_ITEM                    constant varchar2(100) := 'select_item';
 C_SCALAR_SUBQUERY_EXPRESSION     constant varchar2(100) := 'scalar_subquery_expression';
 C_SCHEMA                         constant varchar2(100) := 'schema';
 C_SUBQUERY_FACTORING_ITEM        constant varchar2(100) := 'subquery_factoring_item';
+C_SUBQUERY_FACTORING_LIST        constant varchar2(100) := 'subquery_factoring_list';
 C_STATEMENT                      constant varchar2(100) := 'statement';
 C_T_ALIAS                        constant varchar2(100) := 't_alias';
 C_XML_CONDITION                  constant varchar2(100) := 'xml_condition';

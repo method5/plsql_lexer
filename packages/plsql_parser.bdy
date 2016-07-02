@@ -429,6 +429,7 @@ procedure resolve_ambiguous_nodes(p_user varchar2) is
 		v_ancestor_query_block node;
 		v_with_clause node;
 		v_subquery_factoring_clause node;
+		v_subquery_factoring_list node;
 		v_subquery_factoring_items node_table;
 	begin
 		--Ancestor query_name.
@@ -442,11 +443,13 @@ procedure resolve_ambiguous_nodes(p_user varchar2) is
 				--Child with_clause.
 				v_with_clause := syntax_tree.get_child_node_by_type(g_nodes, v_ancestor_query_block.id, C_WITH_CLAUSE, 1);
 				if v_with_clause is not null then
-					--Child subquery_factoring_clause.
+					--Child subquery_factoring_clause and list
 					v_subquery_factoring_clause := syntax_tree.get_child_node_by_type(g_nodes, v_with_clause.id, C_SUBQUERY_FACTORING_CLAUSE, 1);
-					if v_subquery_factoring_clause is not null then
+					v_subquery_factoring_list := syntax_tree.get_child_node_by_type(g_nodes, v_subquery_factoring_clause.id, C_SUBQUERY_FACTORING_LIST, 1);
+
+					if v_subquery_factoring_list is not null then
 						--Children subquery_factoring_item
-						v_subquery_factoring_items := syntax_tree.get_children_node_by_type(g_nodes, v_subquery_factoring_clause.id, C_SUBQUERY_FACTORING_ITEM);
+						v_subquery_factoring_items := syntax_tree.get_children_node_by_type(g_nodes, v_subquery_factoring_list.id, C_SUBQUERY_FACTORING_ITEM);
 						--Look for matching name.
 						for i in 1 .. v_subquery_factoring_items.count loop
 							if syntax_tree.are_names_equal(v_ambig_cmqstv, v_subquery_factoring_items(i).lexer_token.value) then
@@ -2740,13 +2743,84 @@ begin
 end searched_case_expression;
 
 
+--**DIFFERENCE FROM MANUAL**: Manual does not have search_list or search_item.
 function search_clause(p_parent_id number) return boolean is
 	v_parse_context parse_context;
+
+	function search_item(p_parent_id number) return boolean is
+		v_parse_context parse_context;
+	begin
+		v_parse_context := push(C_SEARCH_ITEM, p_parent_id);
+
+		if match_unreserved_word(C_C_ALIAS, v_parse_context.new_node_id) then
+			g_optional := match_terminal_or_list(string_table('ASC', 'DESC'), v_parse_context.new_node_id);
+			if match_terminal('NULLS', v_parse_context.new_node_id) then
+				if match_terminal_or_list(string_table('FIRST', 'LAST'), v_parse_context.new_node_id) then
+					null;
+				else
+					parse_error('FIRST, LAST', $$plsql_line);
+				end if;
+			end if;
+			return true;
+		else
+			return pop(v_parse_context);
+		end if;
+	end search_item;
+
+	function search_list(p_parent_id number) return boolean is
+		v_parse_context parse_context;
+	begin
+		v_parse_context := push(C_SEARCH_LIST, p_parent_id);
+
+		if search_item(v_parse_context.new_node_id) then
+			loop
+				if match_terminal(',', v_parse_context.new_node_id) then
+					if search_item(v_parse_context.new_node_id) then
+						null;
+					else
+						parse_error(C_SEARCH_ITEM, $$plsql_line);
+					end if;
+				else
+					exit;
+				end if;
+			end loop;
+			return true;
+		else
+			return pop(v_parse_context);
+		end if;
+	end search_list;
 begin
 	v_parse_context := push(C_SEARCH_CLAUSE, p_parent_id);
 
-	--TODO
-	return pop(v_parse_context);
+	if match_terminal('SEARCH', v_parse_context.new_node_id) then
+		if match_terminal_or_list(string_table('DEPTH', 'BREADTH'), v_parse_context.new_node_id) then
+			if match_terminal('FIRST', v_parse_context.new_node_id) then
+				if match_terminal('BY', v_parse_context.new_node_id) then
+					if search_list(v_parse_context.new_node_id) then
+						if match_terminal('SET', v_parse_context.new_node_id) then
+							if match_unreserved_word(C_ORDERING_COLUMN, v_parse_context.new_node_id) then
+								return true;
+							else
+								parse_error(C_ORDERING_COLUMN, $$plsql_line);
+							end if;
+						else
+							parse_error('SET', $$plsql_line);
+						end if;
+					else
+						parse_error('search_list', $$plsql_line);
+					end if;
+				else
+					parse_error('BY', $$plsql_line);
+				end if;
+			else
+				parse_error('FIRST', $$plsql_line);
+			end if;
+		else
+			parse_error('DEPTH, BREADTH', $$plsql_line);
+		end if;
+	else
+		return pop(v_parse_context);
+	end if;
 end search_clause;
 
 
@@ -2807,13 +2881,13 @@ begin
 		return true;
 	elsif expr(v_parse_context.new_node_id) then
 		if match_terminal('AS', v_parse_context.new_node_id) then
-			if match_unreserved_word(C_ALIAS, v_parse_context.new_node_id) then
+			if match_unreserved_word(C_C_ALIAS, v_parse_context.new_node_id) then
 				null;
 			else
-				parse_error('c_alias', $$plsql_line);
+				parse_error(C_C_ALIAS, $$plsql_line);
 			end if;
 		else
-			g_optional := match_unreserved_word(C_ALIAS, v_parse_context.new_node_id);
+			g_optional := match_unreserved_word(C_C_ALIAS, v_parse_context.new_node_id);
 		end if;
 		return true;
 	else
@@ -2824,7 +2898,6 @@ end select_item;
 
 function select_list(p_parent_id number) return boolean is
 	v_parse_context parse_context;
-	v_first_select_item parse_context;
 begin
 	v_parse_context := push(C_SELECT_LIST, p_parent_id);
 	--**DIFFERENCE FROM MANUAL**: SELECT_ITEM does not exist in the manual.
@@ -3062,76 +3135,121 @@ begin
 end subquery;
 
 
---**DIFFERENCE FROM MANUAL**  This rule was created to manage multiple items in subquery_factoring_clause.
-function subquery_factoring_item(p_parent_id number) return boolean is
-	v_parse_context parse_context;
-begin
-	v_parse_context := push(C_SUBQUERY_FACTORING_ITEM, p_parent_id);
-
-	if match_unreserved_word(C_QUERY_NAME, v_parse_context.new_node_id) then
-		if match_terminal('(', v_parse_context.new_node_id) then
-			if match_unreserved_word(C_ALIAS, v_parse_context.new_node_id) then
-				loop
-					if match_terminal('(', v_parse_context.new_node_id) then
-						if match_unreserved_word(C_ALIAS, v_parse_context.new_node_id) then
-							null;
-						else
-							parse_error('C_ALIAS', $$plsql_line);
-						end if;
-					else
-						exit;
-					end if;
-				end loop;
-			end if;
-		end if;
-
-		if match_terminal('AS', v_parse_context.new_node_id) then
-			if match_terminal('(', v_parse_context.new_node_id) then
-				if subquery(v_parse_context.new_node_id) then
-					if match_terminal(')', v_parse_context.new_node_id) then
-						g_optional := search_clause(v_parse_context.new_node_id);
-						g_optional := cycle_clause(v_parse_context.new_node_id);
-						return true;
-					else
-						parse_error('")"', $$plsql_line);
-					end if;
-				else
-					parse_error('subquery', $$plsql_line);
-				end if;
-			else
-				parse_error('"("', $$plsql_line);
-			end if;
-		else
-			parse_error('AS', $$plsql_line);
-		end if;
-	end if;
-
-	return pop(v_parse_context);
-end subquery_factoring_item;
-
-
+--**DIFFERENCE FROM MANUAL**  subquery_factoring_list and subquery_factoring_item are not in the manual.
 function subquery_factoring_clause(p_parent_id number) return boolean is
 	v_parse_context parse_context;
+
+	function subquery_factoring_item(p_parent_id number) return boolean is
+		v_parse_context parse_context;
+
+		function c_alias_item(p_parent_id number) return boolean is
+			v_parse_context parse_context;
+		begin
+			v_parse_context := push(C_C_ALIAS_ITEM, p_parent_id);
+
+			if match_unreserved_word(C_C_ALIAS, v_parse_context.new_node_id) then
+				return true;
+			else
+				return pop(v_parse_context);
+			end if;
+		end c_alias_item;
+
+		function c_alias_list(p_parent_id number) return boolean is
+			v_parse_context parse_context;
+
+		begin
+			v_parse_context := push(C_C_ALIAS_LIST, p_parent_id);
+
+			if match_terminal('(', v_parse_context.new_node_id) then
+
+				if c_alias_item(v_parse_context.new_node_id) then
+					loop
+						if match_terminal(',', v_parse_context.new_node_id) then
+							if c_alias_item(v_parse_context.new_node_id) then
+								null;
+							else
+								parse_error(C_C_ALIAS_ITEM, $$plsql_line);
+							end if;
+						else
+							exit;
+						end if;
+					end loop;
+				else
+					parse_error(c_c_alias_item, $$plsql_line);
+				end if;
+
+				if match_terminal(')', v_parse_context.new_node_id) then
+					return true;
+				else
+					parse_error('")"', $$plsql_line);
+				end if;
+			else
+				return pop(v_parse_context);
+			end if;
+		end c_alias_list;
+
+	begin
+		v_parse_context := push(C_SUBQUERY_FACTORING_ITEM, p_parent_id);
+
+		if match_unreserved_word(C_QUERY_NAME, v_parse_context.new_node_id) then
+			g_optional := c_alias_list(v_parse_context.new_node_id);
+			if match_terminal('AS', v_parse_context.new_node_id) then
+				if match_terminal('(', v_parse_context.new_node_id) then
+					if subquery(v_parse_context.new_node_id) then
+						if match_terminal(')', v_parse_context.new_node_id) then
+							g_optional := search_clause(v_parse_context.new_node_id);
+							g_optional := cycle_clause(v_parse_context.new_node_id);
+							return true;
+						else
+							parse_error('")"', $$plsql_line);
+						end if;
+					else
+						parse_error('subquery', $$plsql_line);
+					end if;
+				else
+					parse_error('"("', $$plsql_line);
+				end if;
+			else
+				parse_error('AS', $$plsql_line);
+			end if;
+		end if;
+
+		return pop(v_parse_context);
+	end subquery_factoring_item;
+
+
+	function subquery_factoring_list(p_parent_id number) return boolean is
+		v_parse_context parse_context;
+	begin
+		v_parse_context := push(C_SUBQUERY_FACTORING_LIST, p_parent_id);
+
+		if subquery_factoring_item(v_parse_context.new_node_id) then
+			loop
+				if match_terminal(',', v_parse_context.new_node_id) then
+					if subquery_factoring_item(v_parse_context.new_node_id) then
+						null;
+					else
+						parse_error(C_SUBQUERY_FACTORING_ITEM, $$plsql_line);
+					end if;
+				else
+					exit;
+				end if;
+			end loop;
+
+			return true;
+		end if;
+
+		return pop(v_parse_context);
+	end subquery_factoring_list;
 begin
 	v_parse_context := push(C_SUBQUERY_FACTORING_CLAUSE, p_parent_id);
 
-	if subquery_factoring_item(v_parse_context.new_node_id) then
-		loop
-			if match_terminal(',', v_parse_context.new_node_id) then
-				if subquery_factoring_item(v_parse_context.new_node_id) then
-					null;
-				else
-					parse_error('subquery_factoring_item', $$plsql_line);
-				end if;
-			else
-				exit;
-			end if;
-		end loop;
-
+	if subquery_factoring_list(v_parse_context.new_node_id) then
 		return true;
+	else
+		return pop(v_parse_context);
 	end if;
 
-	return pop(v_parse_context);
 end subquery_factoring_clause;
 
 
