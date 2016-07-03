@@ -2585,7 +2585,6 @@ begin
 			g_optional := match_terminal('.', v_parse_context.new_node_id);
 			if match_unreserved_word(C_AMBIG_CMTV, v_parse_context.new_node_id) then
 				g_optional := dblink(v_parse_context.new_node_id);
-				return true;
 			else
 				parse_error('cluster, materialized view, table, view', $$plsql_line);
 			end if;
