@@ -841,7 +841,7 @@ begin
 		loop
 			if match_terminal(',', p_parse_context.new_node_id) then
 				if argument(p_parse_context.new_node_id) then
-					exit;
+					null;
 				else
 					parse_error('argument', $$plsql_line);
 				end if;
