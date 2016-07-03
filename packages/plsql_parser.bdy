@@ -503,7 +503,7 @@ procedure resolve_ambiguous_nodes(p_user varchar2) is
 				p_object_name varchar2,
 				p_is_owner_implicit boolean,
 				p_dblink varchar2 default null
-			) return varchar2 is
+			) return varchar2 authid current_user is
 				v_object_type varchar2(4000);
 				v_public varchar2(30);
 			begin
