@@ -76,8 +76,10 @@ C_PSEUDOCOLUMN                   constant varchar2(100) := 'pseudocolumn';
 C_QUERY_NAME                     constant varchar2(100) := 'query_name';
 C_RETURN_EXPR                    constant varchar2(100) := 'return_expr';
 C_ROWCOUNT                       constant varchar2(100) := 'rowcount';
+C_SAMPLE_PERCENT                 constant varchar2(100) := 'sample_percent';
 C_SEARCH_ITEM                    constant varchar2(100) := 'search_item';
 C_SEARCH_LIST                    constant varchar2(100) := 'search_list';
+C_SEED_VALUE                     constant varchar2(100) := 'seed_value';
 --"SELECT" collides with the "SELECT" terminal.
 C_SELECT_STATEMENT               constant varchar2(100) := 'select';
 C_SELECT_CLAUSE                  constant varchar2(100) := 'select_clause';

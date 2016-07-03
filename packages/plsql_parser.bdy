@@ -744,6 +744,7 @@ function model_clause(p_parent_id number) return boolean;
 function model_expression(p_parent_id number) return boolean;
 function multiset_condition(p_parent_id number) return boolean;
 function null_condition(p_parent_id number) return boolean;
+function number_by_another_name(p_type varchar2, p_parent_id number) return boolean;
 function object_access_expression_1(p_parent_id number) return boolean;
 function order_by_clause(p_parent_id number) return boolean;
 function outer_join_clause(p_parent_id number) return boolean;
@@ -757,6 +758,7 @@ function query_partition_clause(p_parent_id number) return boolean;
 function query_table_expression(p_parent_id number) return boolean;
 function return_expr(p_parent_id number) return boolean;
 function row_limiting_clause(p_parent_id number) return boolean;
+function sample_clause(p_parent_id number) return boolean;
 function searched_case_expression(p_parent_id number) return boolean;
 function search_clause(p_parent_id number) return boolean;
 function select_clause(p_parent_id number) return boolean;
@@ -2191,6 +2193,20 @@ begin
 end null_condition;
 
 
+function number_by_another_name(p_type varchar2, p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(p_type, p_parent_id);
+
+	if next_type(0) = plsql_lexer.c_numeric then
+		increment;
+		return true;
+	else
+		return pop(v_parse_context);
+	end if;
+end number_by_another_name;
+
+
 --This function only covers the easy parts of OBJECT_ACCESS_EXPRESSION, anything
 --that has a "( ... ) . ".  Other object access  expressions are ambiguous and
 --must be handled in post-processing.
@@ -2577,8 +2593,9 @@ begin
 		else
 			g_optional := match_unreserved_word(C_AMBIG_CMQTV, v_parse_context.new_node_id);
 			g_optional := dblink(v_parse_context.new_node_id);
-			return true;
 		end if;
+		g_optional := sample_clause(v_parse_context.new_node_id);
+		return true;
 	end if;
 
 	return pop(v_parse_context);
@@ -2681,6 +2698,48 @@ begin
 	--TODO
 	return pop(v_parse_context);
 end row_pattern_clause;
+
+
+function sample_clause(p_parent_id number) return boolean is
+	v_parse_context parse_context;
+begin
+	v_parse_context := push(C_SAMPLE_CLAUSE, p_parent_id);
+
+	--Check next_value because there is potential ambiguity with t_alias.
+	if match_terminal('SAMPLE', v_parse_context.new_node_id) and next_value(1) in ('BLOCK', '(') then
+		g_optional := match_terminal('BLOCK', v_parse_context.new_node_id);
+		if match_terminal('(', v_parse_context.new_node_id) then
+			if number_by_another_name(C_SAMPLE_PERCENT, v_parse_context.new_node_id) then
+				if match_terminal(')', v_parse_context.new_node_id) then
+					if match_terminal('SEED', v_parse_context.new_node_id) then
+						if match_terminal('(', v_parse_context.new_node_id) then
+							if number_by_another_name(C_SEED_VALUE, v_parse_context.new_node_id) then
+								if match_terminal(')', v_parse_context.new_node_id) then
+									null;
+								else
+									parse_error('")"', $$plsql_line);
+								end if;
+							else
+								parse_error(C_SEED_VALUE, $$plsql_line);
+							end if;
+						else
+							parse_error('"("', $$plsql_line);
+						end if;
+					end if;
+					return true;
+				else
+					parse_error('")"', $$plsql_line);
+				end if;
+			else
+				parse_error(C_SAMPLE_PERCENT, $$plsql_line);
+			end if;
+		else
+			parse_error('")"', $$plsql_line);
+		end if;
+	else
+		return pop(v_parse_context);
+	end if;
+end sample_clause;
 
 
 function scalar_subquery_expression(p_parent_id number) return boolean is
