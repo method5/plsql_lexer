@@ -17,8 +17,9 @@ pragma serially_reusable;
 --Globals to select which test suites to run.
 c_errors                  constant number := power(2, 1);
 c_commands                constant number := power(2, 2);
+c_command_name_api        constant number := power(2, 3);
 
-c_static_tests  constant number := c_errors+c_commands;
+c_static_tests  constant number := c_errors+c_commands+c_command_name_api;
 
 c_all_tests constant number := c_static_tests;
 
@@ -102,6 +103,18 @@ begin
 		p_compile_warning_message => p_warning
 	);
 end feedback;
+
+
+--------------------------------------------------------------------------------
+procedure feedback_command_name(p_command_name varchar2, p_success out varchar2, p_warning out varchar2, p_rowcount in number default null) is
+begin
+	statement_feedback.get_feedback_message(
+		p_command_name => p_command_name,
+		p_rowcount => p_rowcount,
+		p_success_message => p_success,
+		p_compile_warning_message => p_warning
+	);
+end feedback_command_name;
 
 
 -- =============================================================================
@@ -739,6 +752,20 @@ begin
 end test_commands;
 
 
+--------------------------------------------------------------------------------
+--Purpose: Test the API that uses P_COMMAND_NAME.  The other tests test the
+--P_TOKENS interface.
+procedure test_command_name_api is
+	v_success varchar2(32767);
+	v_warning varchar2(32767);
+begin
+	feedback_command_name('ALTER TABLE', v_success, v_warning); assert_equals('ALTER TABLE', 'Table altered.|', v_success||'|'||v_warning);
+	feedback_command_name('CREATE TYPE', v_success, v_warning); assert_equals('CREATE TYPE', 'Type created.|Warning: Type created with compilation errors.', v_success||'|'||v_warning);
+	feedback_command_name('SELECT', v_success, v_warning); assert_equals('SELECT 1', 'ERROR: Unknown number of rows selected.|', v_success||'|'||v_warning);
+	feedback_command_name('SELECT', v_success, v_warning, 5); assert_equals('SELECT 4', '5 rows selected.|', v_success||'|'||v_warning);
+	feedback_command_name('INSERT', v_success, v_warning); assert_equals('INSERT 1', 'ERROR: Unknown number of rows created.|', v_success||'|'||v_warning);
+end test_command_name_api;
+
 
 -- =============================================================================
 -- Main Procedure
@@ -761,6 +788,7 @@ begin
 	--Run the chosen tests.
 	if bitand(p_tests, c_errors)                  > 0 then test_errors; end if;
 	if bitand(p_tests, c_commands)                > 0 then test_commands; end if;
+	if bitand(p_tests, c_command_name_api)        > 0 then test_command_name_api; end if;
 
 	--Print summary of results.
 	dbms_output.put_line(null);

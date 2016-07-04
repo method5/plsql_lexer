@@ -8,6 +8,12 @@ procedure get_feedback_message(
 	p_compile_warning_message out varchar2
 );
 
+procedure get_feedback_message(
+	p_command_name             in varchar2,
+	p_rowcount                 in number,
+	p_success_message         out varchar2,
+	p_compile_warning_message out varchar2
+);
 
 /*
 
@@ -71,14 +77,16 @@ p_statement - The SQL or PL/SQL statement that was executed successfully.
               Most of the messages are obvious.  Only the SELECT message is
               unusual - this package will not display the results, only a
               message like "no rows selected".
+  OR
+p_command_name - The V$SQLCOMMAND.COMMAND_NAME of the statement.  This value
+                 can be retrieved from statement_classifier.classify.
+
 p_rowcount - The number of rows modified by the statement.
              If it does not apply, pass in NULL.
 p_success_message - The message SQL*Plus would display if the statement was successful.
 p_compile_warning_message - The message SQL*Plus would display if a PL/SQL object compiled with errors.
                             Catch "ORA-24344: success with compilation error" to detect this situation.
 
-p_command_name - The V$SQLCOMMAND.COMMAND_NAME of the statement.  This value
-                 can be retrieved from statement_classifier.classify.
 
 */
 
