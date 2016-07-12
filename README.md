@@ -1,7 +1,7 @@
-`PLSQL_LEXER` 0.5.0
+`PLSQL_LEXER` 1.0.0
 ============
 
-PL/SQL Lexer solves real-world language problems, in PL/SQL.
+PL/SQL Lexer solves PL/SQL language problems such as tokenizing, splitting, classifying, feedback messages, and removing terminators.
 
 ## Packages and Types
 
@@ -186,13 +186,6 @@ Results:
 	Statement 4 : udpate my_table set a = 2;
 	Command Name: Invalid
 	Warning     : Could not classify this statement, please check for a typo: udpate my_table set a = 2;
-
-## Roadmap
-
-Version 1.0.0 may be ready after these steps:
-
-1. Thoroughly test by using code in other project I'm trying to open source?
-
 
 ## License
 `plsql_lexer` is licensed under the LGPL.

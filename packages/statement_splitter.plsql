@@ -1,36 +1,59 @@
 create or replace package statement_splitter is
 --Copyright (C) 2015 Jon Heller.  This program is licensed under the LGPLv3.
 
-function split_by_sqlplus_delimiter(p_statements in clob, p_sqlplus_delimiter in varchar2 default '/') return clob_table;
 function split_by_semicolon(p_tokens in token_table) return token_table_table;
+function split_by_sqlplus_delimiter(p_statements in clob, p_sqlplus_delimiter in varchar2 default '/') return clob_table;
 function split_by_sqlplus_del_and_semi(p_statements in clob, p_sqlplus_delimiter in varchar2 default '/') return token_table_table;
 
 /*
 
 == Purpose ==
 
-Split a string of separate SQL and PL/SQL statements terminated by ";".
+Split a string of SQL and PL/SQL statements into individual statements.
 
-Unlike SQL*Plus, even PL/SQL-like statements can be terminiated solely with a ";".
-This is helpful because it's difficult to use a "/" in strings in most IDEs.
+SPLIT_BY_SEMICOLON - Use semicolons for all terminators, even for PL/SQL
+  statements.  This mode is useful for IDEs where a "/" in strings causes problems.
 
-If you want to run in a more SQL*Plus-like mode, set p_optional_sqlplus_delimiter
-to "/".  Then a "/" on a line by itself is also a terminator.  This optional
-delimiter is configurable, does not override the ";" terminator, and is removed
-from the split strings.
+SPLIT_BY_SQLPLUS_DELIMITER - Uses a delimiter the way SQL*Plus does - it must
+  be on a line with only whitespace.
 
-
-== Output ==
-
-TODO
-
-== Requirements ==
-
-TODO
+SPLIT_BY_SQLPLUS_DEL_AND_SEMI - Combines the above two.
 
 == Example ==
 
-TODO
+SPLIT_BY_SEMICOLON:
+
+	select rownum, plsql_lexer.concatenate(column_value) statement
+	from table(
+		statement_splitter.split_by_semicolon(
+			plsql_lexer.lex('begin null; end;select * from test2;')
+		)
+	);
+
+	Results:
+	*  ROWNUM   STATEMENT
+	*  ------   ---------
+	*  1        begin null; end;
+	*  2        select * from test2;
+
+
+SPLIT_BY_SQLPLUS_DELIMITER:
+
+	select rownum, column_value statement
+	from table(
+		statement_splitter.split_by_sqlplus_delimiter(
+			'begin null; end;'||chr(10)||
+			'/'||chr(10)||
+			'select * from test2'
+		)
+	);
+
+	Results:
+	*  ROWNUM   STATEMENT
+	*  ------   ---------
+	*  1        begin null; end;
+	*           /
+	*  2        select * from test2;
 
 */
 
