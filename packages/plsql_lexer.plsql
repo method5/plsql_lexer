@@ -1,6 +1,6 @@
 create or replace package plsql_lexer is
 --Copyright (C) 2015 Jon Heller.  This program is licensed under the LGPLv3.
-C_VERSION constant varchar2(10) := '1.0.0';
+C_VERSION constant varchar2(10) := '1.0.1';
 
 --Main functions:
 function lex(p_source in clob) return token_table;
@@ -365,8 +365,6 @@ begin
 			if g_last_char = '''' and look_ahead(1) = '''' then
 				v_token_text := v_token_text || g_last_char;
 				g_last_char := get_char;
-				v_token_text := v_token_text || g_last_char;
-				g_last_char := get_char;
 			elsif g_last_char = '''' and (look_ahead(1) is null or look_ahead(1) <> '''') then
 				v_token_text := v_token_text || g_last_char;
 				g_last_char := get_char;
@@ -391,8 +389,6 @@ begin
 			g_last_char := get_char;
 			--Ignore escaped strings.
 			if g_last_char = '''' and look_ahead(1) = '''' then
-				v_token_text := v_token_text || g_last_char;
-				g_last_char := get_char;
 				v_token_text := v_token_text || g_last_char;
 				g_last_char := get_char;
 			elsif g_last_char = '''' and (look_ahead(1) is null or look_ahead(1) <> '''') then
