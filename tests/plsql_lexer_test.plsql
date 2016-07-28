@@ -163,6 +163,24 @@ begin
 	assert_equals('text: n string 2a', 'whitespace text whitespace EOF', lex(q'! N' ' !'));
 	assert_equals('text: n string 2b', q'!N' '!', get_value_n(q'! N' ' !', 2));
 
+	--Escaped strings.
+	assert_equals('text: escaped string 1', 'text whitespace EOF', lex(q'!'''' !'));
+	assert_equals('text: escaped string 2', 'text whitespace EOF', lex(q'!'a ''' !'));
+	assert_equals('text: escaped string 3', 'text whitespace EOF', lex(q'!''' ' !'));
+
+	--Escaped N strings.
+	assert_equals('text: escaped N string 1', 'text whitespace EOF', lex(q'!n'''' !'));
+	assert_equals('text: escaped N string 2', 'text whitespace EOF', lex(q'!n'a ''' !'));
+	assert_equals('text: escaped N string 3', 'text whitespace EOF', lex(q'!n''' ' !'));
+
+	--Escaped alternative quote strings (not really escaped, but looks that way).
+	assert_equals('text: escaped aq string 1', 'text whitespace EOF', lex(q'[q'!'!' ]'));
+	assert_equals('text: escaped aq string 2', 'text whitespace EOF', lex(q'[q'!''!' ]'));
+
+	--Escaped alternative quote N strings (not really escaped, but looks that way).
+	assert_equals('text: escaped aq N string 1', 'text whitespace EOF', lex(q'[nq'!'!' ]'));
+	assert_equals('text: escaped aq N string 2', 'text whitespace EOF', lex(q'[nq'!''!' ]'));
+
 	--Alternative quoting mechanism closing delimiters: [, {, <, (
 	assert_equals('text: alternative quote 1a', 'text EOF', lex(q'!q'[a]'!'));
 	assert_equals('text: alternative quote 1b', q'!q'[a]'!', get_value_n(q'!q'[a]'!', 1));
