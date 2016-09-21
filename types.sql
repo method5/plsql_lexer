@@ -29,19 +29,19 @@ create or replace type token_table_table is table of token_table;
 --------------------------------------------------------------------------------
 -- Used by PLSQL_PARSER (EXPERIMENTAL - DO NOT DEPEND ON THESE YET!)
 --------------------------------------------------------------------------------
-create or replace type number_table is table of number
-/
-create or replace type node is object
-(
-	id                  number,         --Unique identifier for the node.
-	type                varchar2(4000), --String to represent the node type.  See the constants in PLSQL_PARSER.
-	parent_id           number,         --Unique identifier of the node's parent.
-	lexer_token         token,          --Token information.
-	child_ids           number_table    --Unique identifiers of node's children.
-);
-/
-create or replace type node_table is table of node
-/
+--create or replace type number_table is table of number
+--/
+--create or replace type node is object
+--(
+--	id                  number,         --Unique identifier for the node.
+--	type                varchar2(4000), --String to represent the node type.  See the constants in PLSQL_PARSER.
+--	parent_id           number,         --Unique identifier of the node's parent.
+--	lexer_token         token,          --Token information.
+--	child_ids           number_table    --Unique identifiers of node's children.
+--);
+--/
+--create or replace type node_table is table of node
+--/
 
 
 --------------------------------------------------------------------------------

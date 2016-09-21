@@ -1,4 +1,4 @@
-`PLSQL_LEXER` 1.0.1
+`PLSQL_LEXER` 1.0.2
 ============
 
 PL/SQL Lexer solves PL/SQL language problems such as tokenizing, splitting, classifying, feedback messages, and removing terminators.
@@ -19,11 +19,6 @@ PL/SQL Lexer solves PL/SQL language problems such as tokenizing, splitting, clas
 **Code Analysis Packages**
 
  - *MISPLACED_HINTS* - Find hint in the wrong place.  For example, `insert into /*+ append */ ...` is incorrect because the hint should be placed immediately after the `insert`.
-
-**Experimental**
-
- - *PLSQL_PARSER* - Parse statements into a syntax tree.  Currently this is highly unstable and only supports a small subset of SELECT statements.
- - *SYNTAX_TREE* - Contains methods for searching the NODE_TABLE produced by PLSQL_PARSER.
 
 See the top of each file in the packages directory for more thorough documentation.
 

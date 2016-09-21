@@ -30,7 +30,8 @@ begin
 		(
 			'CLOB_TABLE', 'VARCHAR2_TABLE',
 			'TOKEN', 'TOKEN_TABLE', 'TOKEN_TABLE_TABLE',
-			'NODE', 'NODE_TABLE', 'NUMBER_TABLE',
+--Parser objects not ready yet:
+--			'NODE', 'NODE_TABLE', 'NUMBER_TABLE',
 			'MISPLACED_HINTS_CODE_TYPE', 'MISPLACED_HINTS_CODE_TABLE',
 			'MISPLACED_HINTS_SCHEMA_TYPE', 'MISPLACED_HINTS_SCHEMA_TABLE'
 		)
@@ -54,9 +55,10 @@ start types.sql
 prompt Installing packages...
 
 start packages/plsql_lexer.plsql
-start packages/syntax_tree.plsql
-start packages/plsql_parser.spc
-start packages/plsql_parser.bdy
+--Parser objects not ready yet:
+--start packages/syntax_tree.plsql
+--start packages/plsql_parser.spc
+--start packages/plsql_parser.bdy
 start packages/statement_classifier.plsql
 start packages/statement_splitter.plsql
 start packages/statement_feedback.plsql
@@ -74,7 +76,12 @@ column object_type format a13;
 
 select owner, object_name, object_type
 from all_objects
-where object_name in ('PLSQL_LEXER', 'PLSQL_PARSER', 'SYNTAX_TREE', 'STATEMENT_CLASSIFIER', 'STATEMENT_SPLITTER', 'STATEMENT_FEEDBACK', 'STATEMENT_TERMINATOR', 'MISPLACED_HINTS')
+where object_name in
+	(
+		'PLSQL_LEXER', 'STATEMENT_CLASSIFIER', 'STATEMENT_SPLITTER', 'STATEMENT_FEEDBACK', 'STATEMENT_TERMINATOR', 'MISPLACED_HINTS'
+		--Parser objects not ready yet:
+		--,'PLSQL_PARSER', 'SYNTAX_TREE'
+	)
 	and owner = sys_context('userenv', 'current_schema')
 	and status <> 'VALID';
 
@@ -86,7 +93,12 @@ begin
 	select count(*)
 	into v_count
 	from all_objects
-	where object_name in ('PLSQL_LEXER', 'PLSQL_PARSER', 'SYNTAX_TREE', 'STATEMENT_CLASSIFIER', 'STATEMENT_SPLITTER', 'STATEMENT_FEEDBACK', 'STATEMENT_TERMINATOR', 'MISPLACED_HINTS')
+	where object_name in
+	(
+		'PLSQL_LEXER', 'STATEMENT_CLASSIFIER', 'STATEMENT_SPLITTER', 'STATEMENT_FEEDBACK', 'STATEMENT_TERMINATOR', 'MISPLACED_HINTS'
+		--Parser objects not ready yet:
+		--,'PLSQL_PARSER', 'SYNTAX_TREE'
+	)
 		and owner = sys_context('userenv', 'current_schema')
 		and status <> 'VALID';
 
