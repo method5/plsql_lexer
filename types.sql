@@ -58,7 +58,7 @@ create or replace type misplaced_hints_code_table is table of misplaced_hints_co
 /
 create or replace type misplaced_hints_schema_type is object
 (
-	object_name varchar2(30),
+	object_name varchar2(128),
 	object_type varchar2(23),
 	line_number number,
 	column_number number,

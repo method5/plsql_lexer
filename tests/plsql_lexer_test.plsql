@@ -61,6 +61,8 @@ g_failed_count number := 0;
 g_4_byte_utf8 varchar2(1 char) := unistr('\d841\df79');  --The "cut" character in Cantonese.  Looks like a guy with a sword.
 g_2_byte_utf8 varchar2(1 char) := unistr('\00d0');       --The "eth" character, an upper case D with a line.
 
+--TODO: Use 128 bytes instead of 30 bytes for some tests for Oracle 12.2 extended identifier names.
+
 --Helper procedures.
 
 
