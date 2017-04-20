@@ -221,7 +221,11 @@ begin
 	--and comparing syntx with the manual.
 	classify(q'[/*comment*/ adMINister /*asdf*/ kEy manaGEment create keystore 'asdf' identified by qwer]', v_output); assert_equals('ADMINISTER KEY MANAGEMENT', 'DDL|ADMINISTER KEY MANAGEMENT|ADMINISTER KEY MANAGEMENT|238', concat(v_output));
 
+	classify(q'[ alter  analytic view some_name compile;]', v_output); assert_equals('ALTER ANALYTIC VIEW', 'DDL|ALTER|ALTER ANALYTIC VIEW|250', concat(v_output));
+
 	classify(q'[ alter assemBLY /*I don't think this is a real command but whatever*/]', v_output); assert_equals('ALTER ASSEMBLY', 'DDL|ALTER|ALTER ASSEMBLY|217', concat(v_output));
+
+	classify(q'[ Alter Attribute Dimension asdf.qwer compile;]', v_output); assert_equals('ALTER ASSEMBLY', 'DDL|ALTER|ALTER ATTRIBUTE DIMENSION|244', concat(v_output));
 
 	classify(q'[ ALTEr AUDIt POLICY myPOLICY drop roles myRole; --comment]', v_output); assert_equals('ALTER AUDIT POLICY', 'DDL|ALTER|ALTER AUDIT POLICY|230', concat(v_output));
 
@@ -243,13 +247,19 @@ begin
 
 	classify(q'[ALTER FUNCTION myschema.myfunction compile;]', v_output); assert_equals('ALTER FUNCTION', 'DDL|ALTER|ALTER FUNCTION|92', concat(v_output));
 
+	classify(q'[ALTER HIERARCHY myschema.myhierarchy compile;]', v_output); assert_equals('ALTER HIERARCHY', 'DDL|ALTER|ALTER HIERARCHY|247', concat(v_output));
+
 	classify(q'[ alter index asdf rebuild parallel 8]', v_output); assert_equals('ALTER INDEX', 'DDL|ALTER|ALTER INDEX|11', concat(v_output));
 
 	classify(q'[ALTER INDEXTYPE  my_schema.my_indextype compile;]', v_output); assert_equals('ALTER INDEXTYPE', 'DDL|ALTER|ALTER INDEXTYPE|166', concat(v_output));
 
+	classify(q'[ALTER inmemory  join group my_group add (mytable(mycolumn));]', v_output); assert_equals('ALTER INDEXTYPE', 'DDL|ALTER|ALTER INMEMORY JOIN GROUP|-101', concat(v_output));
+
 	classify(q'[ALTER java  source my_schema.some_object compile;]', v_output); assert_equals('ALTER JAVA', 'DDL|ALTER|ALTER JAVA|161', concat(v_output));
 
 	classify(q'[alter library test_library editionable compile;]', v_output); assert_equals('ALTER LIBRARY', 'DDL|ALTER|ALTER LIBRARY|196', concat(v_output));
+
+	classify(q'[alter lockdown profile my_profile disable feature all]', v_output); assert_equals('ALTER LOCKDOWN PROFILE', 'DDL|ALTER|ALTER LOCKDOWN PROFILE|236', concat(v_output));
 
 	classify(q'[ALTER  MATERIALIZED  VIEW a_schema.mv_name cache consider fresh;]', v_output); assert_equals('ALTER MATERIALIZED VIEW ', 'DDL|ALTER|ALTER MATERIALIZED VIEW |75', concat(v_output));
 	classify(q'[ALTER  SNAPSHOT a_schema.mv_name cache consider fresh;]', v_output); assert_equals('ALTER MATERIALIZED VIEW ', 'DDL|ALTER|ALTER MATERIALIZED VIEW |75', concat(v_output));
@@ -313,6 +323,8 @@ begin
 
 	classify(q'[ ALTER  TABLE my_schema.my_table rename to new_name;]', v_output); assert_equals('ALTER TABLE', 'DDL|ALTER|ALTER TABLE|15', concat(v_output));
 
+	classify(q'[ALTER TABLESPACE SET some_set coalesce]', v_output); assert_equals('ALTER TABLESPACE SET', 'DDL|ALTER|ALTER TABLESPACE SET|-201', concat(v_output));
+
 	classify(q'[ALTER TABLESPACE some_tbs coalesce]', v_output); assert_equals('ALTER TABLESPACE', 'DDL|ALTER|ALTER TABLESPACE|40', concat(v_output));
 
 	--Undocumented by still runs in 12.1.0.2.
@@ -370,9 +382,23 @@ begin
 	classify(q'[ commit work comment 'some comment' write wait batch]', v_output); assert_equals('COMMIT', 'Transaction Control|COMMIT|COMMIT|44', concat(v_output));
 	classify(q'[COMMIT force corrupt_xid_all]', v_output); assert_equals('COMMIT', 'Transaction Control|COMMIT|COMMIT|44', concat(v_output));
 
+	classify(q'[CREATE or replace analytic view some_view using my_fact ...]', v_output); assert_equals('CREATE ANALYTIC VIEW 1', 'DDL|CREATE|CREATE ANALYTIC VIEW|249', concat(v_output));
+	classify(q'[CREATE or replace force analytic view some_view using my_fact ...]', v_output); assert_equals('CREATE ANALYTIC VIEW 2', 'DDL|CREATE|CREATE ANALYTIC VIEW|249', concat(v_output));
+	classify(q'[CREATE or replace noforce analytic view some_view using my_fact ...]', v_output); assert_equals('CREATE ANALYTIC VIEW 3', 'DDL|CREATE|CREATE ANALYTIC VIEW|249', concat(v_output));
+	classify(q'[CREATE force analytic view some_view using my_fact ...]', v_output); assert_equals('CREATE ANALYTIC VIEW 4', 'DDL|CREATE|CREATE ANALYTIC VIEW|249', concat(v_output));
+	classify(q'[CREATE noforce analytic view some_view using my_fact ...]', v_output); assert_equals('CREATE ANALYTIC VIEW 5', 'DDL|CREATE|CREATE ANALYTIC VIEW|249', concat(v_output));
+	classify(q'[CREATE analytic view some_view using my_fact ...]', v_output); assert_equals('CREATE ANALYTIC VIEW 6', 'DDL|CREATE|CREATE ANALYTIC VIEW|249', concat(v_output));
+
 	--Is this a real command?  http://dba.stackexchange.com/questions/96002/what-is-an-oracle-assembly/
 	classify(q'[create or replace assembly some_assembly is 'some string';
 	/]', v_output); assert_equals('CREATE ASSEMBLY', 'DDL|CREATE|CREATE ASSEMBLY|216', concat(v_output));
+
+	classify(q'[ CREATE or replace ATTRIBUTE DIMENSION some_attribute_dimension dimension type time ... ]', v_output); assert_equals('CREATE ATTRIBUTE DIMENSION 1', 'DDL|CREATE|CREATE ATTRIBUTE DIMENSION|243', concat(v_output));
+	classify(q'[ CREATE or replace force ATTRIBUTE DIMENSION some_attribute_dimension dimension type time ... ]', v_output); assert_equals('CREATE ATTRIBUTE DIMENSION 2', 'DDL|CREATE|CREATE ATTRIBUTE DIMENSION|243', concat(v_output));
+	classify(q'[ CREATE or replace noforce ATTRIBUTE DIMENSION some_attribute_dimension dimension type time ... ]', v_output); assert_equals('CREATE ATTRIBUTE DIMENSION 3', 'DDL|CREATE|CREATE ATTRIBUTE DIMENSION|243', concat(v_output));
+	classify(q'[ CREATE force ATTRIBUTE DIMENSION some_attribute_dimension dimension type time ... ]', v_output); assert_equals('CREATE ATTRIBUTE DIMENSION 4', 'DDL|CREATE|CREATE ATTRIBUTE DIMENSION|243', concat(v_output));
+	classify(q'[ CREATE noforce ATTRIBUTE DIMENSION some_attribute_dimension dimension type time ... ]', v_output); assert_equals('CREATE ATTRIBUTE DIMENSION 5', 'DDL|CREATE|CREATE ATTRIBUTE DIMENSION|243', concat(v_output));
+	classify(q'[ CREATE ATTRIBUTE DIMENSION some_attribute_dimension dimension type time ... ]', v_output); assert_equals('CREATE ATTRIBUTE DIMENSION 6', 'DDL|CREATE|CREATE ATTRIBUTE DIMENSION|243', concat(v_output));
 
 	classify(q'[CREATE AUDIT POLICY my_policy actions update on oe.orders]', v_output); assert_equals('CREATE AUDIT POLICY', 'DDL|CREATE|CREATE AUDIT POLICY|229', concat(v_output));
 
@@ -412,12 +438,21 @@ begin
 	classify(q'[CREATE editionable FUNCTION my_schema.my_function() return number is begin return 1; end; /]', v_output); assert_equals('CREATE FUNCTION', 'DDL|CREATE|CREATE FUNCTION|91', concat(v_output));
 	classify(q'[CREATE noneditionable FUNCTION my_schema.my_function() return number is begin return 1; end; /]', v_output); assert_equals('CREATE FUNCTION', 'DDL|CREATE|CREATE FUNCTION|91', concat(v_output));
 
+	classify(q'[CREATE hierarchy some_hierarchy using some_attr ...]', v_output); assert_equals('CREATE HIERARCHY 1', 'DDL|CREATE|CREATE HIERARCHY|246', concat(v_output));
+	classify(q'[CREATE or replace hierarchy some_hierarchy using some_attr ...]', v_output); assert_equals('CREATE HIERARCHY 2', 'DDL|CREATE|CREATE HIERARCHY|246', concat(v_output));
+	classify(q'[CREATE or replace force hierarchy some_hierarchy using some_attr ...]', v_output); assert_equals('CREATE HIERARCHY 3', 'DDL|CREATE|CREATE HIERARCHY|246', concat(v_output));
+	classify(q'[CREATE or replace noforce hierarchy some_hierarchy using some_attr ...]', v_output); assert_equals('CREATE HIERARCHY 4', 'DDL|CREATE|CREATE HIERARCHY|246', concat(v_output));
+	classify(q'[CREATE force hierarchy some_hierarchy using some_attr ...]', v_output); assert_equals('CREATE HIERARCHY 5', 'DDL|CREATE|CREATE HIERARCHY|246', concat(v_output));
+	classify(q'[CREATE noforce hierarchy some_hierarchy using some_attr ...]', v_output); assert_equals('CREATE HIERARCHY 6', 'DDL|CREATE|CREATE HIERARCHY|246', concat(v_output));
+
 	classify(q'[CREATE INDEX on table1(a);]', v_output); assert_equals('CREATE INDEX', 'DDL|CREATE|CREATE INDEX|9', concat(v_output));
 	classify(q'[CREATE unique INDEX on table1(a);]', v_output); assert_equals('CREATE INDEX', 'DDL|CREATE|CREATE INDEX|9', concat(v_output));
 	classify(q'[CREATE bitmap INDEX on table1(a);]', v_output); assert_equals('CREATE INDEX', 'DDL|CREATE|CREATE INDEX|9', concat(v_output));
 
 	classify(q'[CREATE INDEXTYPE my_schema.my_indextype for indtype(a number) using my_type;]', v_output); assert_equals('CREATE INDEXTYPE', 'DDL|CREATE|CREATE INDEXTYPE|164', concat(v_output));
 	classify(q'[CREATE or replace INDEXTYPE my_schema.my_indextype for indtype(a number) using my_type;]', v_output); assert_equals('CREATE INDEXTYPE', 'DDL|CREATE|CREATE INDEXTYPE|164', concat(v_output));
+
+	classify(q'[CREATE inmemory join group my_group (my_table(my_column));]', v_output); assert_equals('CREATE INMEMORY JOIN GROUP', 'DDL|CREATE|CREATE INMEMORY JOIN GROUP|-102', concat(v_output));
 
 	--12 combinations of initial keywords.  COMPILE is optional here, but not elsewhere so it requires special handling.
 	classify(q'[CREATE and resolve noforce JAVA CLASS USING BFILE (java_dir, 'Agent.class') --]'||chr(10)||'/', v_output); assert_equals('CREATE JAVA', 'DDL|CREATE|CREATE JAVA|160', concat(v_output));
@@ -439,6 +474,8 @@ begin
 	classify(q'[CREATE or replace noneditionable LIBRARY ext_lib AS 'ddl_1' IN ddl_dir;]'||chr(10)||'/', v_output); assert_equals('CREATE LIBRARY', 'DDL|CREATE|CREATE LIBRARY|159', concat(v_output));
 	classify(q'[CREATE editionable LIBRARY ext_lib AS 'ddl_1' IN ddl_dir;]'||chr(10)||'/', v_output); assert_equals('CREATE LIBRARY', 'DDL|CREATE|CREATE LIBRARY|159', concat(v_output));
 	classify(q'[CREATE noneditionable LIBRARY ext_lib AS 'ddl_1' IN ddl_dir;]'||chr(10)||'/', v_output); assert_equals('CREATE LIBRARY', 'DDL|CREATE|CREATE LIBRARY|159', concat(v_output));
+
+	classify(q'[create lockdown profile my_profile;]', v_output); assert_equals('CREATE LOCKDOWN PROFILE', 'DDL|CREATE|CREATE LOCKDOWN PROFILE|234', concat(v_output));
 
 	classify(q'[CREATE MATERIALIZED VIEW my_mv as select 1 a from dual;]', v_output); assert_equals('CREATE MATERIALIZED VIEW ', 'DDL|CREATE|CREATE MATERIALIZED VIEW |74', concat(v_output));
 	classify(q'[CREATE SNAPSHOT my_mv as select 1 a from dual;]', v_output); assert_equals('CREATE MATERIALIZED VIEW ', 'DDL|CREATE|CREATE MATERIALIZED VIEW |74', concat(v_output));
