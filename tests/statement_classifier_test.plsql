@@ -558,6 +558,8 @@ begin
 	classify(q'[CREATE TABLE my_table(a number);]', v_output); assert_equals('CREATE TABLE', 'DDL|CREATE|CREATE TABLE|1', concat(v_output));
 	classify(q'[CREATE global temporary TABLE my_table(a number);]', v_output); assert_equals('CREATE TABLE', 'DDL|CREATE|CREATE TABLE|1', concat(v_output));
 
+	classify(q'[create tablespace set my_set;]', v_output); assert_equals('CREATE TABLESPACE SET', 'DDL|CREATE|CREATE TABLESPACE SET|-202', concat(v_output));
+
 	classify(q'[CREATE TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
 	classify(q'[CREATE bigfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
 	classify(q'[CREATE smallfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
@@ -630,7 +632,11 @@ begin
 
 	classify(q'[DISASSOCIATE STATISTICS from columns mytable.a force;]', v_output); assert_equals('DISASSOCIATE STATISTICS', 'DDL|DISASSOCIATE STATISTICS|DISASSOCIATE STATISTICS|169', concat(v_output));
 
+	classify(q'[drop analytic view some_view;]', v_output); assert_equals('DROP ANALYTIC VIEW', 'DDL|DROP|DROP ANALYTIC VIEW|251', concat(v_output));
+
 	classify(q'[DROP ASSEMBLY my_assembly]', v_output); assert_equals('DROP ASSEMBLY', 'DDL|DROP|DROP ASSEMBLY|215', concat(v_output));
+
+	classify(q'[DROP attribute dimension asdf;]', v_output); assert_equals('DROP ATTRIBUTE DIMENSION', 'DDL|DROP|DROP ATTRIBUTE DIMENSION|245', concat(v_output));
 
 	classify(q'[DROP AUDIT POLICY my_policy;]', v_output); assert_equals('DROP AUDIT POLICY', 'DDL|DROP|DROP AUDIT POLICY|231', concat(v_output));
 
@@ -659,13 +665,19 @@ begin
 
 	classify(q'[DROP FUNCTION my_schema.my_function;]', v_output); assert_equals('DROP FUNCTION', 'DDL|DROP|DROP FUNCTION|93', concat(v_output));
 
+	classify(q'[DROP hierarchy my_hierarchy; ]', v_output); assert_equals('DROP HIERARCHY', 'DDL|DROP|DROP HIERARCHY|248', concat(v_output));
+
 	classify(q'[DROP INDEX my_schema.my_index online force;]', v_output); assert_equals('DROP INDEX', 'DDL|DROP|DROP INDEX|10', concat(v_output));
 
 	classify(q'[DROP INDEXTYPE my_indextype force;]', v_output); assert_equals('DROP INDEXTYPE', 'DDL|DROP|DROP INDEXTYPE|165', concat(v_output));
 
+	classify(q'[DROP inmemory  join  group my_group;]', v_output); assert_equals('DROP INMEMORY JOIN GROUP', 'DDL|DROP|DROP INMEMORY JOIN GROUP|-103', concat(v_output));
+
 	classify(q'[DROP JAVA resourse some_resource;]', v_output); assert_equals('DROP JAVA', 'DDL|DROP|DROP JAVA|162', concat(v_output));
 
 	classify(q'[DROP LIBRARY my_library]', v_output); assert_equals('DROP LIBRARY', 'DDL|DROP|DROP LIBRARY|84', concat(v_output));
+
+	classify(q'[DROP lockdown profile some_profile;]', v_output); assert_equals('DROP LOCKDOWN PROFILE', 'DDL|DROP|DROP LOCKDOWN PROFILE|235', concat(v_output));
 
 	--Commands have an extra space in them.
 	classify(q'[DROP MATERIALIZED VIEW my_mv preserve table]', v_output); assert_equals('DROP MATERIALIZED VIEW', 'DDL|DROP|DROP MATERIALIZED VIEW |76', concat(v_output));
@@ -711,6 +723,8 @@ begin
 	classify(q'[DROP public SYNONYM my_synonym]', v_output); assert_equals('DROP SYNONYM', 'DDL|DROP|DROP SYNONYM|20', concat(v_output));
 
 	classify(q'[DROP TABLE my_schema.my_table cascade constraints purge]', v_output); assert_equals('DROP TABLE', 'DDL|DROP|DROP TABLE|12', concat(v_output));
+
+	classify(q'[DROP TABLESPACE set asdf;;]', v_output); assert_equals('DROP TABLESPACE SET', 'DDL|DROP|DROP TABLESPACE SET|-203', concat(v_output));
 
 	classify(q'[DROP TABLESPACE my_tbs including contents and datafiles cascade constraints;]', v_output); assert_equals('DROP TABLESPACE', 'DDL|DROP|DROP TABLESPACE|41', concat(v_output));
 
@@ -762,6 +776,8 @@ begin
 	classify(q'[PURGE INDEX my_index]', v_output); assert_equals('PURGE INDEX', 'DDL|PURGE|PURGE INDEX|201', concat(v_output));
 
 	classify(q'[PURGE TABLE my_table]', v_output); assert_equals('PURGE TABLE', 'DDL|PURGE|PURGE TABLE|200', concat(v_output));
+
+	classify(q'[PURGE TABLESPACE SET some_set]', v_output); assert_equals('PURGE TABLESPACE SET', 'DDL|PURGE|PURGE TABLESPACE SET|-204', concat(v_output));
 
 	classify(q'[PURGE TABLESPACE my_tbs user my_user]', v_output); assert_equals('PURGE TABLESPACE', 'DDL|PURGE|PURGE TABLESPACE|199', concat(v_output));
 
