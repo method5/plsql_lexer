@@ -604,7 +604,7 @@ begin
 	--	p_category := C_DDL; p_statement_type := 'CREATE'; p_command_name := 'CREATE SUMMARY'; p_command_type := 171;
 	elsif v_words_1_to_2 = 'CREATE SYNONYM' then
 		p_category := C_DDL; p_statement_type := 'CREATE'; p_command_name := 'CREATE SYNONYM'; p_command_type := 19;
-	elsif v_words_1_to_2 = 'CREATE TABLE' then
+	elsif v_words_1_to_2 = 'CREATE TABLE' or v_words_1_to_3 in ('CREATE SHARDED TABLE', 'CREATE DUPLICATED TABLE') then
 		p_category := C_DDL; p_statement_type := 'CREATE'; p_command_name := 'CREATE TABLE'; p_command_type := 1;
 	elsif v_words_1_to_3 = 'CREATE TABLESPACE SET' then
 		p_category := C_DDL; p_statement_type := 'CREATE'; p_command_name := 'CREATE TABLESPACE SET'; p_command_type := -202;

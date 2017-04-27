@@ -555,8 +555,10 @@ begin
 	classify(q'[CREATE or replace noneditionable SYNONYM my_synonym for other_schema.some_object@some_link;]', v_output); assert_equals('CREATE SYNONYM', 'DDL|CREATE|CREATE SYNONYM|19', concat(v_output));
 	classify(q'[CREATE or replace noneditionable public SYNONYM my_synonym for other_schema.some_object@some_link;]', v_output); assert_equals('CREATE SYNONYM', 'DDL|CREATE|CREATE SYNONYM|19', concat(v_output));
 
-	classify(q'[CREATE TABLE my_table(a number);]', v_output); assert_equals('CREATE TABLE', 'DDL|CREATE|CREATE TABLE|1', concat(v_output));
-	classify(q'[CREATE global temporary TABLE my_table(a number);]', v_output); assert_equals('CREATE TABLE', 'DDL|CREATE|CREATE TABLE|1', concat(v_output));
+	classify(q'[CREATE TABLE my_table(a number);]', v_output); assert_equals('CREATE TABLE 1', 'DDL|CREATE|CREATE TABLE|1', concat(v_output));
+	classify(q'[CREATE global temporary TABLE my_table(a number);]', v_output); assert_equals('CREATE TABLE 2', 'DDL|CREATE|CREATE TABLE|1', concat(v_output));
+	classify(q'[CREATE sharded TABLE my_table(a number);]', v_output); assert_equals('CREATE TABLE 3', 'DDL|CREATE|CREATE TABLE|1', concat(v_output));
+	classify(q'[CREATE duplicated TABLE my_table(a number);]', v_output); assert_equals('CREATE TABLE 4', 'DDL|CREATE|CREATE TABLE|1', concat(v_output));
 
 	classify(q'[create tablespace set my_set;]', v_output); assert_equals('CREATE TABLESPACE SET', 'DDL|CREATE|CREATE TABLESPACE SET|-202', concat(v_output));
 
