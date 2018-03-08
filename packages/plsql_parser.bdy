@@ -231,25 +231,29 @@ function get_reserved_words return string_table is
 	v_dummy varchar2(1);
 	v_reserved_words string_table := string_table();
 	v_potential_reserved_words string_table;
+	c_base_reserved_words constant string_table := string_table(
+		'!','!=','$','&','(',')','*','+',',','-','.','/',':',';','<','<<','<=','=','=>',
+		'>','>=','?','@','ACCESS','ADD','ALL','ALTER','AND','ANY','AS','ASC','AUDIT',
+		'BETWEEN','BY','CHAR','CHECK','CLUSTER','COLUMN','COMMENT','COMPRESS','CONNECT',
+		'CREATE','CURRENT','DATE','DECIMAL','DEFAULT','DELETE','DESC','DISTINCT','DROP',
+		'ELSE','EXCLUSIVE','EXISTS','FILE','FLOAT','FOR','FROM','GRANT','GROUP','HAVING',
+		'IDENTIFIED','IMMEDIATE','IN','INCREMENT','INDEX','INITIAL','INSERT','INTEGER',
+		'INTERSECT','INTO','IS','LEVEL','LIKE','LOCK','LONG','MAXEXTENTS','MINUS',
+		'MLSLABEL','MODE','MODIFY','NOAUDIT','NOCOMPRESS','NOT','NOWAIT','NULL','NUMBER',
+		'OF','OFFLINE','ON','ONLINE','OPTION','OR','ORDER','PCTFREE','PRIOR','PUBLIC',
+		'RAW','RENAME','RESOURCE','REVOKE','ROW','ROWID','ROWNUM','ROWS','SELECT',
+		'SESSION','SET','SHARE','SIZE','SMALLINT','START','SUCCESSFUL','SYNONYM',
+		'SYSDATE','TABLE','THEN','TO','TRIGGER','UID','UNION','UNIQUE','UPDATE','USER',
+		'VALIDATE','VALUES','VARCHAR','VARCHAR2','VIEW','WHENEVER','WHERE','WITH','[',
+		']','^','{','|','}');
 begin
 	--Use pre-generated list for specific versions.
 	if dbms_db_version.version||'.'||dbms_db_version.release = '12.1' then
-		v_reserved_words := string_table(
-			'!','!=','$','&','(',')','*','+',',','-','.','/',':',';','<','<<','<=','=','=>',
-			'>','>=','?','@','ACCESS','ADD','ALL','ALTER','AND','ANY','AS','ASC','AUDIT',
-			'BETWEEN','BY','CHAR','CHECK','CLUSTER','COLUMN','COMMENT','COMPRESS','CONNECT',
-			'CREATE','CURRENT','DATE','DECIMAL','DEFAULT','DELETE','DESC','DISTINCT','DROP',
-			'ELSE','EXCLUSIVE','EXISTS','FILE','FLOAT','FOR','FROM','GRANT','GROUP','HAVING',
-			'IDENTIFIED','IMMEDIATE','IN','INCREMENT','INDEX','INITIAL','INSERT','INTEGER',
-			'INTERSECT','INTO','IS','LEVEL','LIKE','LOCK','LONG','MAXEXTENTS','MINUS',
-			'MLSLABEL','MODE','MODIFY','NOAUDIT','NOCOMPRESS','NOT','NOWAIT','NULL','NUMBER',
-			'OF','OFFLINE','ON','ONLINE','OPTION','OR','ORDER','PCTFREE','PRIOR','PUBLIC',
-			'RAW','RENAME','RESOURCE','REVOKE','ROW','ROWID','ROWNUM','ROWS','SELECT',
-			'SESSION','SET','SHARE','SIZE','SMALLINT','START','SUCCESSFUL','SYNONYM',
-			'SYSDATE','TABLE','THEN','TO','TRIGGER','UID','UNION','UNIQUE','UPDATE','USER',
-			'VALIDATE','VALUES','VARCHAR','VARCHAR2','VIEW','WHENEVER','WHERE','WITH','[',
-			']','^','{','|','}'
-		);
+		v_reserved_words := c_base_reserved_words;
+	elsif dbms_db_version.version||'.'||dbms_db_version.release = '12.2' then
+		v_reserved_words := c_base_reserved_words;
+		v_reserved_words.extend;
+		v_reserved_words(v_reserved_words.count) := 'HIERARCHIES';
 	--TODO: Pre-generate for 11.2
 	--Otherwise dynamically determine list.
 	else
@@ -263,7 +267,7 @@ begin
 				v_reserved_words.extend;
 				v_reserved_words(v_reserved_words.count) := v_potential_reserved_words(i);
 				--For testing.
-				--dbms_output.put_line('Failed: '||reserved_words.keyword||', Reserved: '||reserved_words.reserved);
+				--dbms_output.put_line('Reserved: '||v_potential_reserved_words(i));
 			end;
 		end loop;
 	end if;
@@ -3628,6 +3632,7 @@ begin
 		end if;
 	end loop;
 
+	--Parse.
 	if statement(null) then
 		null;
 	else
