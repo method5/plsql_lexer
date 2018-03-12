@@ -702,6 +702,63 @@ exception when no_data_found then
 end verify_user_get_real_name;
 
 
+--Print a more user-friendly error message of the path.  Useful for debugging.
+procedure print_path(p_error in varchar2) is
+	v_previous_newline number := 1;
+	v_next_newline number;
+	v_line varchar2(32767);
+	v_line_number number;
+	v_object_name varchar2(128);
+	v_path varchar2(32767);
+begin
+	--Split, get line number, then convert into object name.
+	for i in 1 .. regexp_count(p_error, chr(10)) + 1 loop
+		--Get the error line.
+		v_next_newline := instr(p_error, chr(10), 1, i);
+		if v_next_newline = 0 then
+			v_next_newline := length(p_error) + 1;
+		end if;
+		v_line := replace(substr(p_error, v_previous_newline, v_next_newline - v_previous_newline), chr(10));
+		--test
+		--dbms_output.put_line(v_line);
+		v_previous_newline := v_next_newline;
+
+		--Get the line number from the error message.
+		--Ignore the last "line 1".
+		if v_line like 'ORA-06512%' and v_line not like '%at line 1' then
+			v_line_number := regexp_replace(v_line, '.* ');
+			--test
+			--dbms_output.put_line(v_line_number);
+
+			--Parse the parser... how meta.
+			--Convert into function names.
+			--This assumes that functions and procedures always starte like this: function|procedure name ...
+			select object_name
+			into v_object_name
+			from
+			(
+				select
+					user_source.*, replace(regexp_replace(regexp_replace(replace(replace(text, 'function '), 'procedure '), '\(.*'), ' .*'), chr(10)) object_name
+					,row_number() over (order by line desc) last_when_1
+				from user_source
+				where name = 'PLSQL_PARSER'
+					and type = 'PACKAGE BODY'
+					and (text like 'function %' or text like 'procedure %')
+					and line <= v_line_number
+				order by line
+			)
+			where last_when_1 = 1;
+
+			v_path := v_object_name || '->' || v_path;
+			--test
+			--dbms_output.put_line(v_object_name);
+		end if;
+	end loop;
+
+	--Remove the last "->" and print everything.
+	dbms_output.put_line(substr(v_path, 1, length(v_path)-2));
+	dbms_output.put_line(p_error);
+end;
 
 
 
@@ -3651,6 +3708,9 @@ begin
 	resolve_ambiguous_nodes(v_precise_username);
 
 	return g_nodes;
+exception when others then
+	print_path(dbms_utility.format_error_backtrace);
+	raise;
 end parse;
 
 end;
