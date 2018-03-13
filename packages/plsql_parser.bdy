@@ -3390,15 +3390,20 @@ function t_alias(p_parent_id number) return boolean is
 begin
 	v_parse_context := push(C_T_ALIAS, p_parent_id);
 
-	--"model", "fetch", and "offset" are ambiguously table aliases or beginning of another clause.
+	--"join", "model", "fetch", and "offset" are ambiguously table aliases or beginning of another clause.
 	--For example:
+	--	select 1 from dual join; --valid
+	--	select 1 from dual join join dual ...; --invalid.
+	--
 	--	select 1 from dual offset;
 	--	select 1 from dual offset 1 rows;
 	--
 	--The other valid clauses start with a keyword, like "where", so they are easily handled.
 	--Other potentially ambiguous non-reserved keywords, like "right" and "outer", are handled in the from_clause.
 	if is_unreserved_word(0) then
-		if next_value(0) = 'FETCH' and next_value(1) in ('FIRST', 'NEXT') then
+		if next_value(0) = 'JOIN' and next_value(1) is not null then
+			return pop(v_parse_context);
+		elsif next_value(0) = 'FETCH' and next_value(1) in ('FIRST', 'NEXT') then
 			return pop(v_parse_context);
 		--These may look like expressions, but are really the beginning of new clauses.
 		elsif next_value(0) = 'OFFSET' and next_value(1) in ('OFFSET', 'FETCH', 'MODEL') then
