@@ -762,6 +762,8 @@ end;
 
 
 
+
+
 -------------------------------------------------------------------------------
 --Production Rules.
 -------------------------------------------------------------------------------
@@ -934,7 +936,8 @@ begin
 	v_parse_context := push(C_CASE_EXPRESSION, p_parent_id);
 
 	if match_terminal('CASE', v_parse_context.new_node_id) then
-		if simple_case_expression(v_parse_context.new_node_id) or searched_case_expression(v_parse_context.new_node_id) then
+		--Put searched first, even though it's listed second on docs.  It's easier to find a "WHEN".
+		if searched_case_expression(v_parse_context.new_node_id) or simple_case_expression(v_parse_context.new_node_id)  then
 			g_optional := else_clause(v_parse_context.new_node_id);
 			if match_terminal('END', v_parse_context.new_node_id) then
 				return true;
