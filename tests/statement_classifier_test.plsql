@@ -207,7 +207,7 @@ begin
 		ANALYZE,ASSOCIATE STATISTICS,AUDIT,COMMENT,CREATE,DISASSOCIATE STATISTICS,
 		DROP,FLASHBACK,GRANT,NOAUDIT,PURGE,RENAME,REVOKE,TRUNCATE
 	DML
-		CALL,DELETE,EXPLAIN PLAN,INSERT,LOCK TABLE,MERGE,SELECT,UPDATE
+		CALL,DELETE,EXPLAIN PLAN,EXPLAIN WORK,INSERT,LOCK TABLE,MERGE,SELECT,UPDATE
 	Transaction Control
 		COMMIT,ROLLBACK,SAVEPOINT,SET TRANSACTION,SET CONSTRAINT
 	Session Control
@@ -745,8 +745,14 @@ begin
 	--classify(q'[Do not use 185]', v_output); assert_equals('Do not use 185', 'DDL|ALTER|Do not use 185|185', concat(v_output));
 	--classify(q'[Do not use 186]', v_output); assert_equals('Do not use 186', 'DDL|ALTER|Do not use 186|186', concat(v_output));
 
-	classify(q'[EXPLAIN plan set statement_id='asdf' for select * from dual]', v_output); assert_equals('EXPLAIN 1', 'DML|EXPLAIN PLAN|EXPLAIN|50', concat(v_output));
-	classify(q'[explain plan for with function f return number is begin return 1; end; select f from dual;]', v_output); assert_equals('EXPLAIN 2', 'DML|EXPLAIN PLAN|EXPLAIN|50', concat(v_output));
+	classify(q'[EXPLAIN plan set statement_id='asdf' for select * from dual]', v_output); assert_equals('EXPLAIN PLAN 1', 'DML|EXPLAIN PLAN|EXPLAIN|50', concat(v_output));
+	classify(q'[explain plan for with function f return number is begin return 1; end; select f from dual;]', v_output); assert_equals('EXPLAIN PLAN 2', 'DML|EXPLAIN PLAN|EXPLAIN|50', concat(v_output));
+
+	--EXPLAIN WORK is odd - it shares the same command name and type as EXPLAIN PLAN.
+	--That doesn't really make sense but it probably doesn't matter - EXPLAIN WORK can
+	--only be run as SYSASM and will probably never be used in real life.
+	classify(q'[EXPLAIN work set statement_id='asdf' for alter diskgroup fradg rebalance]', v_output); assert_equals('EXPLAIN WORK 1', 'DML|EXPLAIN WORK|EXPLAIN|50', concat(v_output));
+	classify(q'[explain work for alter diskgroup fradg rebalance]', v_output); assert_equals('EXPLAIN WORK 2', 'DML|EXPLAIN WORK|EXPLAIN|50', concat(v_output));
 
 	classify(q'[FLASHBACK DATABASE to restore point my_restore_point]', v_output); assert_equals('FLASHBACK DATABASE', 'DDL|FLASHBACK|FLASHBACK DATABASE|204', concat(v_output));
 	classify(q'[FLASHBACK standby DATABASE to restore point my_restore_point]', v_output); assert_equals('FLASHBACK DATABASE', 'DDL|FLASHBACK|FLASHBACK DATABASE|204', concat(v_output));

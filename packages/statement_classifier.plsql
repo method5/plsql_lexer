@@ -100,7 +100,7 @@ Lex SQLERRM   :
       ANALYZE,ASSOCIATE STATISTICS,AUDIT,COMMENT,CREATE,DISASSOCIATE STATISTICS,
       DROP,FLASHBACK,GRANT,NOAUDIT,PURGE,RENAME,REVOKE,TRUNCATE
     DML
-      CALL,DELETE,EXPLAIN PLAN,INSERT,LOCK TABLE,MERGE,SELECT,UPDATE
+      CALL,DELETE,EXPLAIN PLAN,EXPLAIN WORK,INSERT,LOCK TABLE,MERGE,SELECT,UPDATE
     Transaction Control
       COMMIT,ROLLBACK,SAVEPOINT,SET TRANSACTION,SET CONSTRAINT
     Session Control
@@ -741,8 +741,14 @@ begin
 	elsif v_words_1_to_4 = 'Do not use 186' then
 		p_category := C_DDL; p_statement_type := 'Do'; p_command_name := 'Do not use 186'; p_command_type := 186;
 	*/
-	elsif v_words_1 = 'EXPLAIN' then --Statement type is more specific than command name.
+	--EXPLAIN is odd.  The statement type is more specific than the command name.
+	--And EXPLAIN PLAN and EXPLAIN WORK share the same command name and ID.
+	--That doesn't really make sense but it probably doesn't matter - EXPLAIN WORK can
+	--only be run as SYSASM and will probably never be used in real life.
+	elsif v_words_1_to_2 = 'EXPLAIN PLAN' then --Statement type is more specific than command name.
 		p_category := C_DML; p_statement_type := 'EXPLAIN PLAN'; p_command_name := 'EXPLAIN'; p_command_type := 50;
+	elsif v_words_1_to_2 = 'EXPLAIN WORK' then --Statement type is more specific than command name.
+		p_category := C_DML; p_statement_type := 'EXPLAIN WORK'; p_command_name := 'EXPLAIN'; p_command_type := 50;
 	elsif v_words_1_to_2 = 'FLASHBACK DATABASE' then
 		p_category := C_DDL; p_statement_type := 'FLASHBACK'; p_command_name := 'FLASHBACK DATABASE'; p_command_type := 204;
 	elsif v_words_1_to_2 = 'FLASHBACK TABLE' then
