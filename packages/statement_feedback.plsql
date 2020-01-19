@@ -1,5 +1,5 @@
 create or replace package statement_feedback is
---Copyright (C) 2015 Jon Heller.  This program is licensed under the LGPLv3.
+--Copyright (C) 2020 Jon Heller.  This program is licensed under the LGPLv3.
 
 procedure get_feedback_message(
 	p_tokens                   in token_table,
@@ -56,9 +56,9 @@ begin
 
 	--Get the feedback message.
 	statement_feedback.get_feedback_message(
-		p_statement => v_statement,
-		p_rowcount => sql%rowcount,
-		p_success_message => v_success_message,
+		p_tokens                  => plsql_lexer.lex(v_statement),
+		p_rowcount                => sql%rowcount,
+		p_success_message         => v_success_message,
 		p_compile_warning_message => v_compile_warning_message
 	);
 

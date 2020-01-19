@@ -1,4 +1,4 @@
-`PLSQL_LEXER` 2.0.0
+`PLSQL_LEXER` 2.0.1
 ===================
 
 PL/SQL Lexer solves PL/SQL language problems such as tokenizing, splitting, classifying, feedback messages, and removing terminators.
