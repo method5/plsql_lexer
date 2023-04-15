@@ -199,6 +199,8 @@ begin
 	--Command name has extra space, real command is "DISKGROUP".
 	feedback(q'[/*+useless comment*/ alter diskgroup +orcl13 resize disk '/emcpowersomething/' size 500m;]', v_success, v_warning); assert_equals('ALTER DISKGROUP', 'Diskgroup altered.|', v_success||'|'||v_warning);
 
+	feedback(q'[ ALTER DOMAIN A_YEAR DROP DISPLAY]', v_success, v_warning); assert_equals('ALTER DOMAIN', 'Domain altered.|', v_success||'|'||v_warning);
+
 	--Undocumented feature, the feedback message is a guess.
 	feedback(q'[ alter EDITION my_edition unusable]', v_success, v_warning); assert_equals('ALTER EDITION', 'Edition altered.|', v_success||'|'||v_warning);
 
@@ -229,6 +231,10 @@ begin
 
 	feedback(q'[ alter  materialized	zonemap my_schema.my_zone enable pruning]', v_success, v_warning); assert_equals('ALTER MATERIALIZED ZONEMAP', 'Materialized zonemap altered.|', v_success||'|'||v_warning);
 
+	feedback(q'[ alter mle env jheller.ASDF compile]', v_success, v_warning); assert_equals('ALTER MLE ENV', 'MLE env altered.|', v_success||'|'||v_warning);
+
+	feedback(q'[ alter mle module test_module set metadata using clob (select 'A');]', v_success, v_warning); assert_equals('ALTER MLE MODULE', 'MLE module altered.|', v_success||'|'||v_warning);
+
 	feedback(q'[alter operator my_operator add binding (number) return (number) using my_function]', v_success, v_warning); assert_equals('ALTER OPERATOR', 'Operator altered.|', v_success||'|'||v_warning);
 
 	feedback(q'[alter outline public my_outline disable;]', v_success, v_warning); assert_equals('ALTER OUTLINE', 'Outline altered.|', v_success||'|'||v_warning);
@@ -254,9 +260,14 @@ begin
 
 	feedback(q'[ALTER PLUGGABLE DATABASE my_pdb default tablespace some_tbs]', v_success, v_warning); assert_equals('ALTER PLUGGABLE DATABASE', 'Pluggable database altered.|', v_success||'|'||v_warning);
 
+	--This is a guess! I haven't been able to run this.
+	feedback(q'[alter pmem filestore my_filestore resize 1t;]', v_success, v_warning); assert_equals('ALTER PMEM FILESTORE', 'PMEM filestore altered.|', v_success||'|'||v_warning);
+
 	feedback(q'[ALTER PROCEDURE my_proc compile]', v_success, v_warning); assert_equals('ALTER PROCEDURE', 'Procedure altered.|Warning: Procedure altered with compilation errors.', v_success||'|'||v_warning);
 
 	feedback(q'[ alter profile default limit password_lock_time unlimited;]', v_success, v_warning); assert_equals('ALTER PROFILE', 'Profile altered.|', v_success||'|'||v_warning);
+
+	feedback(q'[ alter property graph my_graph compile;]', v_success, v_warning); assert_equals('ALTER PROPERTY GRAPH', 'Property graph altered.|', v_success||'|'||v_warning);
 
 	feedback(q'[ALTER RESOURCE COST private_sga 1000;]', v_success, v_warning); assert_equals('ALTER RESOURCE COST', 'Resource cost altered.|', v_success||'|'||v_warning);
 
@@ -377,6 +388,9 @@ begin
 	--Command name has extra space, real command is "DISKGROUP".
 	feedback(q'[CREATE DISKGROUP my_diskgroup disk '/emc/powersomething/' size 555m;]', v_success, v_warning); assert_equals('CREATE DISK GROUP', 'Diskgroup created.|', v_success||'|'||v_warning);
 
+	feedback(q'[create domain a_year as number(4) constraint c1 check (a_year <= 1900) enable display a_year;]', v_success, v_warning); assert_equals('CREATE DOMAIN', 'Domain created.|', v_success||'|'||v_warning);
+	feedback(q'[CREATE FLEXIBLE DOMAIN flexible_domain(val1) and not even the manual examples actually work...]', v_success, v_warning); assert_equals('CREATE DOMAIN', 'Domain created.|', v_success||'|'||v_warning);
+
 	feedback(q'[CREATE EDITION my_edition as child of my_parent;]', v_success, v_warning); assert_equals('CREATE EDITION', 'Edition created.|', v_success||'|'||v_warning);
 
 	feedback(q'[CREATE FLASHBACK ARCHIVE default my_fba tablespace my_ts quota 5g;]', v_success, v_warning); assert_equals('CREATE FLASHBACK ARCHIVE', 'Flashback archive created.|', v_success||'|'||v_warning);
@@ -393,6 +407,7 @@ begin
 	feedback(q'[CREATE INDEX on table1(a);]', v_success, v_warning); assert_equals('CREATE INDEX', 'Index created.|', v_success||'|'||v_warning);
 	feedback(q'[CREATE unique INDEX on table1(a);]', v_success, v_warning); assert_equals('CREATE INDEX', 'Index created.|', v_success||'|'||v_warning);
 	feedback(q'[CREATE bitmap INDEX on table1(a);]', v_success, v_warning); assert_equals('CREATE INDEX', 'Index created.|', v_success||'|'||v_warning);
+	feedback(q'[CREATE multivalue INDEX asdf ON mytable t (t.jcol.credit_score.numberOnly());]', v_success, v_warning); assert_equals('CREATE INDEX', 'Index created.|', v_success||'|'||v_warning);
 
 	feedback(q'[CREATE INDEXTYPE my_schema.my_indextype for indtype(a number) using my_type;]', v_success, v_warning); assert_equals('CREATE INDEXTYPE', 'Indextype created.|', v_success||'|'||v_warning);
 	feedback(q'[CREATE or replace INDEXTYPE my_schema.my_indextype for indtype(a number) using my_type;]', v_success, v_warning); assert_equals('CREATE INDEXTYPE', 'Indextype created.|', v_success||'|'||v_warning);
@@ -430,6 +445,10 @@ begin
 
 	feedback(q'[CREATE MATERIALIZED ZONEMAP sales_zmap ON sales(cust_id, prod_id);]', v_success, v_warning); assert_equals('CREATE MATERIALIZED ZONEMAP', 'Materialized zonemap created.|', v_success||'|'||v_warning);
 
+	feedback(q'[create or replace mle env jheller."ASDF";]', v_success, v_warning); assert_equals('CREATE MLE ENV', 'MLE env created.|', v_success||'|'||v_warning);
+
+	feedback(q'[create or replace mle module test_module language JAVASCRIPT as 'asdf asdf';]'||chr(10)||'/', v_success, v_warning); assert_equals('CREATE MLE MODULE', 'MLE module created.|', v_success||'|'||v_warning);
+
 	feedback(q'[CREATE OPERATOR eq_op BINDING (VARCHAR2, VARCHAR2) RETURN NUMBER USING eq_f; ]', v_success, v_warning); assert_equals('CREATE OPERATOR', 'Operator created.|', v_success||'|'||v_warning);
 	feedback(q'[CREATE OR REPLACE OPERATOR eq_op BINDING (VARCHAR2, VARCHAR2) RETURN NUMBER USING eq_f; ]', v_success, v_warning); assert_equals('CREATE OPERATOR', 'Operator created.|', v_success||'|'||v_warning);
 
@@ -459,6 +478,9 @@ begin
 
 	feedback(q'[CREATE PLUGGABLE DATABASE my_pdb from another_pdb]', v_success, v_warning); assert_equals('CREATE PLUGGABLE DATABASE', 'Pluggable database created.|', v_success||'|'||v_warning);
 
+	--This is a guess.
+	feedback(q'[create pmem filestore my_filestore mountpoint '/u01/db/db1_pmemfs' backingfile '/u01/db_storage/db1' size 1t blocksize 8k autoextend on next 10g maxsize 2t;]', v_success, v_warning); assert_equals('CREATE PMEM FILESTORE', 'PMEM filestore created.|', v_success||'|'||v_warning);
+
 	feedback(q'[CREATE PROCEDURE my proc is begin null; end; /]', v_success, v_warning); assert_equals('CREATE PROCEDURE', 'Procedure created.|Warning: Procedure created with compilation errors.', v_success||'|'||v_warning);
 	feedback(q'[CREATE editionable PROCEDURE my proc is begin null; end; /]', v_success, v_warning); assert_equals('CREATE PROCEDURE', 'Procedure created.|Warning: Procedure created with compilation errors.', v_success||'|'||v_warning);
 	feedback(q'[CREATE noneditionable PROCEDURE my proc is begin null; end; /]', v_success, v_warning); assert_equals('CREATE PROCEDURE', 'Procedure created.|Warning: Procedure created with compilation errors.', v_success||'|'||v_warning);
@@ -466,7 +488,10 @@ begin
 	feedback(q'[CREATE or replace editionable PROCEDURE my proc is begin null; end; /]', v_success, v_warning); assert_equals('CREATE PROCEDURE', 'Procedure created.|Warning: Procedure created with compilation errors.', v_success||'|'||v_warning);
 	feedback(q'[CREATE or replace noneditionable PROCEDURE my proc is begin null; end; /]', v_success, v_warning); assert_equals('CREATE PROCEDURE', 'Procedure created.|Warning: Procedure created with compilation errors.', v_success||'|'||v_warning);
 
-	feedback(q'[CREATE PROFILE my_profile limit sessions_per_user 50;]', v_success, v_warning); assert_equals('CREATE PROFILE', 'Profile created.|', v_success||'|'||v_warning);
+	feedback(q'[CREATE PROFILE my_profile limit sessions_per_user 50;]', v_success, v_warning); assert_equals('CREATE PROFILE 1', 'Profile created.|', v_success||'|'||v_warning);
+	feedback(q'[CREATE MANDATORY PROFILE my_profile limit sessions_per_user 50;]', v_success, v_warning); assert_equals('CREATE PROFILE 2', 'Profile created.|', v_success||'|'||v_warning);
+
+	feedback(q'[create property graph my_graph vertex tables(my_table properties(a, b));]', v_success, v_warning); assert_equals('CREATE PROPERTY GRAPH', 'Property graph created.|', v_success||'|'||v_warning);
 
 	feedback(q'[CREATE RESTORE POINT before_change gaurantee flashback database;]', v_success, v_warning); assert_equals('CREATE RESTORE POINT', 'Restore point created.|', v_success||'|'||v_warning);
 
@@ -504,6 +529,10 @@ begin
 	feedback(q'[CREATE global temporary TABLE my_table(a number);]', v_success, v_warning); assert_equals('CREATE TABLE 2', 'Table created.|', v_success||'|'||v_warning);
 	feedback(q'[CREATE sharded TABLE my_table(a number);]', v_success, v_warning); assert_equals('CREATE TABLE 3', 'Table created.|', v_success||'|'||v_warning);
 	feedback(q'[CREATE duplicated TABLE my_table(a number);]', v_success, v_warning); assert_equals('CREATE TABLE 4', 'Table created.|', v_success||'|'||v_warning);
+	feedback(q'[CREATE private temporary table ora$ptt_temp(a number)]', v_success, v_warning); assert_equals('CREATE TABLE 5', 'Table created.|', v_success||'|'||v_warning);
+	feedback(q'[CREATE IMMUTABLE TABLE immutable1(a number) no drop until 1 days idle no delete until 16 days after insert]', v_success, v_warning); assert_equals('CREATE TABLE 6', 'Table created.|', v_success||'|'||v_warning);
+	feedback(q'[create blockchain table blockchain1 (a number) no drop until 1 days idle no delete locked hashing using "SHA2_512" version "v1"]', v_success, v_warning); assert_equals('CREATE TABLE 7', 'Table created.|', v_success||'|'||v_warning);
+	feedback(q'[create immutable blockchain table blockchain1 (a number) no drop until 1 days idle no delete locked hashing using "SHA2_512" version "v1"]', v_success, v_warning); assert_equals('CREATE TABLE 8', 'Table created.|', v_success||'|'||v_warning);
 
 	feedback(q'[CREATE TABLESPACE SET myset in shardspace ss1 using template(datafile size 1g)]', v_success, v_warning); assert_equals('CREATE TABLESPACE SET', 'Tablespace created.|', v_success||'|'||v_warning);
 
@@ -516,6 +545,10 @@ begin
 	feedback(q'[CREATE undo TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_success, v_warning); assert_equals('CREATE TABLESPACE', 'Tablespace created.|', v_success||'|'||v_warning);
 	feedback(q'[CREATE undo bigfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_success, v_warning); assert_equals('CREATE TABLESPACE', 'Tablespace created.|', v_success||'|'||v_warning);
 	feedback(q'[CREATE undo smallfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_success, v_warning); assert_equals('CREATE TABLESPACE', 'Tablespace created.|', v_success||'|'||v_warning);
+	feedback(q'[create local temporary tablespace for leaf my_tablespace1 tempfile '/opt/oracle/oradata/FREE/FREEPDB1/temp02.dbf' size 100M;]', v_success, v_warning); assert_equals('CREATE TABLESPACE', 'Tablespace created.|', v_success||'|'||v_warning);
+	--Semantically wrong because of "smallfile", but "smallfile" is part of the syntax diagrams.
+	feedback(q'[create smallfile local temporary tablespace for leaf my_tablespace1 tempfile '/opt/oracle/oradata/FREE/FREEPDB1/temp02.dbf' size 100M;]', v_success, v_warning); assert_equals('CREATE TABLESPACE', 'Tablespace created.|', v_success||'|'||v_warning);
+	feedback(q'[create bigfile local temporary tablespace for leaf my_tablespace1 tempfile '/opt/oracle/oradata/FREE/FREEPDB1/temp02.dbf' size 100M;]', v_success, v_warning); assert_equals('CREATE TABLESPACE', 'Tablespace created.|', v_success||'|'||v_warning);
 
 	feedback(q'[CREATE TRIGGER my_trigger before insert on my_table begin null; end; /]', v_success, v_warning); assert_equals('CREATE TRIGGER', 'Trigger created.|Warning: Trigger created with compilation errors.', v_success||'|'||v_warning);
 	feedback(q'[CREATE editionable TRIGGER my_trigger before insert on my_table begin null; end; /]', v_success, v_warning); assert_equals('CREATE TRIGGER', 'Trigger created.|Warning: Trigger created with compilation errors.', v_success||'|'||v_warning);
@@ -570,6 +603,8 @@ begin
 	feedback(q'[CREATE or replace no force editionable VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 28', 'View created.|Warning: View created with compilation errors.', v_success||'|'||v_warning);
 	feedback(q'[CREATE or replace no force editionable editioning VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 29', 'View created.|Warning: View created with compilation errors.', v_success||'|'||v_warning);
 	feedback(q'[CREATE or replace no force noneditionable VIEW my_view as select 1 a from dual;]', v_success, v_warning); assert_equals('CREATE VIEW 30', 'View created.|Warning: View created with compilation errors.', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace noforce noneditionable json relational duality view department_dv as select json {'departmentNumber':d.deptno} from dept d;]', v_success, v_warning); assert_equals('CREATE VIEW 31', 'View created.|Warning: View created with compilation errors.', v_success||'|'||v_warning);
+	feedback(q'[CREATE or replace noforce noneditionable json duality view department_dv as select json {'departmentNumber':d.deptno} from dept d;]', v_success, v_warning); assert_equals('CREATE VIEW 32', 'View created.|Warning: View created with compilation errors.', v_success||'|'||v_warning);
 
 	--Not a real command.
 	--feedback(q'[DECLARE REWRITE EQUIVALENCE]', v_success, v_warning); assert_equals('DECLARE REWRITE EQUIVALENCE', '|', v_success||'|'||v_warning);
@@ -608,6 +643,8 @@ begin
 	--Command name has extra space, real command is "DISKGROUP".
 	feedback(q'[DROP DISKGROUP fradg force including contents;]', v_success, v_warning); assert_equals('DROP DISK GROUP', 'Diskgroup dropped.|', v_success||'|'||v_warning);
 
+	feedback(q'[drop domain if exists a_year;]', v_success, v_warning); assert_equals('DROP DOMAIN', 'Domain dropped.|', v_success||'|'||v_warning);
+
 	feedback(q'[DROP EDITION my_edition cascade;]', v_success, v_warning); assert_equals('DROP EDITION', 'Edition dropped.|', v_success||'|'||v_warning);
 
 	feedback(q'[DROP FLASHBACK ARCHIVE my_fba;]', v_success, v_warning); assert_equals('DROP FLASHBACK ARCHIVE', 'Flashback archive dropped.|', v_success||'|'||v_warning);
@@ -637,6 +674,10 @@ begin
 
 	feedback(q'[DROP MATERIALIZED ZONEMAP my_schema.my_zonemap]', v_success, v_warning); assert_equals('DROP MATERIALIZED ZONEMAP', 'Materialized zonemap dropped.|', v_success||'|'||v_warning);
 
+	feedback(q'[drop mle env Jheller.ASDF;]', v_success, v_warning); assert_equals('DROP MLE MODULE', 'MLE env dropped.|', v_success||'|'||v_warning);
+
+	feedback(q'[drop mle module if exists test_module;]', v_success, v_warning); assert_equals('DROP MLE MODULE', 'MLE module dropped.|', v_success||'|'||v_warning);
+
 	feedback(q'[DROP OPERATOR my_operator force;]', v_success, v_warning); assert_equals('DROP OPERATOR', 'Operator dropped.|', v_success||'|'||v_warning);
 
 	feedback(q'[DROP OUTLINE my_outline;]', v_success, v_warning); assert_equals('DROP OUTLINE', 'Outline dropped.|', v_success||'|'||v_warning);
@@ -647,9 +688,14 @@ begin
 
 	feedback(q'[DROP PLUGGABLE DATABASE my_pdb]', v_success, v_warning); assert_equals('DROP PLUGGABLE DATABASE', 'Pluggable database dropped.|', v_success||'|'||v_warning);
 
+	--This is a guess.
+	feedback(q'[drop pmem filestore my_filestore excluding contents]', v_success, v_warning); assert_equals('DROP PMEM FILESTORE', 'PMEM filestore dropped.|', v_success||'|'||v_warning);
+
 	feedback(q'[DROP PROCEDURE my_proc]', v_success, v_warning); assert_equals('DROP PROCEDURE', 'Procedure dropped.|', v_success||'|'||v_warning);
 
 	feedback(q'[DROP PROFILE my_profile cascade;]', v_success, v_warning); assert_equals('DROP PROFILE', 'Profile dropped.|', v_success||'|'||v_warning);
+
+	feedback(q'[drop property graph my_graph;]', v_success, v_warning); assert_equals('DROP PROPERTY GRAPH', 'Property graph dropped.|', v_success||'|'||v_warning);
 
 	feedback(q'[DROP RESTORE POINT my_restore_point]', v_success, v_warning); assert_equals('DROP RESTORE POINT', 'Restore point dropped.|', v_success||'|'||v_warning);
 

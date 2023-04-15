@@ -1,4 +1,4 @@
-`PLSQL_LEXER` 2.0.1
+`PLSQL_LEXER` 2.2.0
 ===================
 
 PL/SQL Lexer solves PL/SQL language problems such as tokenizing, splitting, classifying, feedback messages, and removing terminators.
@@ -40,7 +40,7 @@ See the file types.sql for all the type definitions.  The most important type th
 
 ## How to Install
 
-Click the "Download ZIP" button, extract the files, CD to the directory with those files, connect to SQL*Plus, and run these commands:
+Click the green "Code" button, click "Download ZIP", extract the files, CD to the directory with those files, connect to SQL*Plus, and run these commands:
 
 1. Create objects and packages on the desired schema:
 

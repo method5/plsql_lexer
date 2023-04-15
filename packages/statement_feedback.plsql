@@ -107,9 +107,10 @@ begin
 		null;
 	--If classification succeeded, set the outputs.
 	else
-		--These are one-offs and exceptions.
+		--These are one-offs and exceptions. Most commands will be handled by the
+		--  "standard" ELSIFs at the end of this statement.
 		--Note that some of these seem to have extra spaces because the command names
-		--do not always perfectly line up with the real syntax.
+		--  do not always perfectly line up with the real syntax.
 
 		if p_command_name = 'ADMINISTER KEY MANAGEMENT' then
 			p_success_message := 'keystore altered.';
@@ -121,6 +122,15 @@ begin
 			p_success_message := 'Lockdown Profile altered.';
 		elsif p_command_name = 'ALTER MATERIALIZED VIEW ' then
 			p_success_message := 'Materialized view altered.';
+		elsif p_command_name = 'ALTER MLE ENV' then
+			p_success_message := 'MLE env altered.';
+		elsif p_command_name = 'ALTER MLE MODULE' then
+			p_success_message := 'MLE module altered.';
+		elsif p_command_name = 'ALTER PMEM FILESTORE' then
+			--TODO: I'm not 100% sure about this.
+			p_success_message := 'PMEM filestore altered.';
+		elsif p_command_name = 'ALTER PROPERTY GRAPH' then
+			p_success_message := 'Property graph altered.';
 		elsif p_command_name = 'ALTER TABLESPACE SET' then
 			--TODO: I'm not 100% sure about this.
 			p_success_message := 'Tablespace altered.';
@@ -148,8 +158,17 @@ begin
 			p_success_message := 'Lockdown Profile created.';
 		elsif p_command_name = 'CREATE MATERIALIZED VIEW ' then
 			p_success_message := 'Materialized view created.';
+		elsif p_command_name = 'CREATE MLE ENV' then
+			p_success_message := 'MLE env created.';
+		elsif p_command_name = 'CREATE MLE MODULE' then
+			p_success_message := 'MLE module created.';
 		elsif p_command_name = 'CREATE PFILE' then
 			p_success_message := 'File created.';
+		elsif p_command_name = 'CREATE PMEM FILESTORE' then
+			--TODO: I'm not 100% sure about this.
+			p_success_message := 'PMEM filestore created.';
+		elsif p_command_name = 'CREATE PROPERTY GRAPH' then
+			p_success_message := 'Property graph created.';
 		elsif p_command_name = 'CREATE SPFILE' then
 			p_success_message := 'File created.';
 		elsif p_command_name = 'CREATE TABLESPACE SET' then
@@ -176,6 +195,15 @@ begin
 			p_success_message := 'Materialized view log dropped.';
 		elsif p_command_name = 'DROP MATERIALIZED VIEW ' then
 			p_success_message := 'Materialized view dropped.';
+		elsif p_command_name = 'DROP MLE ENV' then
+			p_success_message := 'MLE env dropped.';
+		elsif p_command_name = 'DROP MLE MODULE' then
+			p_success_message := 'MLE module dropped.';
+		elsif p_command_name = 'DROP PMEM FILESTORE' then
+			--TODO: I'm not 100% sure about this.
+			p_success_message := 'PMEM filestore dropped.';
+		elsif p_command_name = 'DROP PROPERTY GRAPH' then
+			p_success_message := 'Property graph dropped.';
 		elsif p_command_name = 'DROP TABLESPACE SET' then
 			--TODO: I'm not 100% sure about this.
 			p_success_message := 'Tablespace dropped.';
@@ -271,12 +299,10 @@ begin
 			p_success_message := lower(replace(p_command_name, 'DROP '))||' dropped.';
 			p_success_message := upper(substr(p_success_message, 1, 1))||substr(p_success_message, 2);
 
-
 		--Print error message if statement type could not be determined.
 		else
 			p_success_message := 'ERROR: Cannot determine statement type.';
 		end if;
-
 
 		--Get compile warning message for PL/SQL objects
 		if p_command_name = 'ALTER ANALYTIC VIEW' then

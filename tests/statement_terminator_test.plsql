@@ -228,6 +228,8 @@ begin
 	--Command name has extra space, real command is "DISKGROUP".ppp
 	v_statement := q'[/*+useless comment*/ alter diskgroup +orcl13 resize disk '/emcpowersomething/' size 500m;]'; assert_equals('ALTER DISKGROUP', replace(v_statement, ';'), get_wo_semi(v_statement));
 
+	v_statement := q'[ alter domain a_year drop display; ]'; assert_equals('ALTER DOMAIN', replace(v_statement, ';'), get_wo_semi(v_statement));
+
 	--Undocumented feature:
 	v_statement := q'[ alter EDITION my_edition unusable;]'; assert_equals('ALTER EDITION', replace(v_statement, ';'), get_wo_semi(v_statement));
 
@@ -252,6 +254,10 @@ begin
 	v_statement := q'[ALTER /*a*/ SNAPSHOT /*c*/LOG force on my_table parallel 10;]'; assert_equals('ALTER MATERIALIZED VIEW LOG', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	v_statement := q'[ alter  materialized	zonemap my_schema.my_zone enable pruning;]'; assert_equals('ALTER MATERIALIZED ZONEMAP', replace(v_statement, ';'), get_wo_semi(v_statement));
+
+	v_statement := q'[ alter mle env jheller.ASDF compile;]'; assert_equals('ALTER MLE ENV', replace(v_statement, ';'), get_wo_semi(v_statement));
+
+	v_statement := q'[alter mle module test_module set metadata using clob (select 'A');]'; assert_equals('ALTER MLE MODULE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	v_statement := q'[alter operator my_operator add binding (number) return (number) using my_function;]'; assert_equals('ALTER OPERATOR', replace(v_statement, ';'), get_wo_semi(v_statement));
 
@@ -278,9 +284,13 @@ begin
 
 	v_statement := q'[ALTER PLUGGABLE DATABASE my_pdb default tablespace some_tbs;]'; assert_equals('ALTER PLUGGABLE DATABASE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
+	v_statement := q'[alter pmem filestore my_filestore resize 1t;]'; assert_equals('ALTER PMEM FILESTORE', replace(v_statement, ';'), get_wo_semi(v_statement));
+
 	v_statement := q'[ALTER PROCEDURE my_proc compile;]'; assert_equals('ALTER PROCEDURE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	v_statement := q'[ alter profile default limit password_lock_time unlimited;]'; assert_equals('ALTER PROFILE', replace(v_statement, ';'), get_wo_semi(v_statement));
+
+	v_statement := q'[ alter property graph my_graph compile;]'; assert_equals('ALTER PROPERTY GRAPH', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	v_statement := q'[ALTER RESOURCE COST privat_sga 1000;]'; assert_equals('ALTER RESOURCE COST', replace(v_statement, ';'), get_wo_semi(v_statement));
 
@@ -397,6 +407,9 @@ begin
 	--Command name has extra space, real command is "DISKGROUP".
 	v_statement := q'[CREATE DISKGROUP my_diskgroup disk '/emc/powersomething/' size 555m;]'; assert_equals('CREATE DISK GROUP', replace(v_statement, ';'), get_wo_semi(v_statement));
 
+	v_statement := q'[ create domain a_year as number(4) constraint c1 check (a_year <= 1900) enable display a_year; ]'; assert_equals('CREATE DOMAIN', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE FLEXIBLE DOMAIN flexible_domain(val1) not even the manual examples actually work ; ]'; assert_equals('CREATE DOMAIN', replace(v_statement, ';'), get_wo_semi(v_statement));
+
 	v_statement := q'[CREATE EDITION my_edition as child of my_parent;]'; assert_equals('CREATE EDITION', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	v_statement := q'[CREATE FLASHBACK ARCHIVE default my_fba tablespace my_ts quota 5g;]'; assert_equals('CREATE FLASHBACK ARCHIVE', replace(v_statement, ';'), get_wo_semi(v_statement));
@@ -411,6 +424,7 @@ begin
 	v_statement := q'[CREATE INDEX on table1(a);]'; assert_equals('CREATE INDEX', replace(v_statement, ';'), get_wo_semi(v_statement));
 	v_statement := q'[CREATE unique INDEX on table1(a);]'; assert_equals('CREATE INDEX', replace(v_statement, ';'), get_wo_semi(v_statement));
 	v_statement := q'[CREATE bitmap INDEX on table1(a);]'; assert_equals('CREATE INDEX', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE multivalue INDEX asdf ON mytable t (t.jcol.credit_score.numberOnly());]'; assert_equals('CREATE INDEX', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	v_statement := q'[CREATE INDEXTYPE my_schema.my_indextype for indtype(a number) using my_type;]'; assert_equals('CREATE INDEXTYPE', replace(v_statement, ';'), get_wo_semi(v_statement));
 	v_statement := q'[CREATE or replace INDEXTYPE my_schema.my_indextype for indtype(a number) using my_type;]'; assert_equals('CREATE INDEXTYPE', replace(v_statement, ';'), get_wo_semi(v_statement));
@@ -444,6 +458,10 @@ begin
 
 	v_statement := q'[CREATE MATERIALIZED ZONEMAP sales_zmap ON sales(cust_id, prod_id);]'; assert_equals('CREATE MATERIALIZED ZONEMAP', replace(v_statement, ';'), get_wo_semi(v_statement));
 
+	v_statement := q'[create or replace mle env jheller."ASDF";]'; assert_equals('CREATE MLE ENV', replace(v_statement, ';'), get_wo_semi(v_statement));
+
+	v_statement := q'[create or replace mle module test_module language JAVASCRIPT as 'asdf asdf';]'; assert_equals('CREATE MLE MODULE', v_statement, get_wo_semi(v_statement));
+
 	v_statement := q'[CREATE OPERATOR eq_op BINDING (VARCHAR2, VARCHAR2) RETURN NUMBER USING eq_f; ]'; assert_equals('CREATE OPERATOR', replace(v_statement, ';'), get_wo_semi(v_statement));
 	v_statement := q'[CREATE OR REPLACE OPERATOR eq_op BINDING (VARCHAR2, VARCHAR2) RETURN NUMBER USING eq_f; ]'; assert_equals('CREATE OPERATOR', replace(v_statement, ';'), get_wo_semi(v_statement));
 
@@ -476,6 +494,8 @@ begin
 
 	v_statement := q'[CREATE PLUGGABLE DATABASE my_pdb from another_pdb]'; assert_equals('CREATE PLUGGABLE DATABASE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
+	v_statement := q'[create pmem filestore my_filestore mountpoint '/u01/db/db1_pmemfs' backingfile '/u01/db_storage/db1' size 1t blocksize 8k autoextend on next 10g maxsize 2t;]'; assert_equals('CREATE PLUGGABLE DATABASE', replace(v_statement, ';'), get_wo_semi(v_statement));
+
 	v_statement := q'[CREATE PROCEDURE my proc is begin null; end;]'; assert_equals('CREATE PROCEDURE', v_statement, get_wo_semi(v_statement));
 	v_statement := q'[CREATE editionable PROCEDURE my proc is begin null; end;]'; assert_equals('CREATE PROCEDURE', v_statement, get_wo_semi(v_statement));
 	v_statement := q'[CREATE noneditionable PROCEDURE my proc is begin null; end;]'; assert_equals('CREATE PROCEDURE', v_statement, get_wo_semi(v_statement));
@@ -483,7 +503,10 @@ begin
 	v_statement := q'[CREATE or replace editionable PROCEDURE my proc is begin null; end;]'; assert_equals('CREATE PROCEDURE', v_statement, get_wo_semi(v_statement));
 	v_statement := q'[CREATE or replace noneditionable PROCEDURE my proc is begin null; end;]'; assert_equals('CREATE PROCEDURE', v_statement, get_wo_semi(v_statement));
 
-	v_statement := q'[CREATE PROFILE my_profile limit sessions_per_user 50;]'; assert_equals('CREATE PROFILE', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE PROFILE my_profile limit sessions_per_user 50;]'; assert_equals('CREATE PROFILE 1', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE MANDATORY PROFILE my_profile limit sessions_per_user 50;]'; assert_equals('CREATE PROFILE 2', replace(v_statement, ';'), get_wo_semi(v_statement));
+
+	v_statement := q'[create property graph my_graph vertex tables(my_table properties(a, b));]'; assert_equals('CREATE PROPERTY GRAPH', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	v_statement := q'[CREATE RESTORE POINT before_change gaurantee flashback database;]'; assert_equals('CREATE RESTORE POINT', replace(v_statement, ';'), get_wo_semi(v_statement));
 
@@ -526,8 +549,13 @@ begin
 	v_statement := q'[CREATE TABLE my_table(a number);]'; assert_equals('CREATE TABLE 1', replace(v_statement, ';'), get_wo_semi(v_statement));
 	--Must remove last semicolon even with PLSQL_DECLARATION or else it will throw ORA-600.
 	v_statement := q'[create table test1 as with function f return number is begin return 1; end; select f from dual;]'; assert_equals('CREATE TABLE 2', replace(v_statement, 'dual;', 'dual'), get_wo_semi(v_statement));
-
-	v_statement := q'[CREATE global temporary TABLE my_table(a number);]'; assert_equals('CREATE TABLE', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE global temporary TABLE my_table(a number);]'; assert_equals('CREATE TABLE 3', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE sharded TABLE my_table(a number);]'; assert_equals('CREATE TABLE 4', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE duplicated TABLE my_table(a number);]'; assert_equals('CREATE TABLE 5', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE private temporary table ora$ptt_temp(a number);]'; assert_equals('CREATE TABLE 6', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE IMMUTABLE TABLE immutable1(a number) no drop until 1 days idle no delete until 16 days after insert;]'; assert_equals('CREATE TABLE 7', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[create blockchain table blockchain1 (a number) no drop until 1 days idle no delete locked hashing using "SHA2_512" version "v1";]'; assert_equals('CREATE TABLE 8', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[create immutable blockchain table blockchain1 (a number) no drop until 1 days idle no delete locked hashing using "SHA2_512" version "v1";]'; assert_equals('CREATE TABLE 9', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	v_statement := q'[CREATE TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]'; assert_equals('CREATE TABLESPACE', replace(v_statement, ';'), get_wo_semi(v_statement));
 	v_statement := q'[CREATE bigfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]'; assert_equals('CREATE TABLESPACE', replace(v_statement, ';'), get_wo_semi(v_statement));
@@ -538,6 +566,10 @@ begin
 	v_statement := q'[CREATE undo TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]'; assert_equals('CREATE TABLESPACE', replace(v_statement, ';'), get_wo_semi(v_statement));
 	v_statement := q'[CREATE undo bigfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]'; assert_equals('CREATE TABLESPACE', replace(v_statement, ';'), get_wo_semi(v_statement));
 	v_statement := q'[CREATE undo smallfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]'; assert_equals('CREATE TABLESPACE', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[create local temporary tablespace for leaf my_tablespace1 tempfile '/opt/oracle/oradata/FREE/FREEPDB1/temp02.dbf' size 100M;]'; assert_equals('CREATE TABLESPACE', replace(v_statement, ';'), get_wo_semi(v_statement));
+	--Semantically wrong because of "smallfile", but "smallfile" is part of the syntax diagrams.
+	v_statement := q'[create smallfile local temporary tablespace for leaf my_tablespace1 tempfile '/opt/oracle/oradata/FREE/FREEPDB1/temp02.dbf' size 100M;]'; assert_equals('CREATE TABLESPACE', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[create bigfile local temporary tablespace for leaf my_tablespace1 tempfile '/opt/oracle/oradata/FREE/FREEPDB1/temp02.dbf' size 100M;]'; assert_equals('CREATE TABLESPACE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	--Simple triggers, keep semicolon.
 	v_statement := q'[CREATE TRIGGER my_trigger before insert on my_table begin null; end;]'; assert_equals('CREATE TRIGGER', v_statement, get_wo_semi(v_statement));
@@ -609,7 +641,9 @@ begin
 	v_statement := q'[CREATE or replace no force editionable editioning VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 29', replace(v_statement, ';'), get_wo_semi(v_statement));
 	v_statement := q'[CREATE or replace no force noneditionable VIEW my_view as select 1 a from dual;]'; assert_equals('CREATE VIEW 30', replace(v_statement, ';'), get_wo_semi(v_statement));
 	--Must remove last semicolon on PLSQL_DECLARATION or an ORA-600 error is generated.
-	v_statement := q'[create or replace view test_view as with function f return number is begin return 1; end; select f from dual;]'; assert_equals('CREATE VIEW 30', replace(v_statement, 'dual;', 'dual'), get_wo_semi(v_statement));
+	v_statement := q'[create or replace view test_view as with function f return number is begin return 1; end; select f from dual;]'; assert_equals('CREATE VIEW 31', replace(v_statement, 'dual;', 'dual'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE or replace noforce noneditionable json relational duality view department_dv as select json {'departmentNumber':d.deptno} from dept d;]'; assert_equals('CREATE VIEW 32', replace(v_statement, ';'), get_wo_semi(v_statement));
+	v_statement := q'[CREATE or replace noforce noneditionable json duality view department_dv as select json {'departmentNumber':d.deptno} from dept d;]'; assert_equals('CREATE VIEW 33', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	--Not a real command.
 	--v_statement := q'[DECLARE REWRITE EQUIVALENCE]'; assert_equals('DECLARE REWRITE EQUIVALENCE', replace(v_statement, ';'), get_wo_semi(v_statement));
@@ -643,6 +677,8 @@ begin
 	--Command name has extra space, real command is "DISKGROUP".
 	v_statement := q'[DROP DISKGROUP fradg force including contents;]'; assert_equals('DROP DISK GROUP', replace(v_statement, ';'), get_wo_semi(v_statement));
 
+	v_statement := q'[drop domain if exists a_year;]'; assert_equals('DROP DOMAIN', replace(v_statement, ';'), get_wo_semi(v_statement));
+
 	v_statement := q'[DROP EDITION my_edition cascade;]'; assert_equals('DROP EDITION', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	v_statement := q'[DROP FLASHBACK ARCHIVE my_fba;]'; assert_equals('DROP FLASHBACK ARCHIVE', replace(v_statement, ';'), get_wo_semi(v_statement));
@@ -666,6 +702,10 @@ begin
 
 	v_statement := q'[DROP MATERIALIZED ZONEMAP my_schema.my_zonemap;]'; assert_equals('DROP MATERIALIZED ZONEMAP', replace(v_statement, ';'), get_wo_semi(v_statement));
 
+	v_statement := q'[drop mle env Jheller.ASDF;]'; assert_equals('DROP MLE ENV', replace(v_statement, ';'), get_wo_semi(v_statement));
+
+	v_statement := q'[drop mle module if exists test_module;]'; assert_equals('DROP MLE MODULE', replace(v_statement, ';'), get_wo_semi(v_statement));
+
 	v_statement := q'[DROP OPERATOR my_operator force;]'; assert_equals('DROP OPERATOR', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	v_statement := q'[DROP OUTLINE my_outline;]'; assert_equals('DROP OUTLINE', replace(v_statement, ';'), get_wo_semi(v_statement));
@@ -676,9 +716,13 @@ begin
 
 	v_statement := q'[DROP PLUGGABLE DATABASE my_pdb;]'; assert_equals('DROP PLUGGABLE DATABASE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
+	v_statement := q'[drop pmem filestore my_filestore excluding contents;]'; assert_equals('DROP PMEM FILESTORE', replace(v_statement, ';'), get_wo_semi(v_statement));
+
 	v_statement := q'[DROP PROCEDURE my_proc;]'; assert_equals('DROP PROCEDURE', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	v_statement := q'[DROP PROFILE my_profile cascade;]'; assert_equals('DROP PROFILE', replace(v_statement, ';'), get_wo_semi(v_statement));
+
+	v_statement := q'[DROP PROPERTY GRAPH my_graph;]'; assert_equals('DROP PROPERTY GRAPH', replace(v_statement, ';'), get_wo_semi(v_statement));
 
 	v_statement := q'[DROP RESTORE POINT my_restore_point;]'; assert_equals('DROP RESTORE POINT', replace(v_statement, ';'), get_wo_semi(v_statement));
 

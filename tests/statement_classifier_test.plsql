@@ -243,6 +243,8 @@ begin
 	--Command name has extra space, real command is "DISKGROUP".
 	classify(q'[/*+useless comment*/ alter diskgroup +orcl13 resize disk '/emcpowersomething/' size 500m;]', v_output); assert_equals('ALTER DISKGROUP', 'DDL|ALTER|ALTER DISK GROUP|193', concat(v_output));
 
+	classify(q'[ alter domain a_year drop display;]', v_output); assert_equals('ALTER DOMAIN', 'DDL|ALTER|ALTER DOMAIN|282', concat(v_output));
+
 	--Undocumented feature:
 	classify(q'[ alter EDITION my_edition unusable]', v_output); assert_equals('ALTER EDITION', 'DDL|ALTER|ALTER EDITION|213', concat(v_output));
 
@@ -272,6 +274,10 @@ begin
 
 	classify(q'[ alter  materialized	zonemap my_schema.my_zone enable pruning]', v_output); assert_equals('ALTER MATERIALIZED ZONEMAP', 'DDL|ALTER|ALTER MATERIALIZED ZONEMAP|240', concat(v_output));
 
+	classify(q'[ alter mle env jheller.ASDF compile ]', v_output); assert_equals('ALTER MLE ENV', 'DDL|ALTER|ALTER MLE ENV|280', concat(v_output));
+
+	classify(q'[alter mle module test_module set metadata using clob (select 'A');]', v_output); assert_equals('ALTER MLE MODULE', 'DDL|ALTER|ALTER MLE MODULE|279', concat(v_output));
+
 	classify(q'[alter operator my_operator add binding (number) return (number) using my_function]', v_output); assert_equals('ALTER OPERATOR', 'DDL|ALTER|ALTER OPERATOR|183', concat(v_output));
 
 	classify(q'[alter outline public my_outline disable;]', v_output); assert_equals('ALTER OUTLINE', 'DDL|ALTER|ALTER OUTLINE|179', concat(v_output));
@@ -297,9 +303,13 @@ begin
 
 	classify(q'[ALTER PLUGGABLE DATABASE my_pdb default tablespace some_tbs]', v_output); assert_equals('ALTER PLUGGABLE DATABASE', 'DDL|ALTER|ALTER PLUGGABLE DATABASE|227', concat(v_output));
 
+	classify(q'[alter pmem filestore my_filestore resize 1t;]', v_output); assert_equals('ALTER PMEM FILESTORE', 'DDL|ALTER|ALTER PMEM FILESTORE|258', concat(v_output));
+
 	classify(q'[ALTER PROCEDURE my_proc compile]', v_output); assert_equals('ALTER PROCEDURE', 'DDL|ALTER|ALTER PROCEDURE|25', concat(v_output));
 
 	classify(q'[ alter profile default limit password_lock_time unlimited;]', v_output); assert_equals('ALTER PROFILE', 'DDL|ALTER|ALTER PROFILE|67', concat(v_output));
+
+	classify(q'[ alter property graph my_graph compile;]', v_output); assert_equals('ALTER PROPERTY GRAPH', 'DDL|ALTER|ALTER PROPERTY GRAPH|276', concat(v_output));
 
 	classify(q'[ALTER RESOURCE COST privat_sga 1000;]', v_output); assert_equals('ALTER RESOURCE COST', 'DDL|ALTER|ALTER RESOURCE COST|70', concat(v_output));
 
@@ -430,6 +440,9 @@ begin
 	--Command name has extra space, real command is "DISKGROUP".
 	classify(q'[CREATE DISKGROUP my_diskgroup disk '/emc/powersomething/' size 555m;]', v_output); assert_equals('CREATE DISK GROUP', 'DDL|CREATE|CREATE DISK GROUP|194', concat(v_output));
 
+	classify(q'[create domain a_year as number(4) constraint c1 check (a_year <= 1900) enable display a_year;]', v_output); assert_equals('CREATE DOMAIN', 'DDL|CREATE|CREATE DOMAIN|281', concat(v_output));
+	classify(q'[CREATE FLEXIBLE DOMAIN flexible_domain(val1) and not even the manual examples actually work...]', v_output); assert_equals('CREATE DOMAIN', 'DDL|CREATE|CREATE DOMAIN|281', concat(v_output));
+
 	classify(q'[CREATE EDITION my_edition as child of my_parent;]', v_output); assert_equals('CREATE EDITION', 'DDL|CREATE|CREATE EDITION|212', concat(v_output));
 
 	classify(q'[CREATE FLASHBACK ARCHIVE default my_fba tablespace my_ts quota 5g;]', v_output); assert_equals('CREATE FLASHBACK ARCHIVE', 'DDL|CREATE|CREATE FLASHBACK ARCHIVE|218', concat(v_output));
@@ -448,10 +461,11 @@ begin
 	classify(q'[CREATE force hierarchy some_hierarchy using some_attr ...]', v_output); assert_equals('CREATE HIERARCHY 5', 'DDL|CREATE|CREATE HIERARCHY|246', concat(v_output));
 	classify(q'[CREATE noforce hierarchy some_hierarchy using some_attr ...]', v_output); assert_equals('CREATE HIERARCHY 6', 'DDL|CREATE|CREATE HIERARCHY|246', concat(v_output));
 
-	classify(q'[CREATE INDEX on table1(a);]', v_output); assert_equals('CREATE INDEX', 'DDL|CREATE|CREATE INDEX|9', concat(v_output));
-	classify(q'[CREATE unique INDEX on table1(a);]', v_output); assert_equals('CREATE INDEX', 'DDL|CREATE|CREATE INDEX|9', concat(v_output));
-	classify(q'[CREATE bitmap INDEX on table1(a);]', v_output); assert_equals('CREATE INDEX', 'DDL|CREATE|CREATE INDEX|9', concat(v_output));
-	classify(q'[CREATE search INDEX index_name on table1(a) for json parameters...]', v_output); assert_equals('CREATE INDEX', 'DDL|CREATE|CREATE INDEX|9', concat(v_output));
+	classify(q'[CREATE INDEX on table1(a);]', v_output); assert_equals('CREATE INDEX 1', 'DDL|CREATE|CREATE INDEX|9', concat(v_output));
+	classify(q'[CREATE unique INDEX on table1(a);]', v_output); assert_equals('CREATE INDEX 2', 'DDL|CREATE|CREATE INDEX|9', concat(v_output));
+	classify(q'[CREATE bitmap INDEX on table1(a);]', v_output); assert_equals('CREATE INDEX 3', 'DDL|CREATE|CREATE INDEX|9', concat(v_output));
+	classify(q'[CREATE search INDEX index_name on table1(a) for json parameters...]', v_output); assert_equals('CREATE INDEX 4', 'DDL|CREATE|CREATE INDEX|9', concat(v_output));
+	classify(q'[CREATE multivalue INDEX asdf ON mytable t (t.jcol.credit_score.numberOnly());]', v_output); assert_equals('CREATE INDEX 5', 'DDL|CREATE|CREATE INDEX|9', concat(v_output));
 
 	classify(q'[CREATE INDEXTYPE my_schema.my_indextype for indtype(a number) using my_type;]', v_output); assert_equals('CREATE INDEXTYPE', 'DDL|CREATE|CREATE INDEXTYPE|164', concat(v_output));
 	classify(q'[CREATE or replace INDEXTYPE my_schema.my_indextype for indtype(a number) using my_type;]', v_output); assert_equals('CREATE INDEXTYPE', 'DDL|CREATE|CREATE INDEXTYPE|164', concat(v_output));
@@ -489,8 +503,14 @@ begin
 
 	classify(q'[CREATE MATERIALIZED ZONEMAP sales_zmap ON sales(cust_id, prod_id);]', v_output); assert_equals('CREATE MATERIALIZED ZONEMAP', 'DDL|CREATE|CREATE MATERIALIZED ZONEMAP|239', concat(v_output));
 
+	classify(q'[ create or replace mle env jheller."ASDF"; ]', v_output); assert_equals('CREATE MLE ENV', 'DDL|CREATE|CREATE MLE ENV|268', concat(v_output));
+
+	classify(q'[create or replace mle module test_module language JAVASCRIPT as 'asdf asdf';]'||chr(10)||'/', v_output); assert_equals('CREATE MLE MODULE', 'DDL|CREATE|CREATE MLE MODULE|266', concat(v_output));
+
 	classify(q'[CREATE OPERATOR eq_op BINDING (VARCHAR2, VARCHAR2) RETURN NUMBER USING eq_f; ]', v_output); assert_equals('CREATE OPERATOR', 'DDL|CREATE|CREATE OPERATOR|163', concat(v_output));
 	classify(q'[CREATE OR REPLACE OPERATOR eq_op BINDING (VARCHAR2, VARCHAR2) RETURN NUMBER USING eq_f; ]', v_output); assert_equals('CREATE OPERATOR', 'DDL|CREATE|CREATE OPERATOR|163', concat(v_output));
+
+	classify(q'[CREATE OPERATOR eq_op BINDING (VARCHAR2, VARCHAR2) RETURN NUMBER USING eq_f; ]', v_output); assert_equals('CREATE OPERATOR', 'DDL|CREATE|CREATE OPERATOR|163', concat(v_output));
 
 	classify(q'[CREATE or replace OUTLINE salaries FOR CATEGORY special ON SELECT last_name, salary FROM employees;]', v_output); assert_equals('CREATE OUTLINE', 'DDL|CREATE|CREATE OUTLINE|180', concat(v_output));
 	classify(q'[CREATE or replace public OUTLINE salaries FOR CATEGORY special ON SELECT last_name, salary FROM employees;]', v_output); assert_equals('CREATE OUTLINE', 'DDL|CREATE|CREATE OUTLINE|180', concat(v_output));
@@ -518,6 +538,8 @@ begin
 
 	classify(q'[CREATE PLUGGABLE DATABASE my_pdb from another_pdb]', v_output); assert_equals('CREATE PLUGGABLE DATABASE', 'DDL|CREATE|CREATE PLUGGABLE DATABASE|226', concat(v_output));
 
+	classify(q'[create pmem filestore my_filestore mountpoint '/u01/db/db1_pmemfs' backingfile '/u01/db_storage/db1' size 1t blocksize 8k autoextend on next 10g maxsize 2t;]', v_output); assert_equals('CREATE PMEM FILESTORE', 'DDL|CREATE|CREATE PMEM FILESTORE|257', concat(v_output));
+
 	classify(q'[CREATE PROCEDURE my proc is begin null; end; /]', v_output); assert_equals('CREATE PROCEDURE', 'DDL|CREATE|CREATE PROCEDURE|24', concat(v_output));
 	classify(q'[CREATE editionable PROCEDURE my proc is begin null; end; /]', v_output); assert_equals('CREATE PROCEDURE', 'DDL|CREATE|CREATE PROCEDURE|24', concat(v_output));
 	classify(q'[CREATE noneditionable PROCEDURE my proc is begin null; end; /]', v_output); assert_equals('CREATE PROCEDURE', 'DDL|CREATE|CREATE PROCEDURE|24', concat(v_output));
@@ -525,7 +547,10 @@ begin
 	classify(q'[CREATE or replace editionable PROCEDURE my proc is begin null; end; /]', v_output); assert_equals('CREATE PROCEDURE', 'DDL|CREATE|CREATE PROCEDURE|24', concat(v_output));
 	classify(q'[CREATE or replace noneditionable PROCEDURE my proc is begin null; end; /]', v_output); assert_equals('CREATE PROCEDURE', 'DDL|CREATE|CREATE PROCEDURE|24', concat(v_output));
 
-	classify(q'[CREATE PROFILE my_profile limit sessions_per_user 50;]', v_output); assert_equals('CREATE PROFILE', 'DDL|CREATE|CREATE PROFILE|65', concat(v_output));
+	classify(q'[CREATE PROFILE my_profile limit sessions_per_user 50;]', v_output); assert_equals('CREATE PROFILE 1', 'DDL|CREATE|CREATE PROFILE|65', concat(v_output));
+	classify(q'[CREATE MANDATORY PROFILE my_profile limit sessions_per_user 50;]', v_output); assert_equals('CREATE PROFILE 2', 'DDL|CREATE|CREATE PROFILE|65', concat(v_output));
+
+	classify(q'[create property graph my_graph vertex tables(my_table properties(a, b));]', v_output); assert_equals('CREATE PROPERTY GRAPH', 'DDL|CREATE|CREATE PROPERTY GRAPH|275', concat(v_output));
 
 	classify(q'[CREATE RESTORE POINT before_change gaurantee flashback database;]', v_output); assert_equals('CREATE RESTORE POINT', 'DDL|CREATE|CREATE RESTORE POINT|206', concat(v_output));
 	classify(q'[CREATE clean RESTORE POINT before_change gaurantee flashback database;]', v_output); assert_equals('CREATE RESTORE POINT', 'DDL|CREATE|CREATE RESTORE POINT|206', concat(v_output));
@@ -564,19 +589,26 @@ begin
 	classify(q'[CREATE global temporary TABLE my_table(a number);]', v_output); assert_equals('CREATE TABLE 2', 'DDL|CREATE|CREATE TABLE|1', concat(v_output));
 	classify(q'[CREATE sharded TABLE my_table(a number);]', v_output); assert_equals('CREATE TABLE 3', 'DDL|CREATE|CREATE TABLE|1', concat(v_output));
 	classify(q'[CREATE duplicated TABLE my_table(a number);]', v_output); assert_equals('CREATE TABLE 4', 'DDL|CREATE|CREATE TABLE|1', concat(v_output));
-	classify(q'[CREATE private temporary table ora$ptt_temp(a number);]', v_output); assert_equals('CREATE TABLE 4', 'DDL|CREATE|CREATE TABLE|1', concat(v_output));
+	classify(q'[CREATE private temporary table ora$ptt_temp(a number);]', v_output); assert_equals('CREATE TABLE 5', 'DDL|CREATE|CREATE TABLE|1', concat(v_output));
+	classify(q'[CREATE IMMUTABLE TABLE immutable1(a number) no drop until 1 days idle no delete until 16 days after insert;]', v_output); assert_equals('CREATE TABLE 6', 'DDL|CREATE|CREATE TABLE|1', concat(v_output));
+	classify(q'[create blockchain table blockchain1 (a number) no drop until 1 days idle no delete locked hashing using "SHA2_512" version "v1";]', v_output); assert_equals('CREATE TABLE 7', 'DDL|CREATE|CREATE TABLE|1', concat(v_output));
+	classify(q'[create immutable blockchain table blockchain1 (a number) no drop until 1 days idle no delete locked hashing using "SHA2_512" version "v1";]', v_output); assert_equals('CREATE TABLE 7', 'DDL|CREATE|CREATE TABLE|1', concat(v_output));
 
 	classify(q'[create tablespace set my_set;]', v_output); assert_equals('CREATE TABLESPACE SET', 'DDL|CREATE|CREATE TABLESPACE SET|-202', concat(v_output));
 
-	classify(q'[CREATE TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
-	classify(q'[CREATE bigfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
-	classify(q'[CREATE smallfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
-	classify(q'[CREATE temporary TABLESPACE my_tbs tempfile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
-	classify(q'[CREATE temporary bigfile TABLESPACE my_tbs tempfile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
-	classify(q'[CREATE temporary smallfile TABLESPACE my_tbs tempfile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
-	classify(q'[CREATE undo TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
-	classify(q'[CREATE undo bigfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
-	classify(q'[CREATE undo smallfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
+	classify(q'[CREATE TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE 1', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
+	classify(q'[CREATE bigfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE 2', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
+	classify(q'[CREATE smallfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE 3', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
+	classify(q'[CREATE temporary TABLESPACE my_tbs tempfile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE 4', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
+	classify(q'[CREATE temporary bigfile TABLESPACE my_tbs tempfile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE 5', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
+	classify(q'[CREATE temporary smallfile TABLESPACE my_tbs tempfile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE 6', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
+	classify(q'[CREATE undo TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE 7', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
+	classify(q'[CREATE undo bigfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE 8', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
+	classify(q'[CREATE undo smallfile TABLESPACE my_tbs datafile '+mydg' size 100m autoextend on;]', v_output); assert_equals('CREATE TABLESPACE 9', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
+	classify(q'[create local temporary tablespace for leaf my_tablespace1 tempfile '/opt/oracle/oradata/FREE/FREEPDB1/temp02.dbf' size 100M;]', v_output); assert_equals('CREATE TABLESPACE 10', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
+	--Semantically wrong because of "smallfile", but "smallfile" is part of the syntax diagrams.
+	classify(q'[create smallfile local temporary tablespace for leaf my_tablespace1 tempfile '/opt/oracle/oradata/FREE/FREEPDB1/temp02.dbf' size 100M;]', v_output); assert_equals('CREATE TABLESPACE 11', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
+	classify(q'[create bigfile local temporary tablespace for leaf my_tablespace1 tempfile '/opt/oracle/oradata/FREE/FREEPDB1/temp02.dbf' size 100M;]', v_output); assert_equals('CREATE TABLESPACE 12', 'DDL|CREATE|CREATE TABLESPACE|39', concat(v_output));
 
 	classify(q'[CREATE TRIGGER my_trigger before insert on my_table begin null; end; /]', v_output); assert_equals('CREATE TRIGGER', 'DDL|CREATE|CREATE TRIGGER|59', concat(v_output));
 	classify(q'[CREATE editionable TRIGGER my_trigger before insert on my_table begin null; end; /]', v_output); assert_equals('CREATE TRIGGER', 'DDL|CREATE|CREATE TRIGGER|59', concat(v_output));
@@ -611,11 +643,11 @@ begin
 	classify(q'[CREATE force editionable VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 8', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
 	classify(q'[CREATE force editionable editioning VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 9', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
 	classify(q'[CREATE force noneditionable VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 10', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE no force VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 11', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE no force editioning VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 12', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE no force editionable VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 13', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE no force editionable editioning VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 14', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE no force noneditionable VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 15', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE noforce VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 11', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE noforce editioning VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 12', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE noforce editionable VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 13', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE noforce editionable editioning VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 14', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE noforce noneditionable VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 15', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
 	classify(q'[CREATE or replace VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 16', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
 	classify(q'[CREATE or replace editioning VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 17', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
 	classify(q'[CREATE or replace editionable VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 18', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
@@ -626,11 +658,13 @@ begin
 	classify(q'[CREATE or replace force editionable VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 23', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
 	classify(q'[CREATE or replace force editionable editioning VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 24', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
 	classify(q'[CREATE or replace force noneditionable VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 25', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE or replace no force VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 26', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE or replace no force editioning VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 27', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE or replace no force editionable VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 28', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE or replace no force editionable editioning VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 29', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
-	classify(q'[CREATE or replace no force noneditionable VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 30', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE or replace noforce VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 26', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE or replace noforce editioning VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 27', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE or replace noforce editionable VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 28', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE or replace noforce editionable editioning VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 29', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE or replace noforce noneditionable VIEW my_view as select 1 a from dual;]', v_output); assert_equals('CREATE VIEW 30', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE or replace noforce noneditionable json relational duality view department_dv as select json {'departmentNumber':d.deptno} from dept d;]', v_output); assert_equals('CREATE VIEW 31', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
+	classify(q'[CREATE or replace noforce noneditionable json duality view department_dv as select json {'departmentNumber':d.deptno} from dept d;]', v_output); assert_equals('CREATE VIEW 32', 'DDL|CREATE|CREATE VIEW|21', concat(v_output));
 
 	--Not a real command.
 	--classify(q'[DECLARE REWRITE EQUIVALENCE]', v_output); assert_equals('DECLARE REWRITE EQUIVALENCE', 'DDL|ALTER|DECLARE REWRITE EQUIVALENCE|209', concat(v_output));
@@ -667,6 +701,8 @@ begin
 	--Command name has extra space, real command is "DISKGROUP".
 	classify(q'[DROP DISKGROUP fradg force including contents;]', v_output); assert_equals('DROP DISK GROUP', 'DDL|DROP|DROP DISK GROUP|195', concat(v_output));
 
+	classify(q'[drop domain if exists a_year;]', v_output); assert_equals('DROP DOMAIN', 'DDL|DROP|DROP DOMAIN|283', concat(v_output));
+
 	classify(q'[DROP EDITION my_edition cascade;]', v_output); assert_equals('DROP EDITION', 'DDL|DROP|DROP EDITION|214', concat(v_output));
 
 	classify(q'[DROP FLASHBACK ARCHIVE my_fba;]', v_output); assert_equals('DROP FLASHBACK ARCHIVE', 'DDL|DROP|DROP FLASHBACK ARCHIVE|220', concat(v_output));
@@ -696,6 +732,10 @@ begin
 
 	classify(q'[DROP MATERIALIZED ZONEMAP my_schema.my_zonemap]', v_output); assert_equals('DROP MATERIALIZED ZONEMAP', 'DDL|DROP|DROP MATERIALIZED ZONEMAP|241', concat(v_output));
 
+	classify(q'[drop mle env Jheller.ASDF;]', v_output); assert_equals('DROP MLE ENV', 'DDL|DROP|DROP MLE ENV|269', concat(v_output));
+
+	classify(q'[drop mle module if exists test_module;]', v_output); assert_equals('DROP MLE MODULE', 'DDL|DROP|DROP MLE MODULE|267', concat(v_output));
+
 	classify(q'[DROP OPERATOR my_operator force;]', v_output); assert_equals('DROP OPERATOR', 'DDL|DROP|DROP OPERATOR|167', concat(v_output));
 
 	classify(q'[DROP OUTLINE my_outline;]', v_output); assert_equals('DROP OUTLINE', 'DDL|DROP|DROP OUTLINE|181', concat(v_output));
@@ -706,9 +746,13 @@ begin
 
 	classify(q'[DROP PLUGGABLE DATABASE my_pdb]', v_output); assert_equals('DROP PLUGGABLE DATABASE', 'DDL|DROP|DROP PLUGGABLE DATABASE|228', concat(v_output));
 
+	classify(q'[drop pmem filestore my_filestore excluding contents]', v_output); assert_equals('DROP PMEM FILESTORE', 'DDL|DROP|DROP PMEM FILESTORE|259', concat(v_output));
+
 	classify(q'[DROP PROCEDURE my_proc]', v_output); assert_equals('DROP PROCEDURE', 'DDL|DROP|DROP PROCEDURE|68', concat(v_output));
 
 	classify(q'[DROP PROFILE my_profile cascade;]', v_output); assert_equals('DROP PROFILE', 'DDL|DROP|DROP PROFILE|66', concat(v_output));
+
+	classify(q'[drop property graph my_graph;]', v_output); assert_equals('DROP PROPERTY GRAPH', 'DDL|DROP|DROP PROPERTY GRAPH|277', concat(v_output));
 
 	classify(q'[DROP RESTORE POINT my_restore_point]', v_output); assert_equals('DROP RESTORE POINT', 'DDL|DROP|DROP RESTORE POINT|207', concat(v_output));
 
